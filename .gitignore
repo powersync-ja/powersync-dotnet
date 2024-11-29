@@ -1,0 +1,60 @@
+# Build directories
+bin/
+obj/
+
+# User-specific files
+*.user
+*.userosscache
+*.suo
+*.sln.docstates
+*.userprefs
+*.rsuser
+
+# Logs and debug output
+*.log
+*.tlog
+*.dmp
+
+# Visual Studio specific
+.vscode/
+.vs/
+
+# Rider specific
+.idea/
+*.sln.iml
+
+# Build results
+*.dll
+*.exe
+*.pdb
+*.cache
+*.ilk
+*.lib
+*.obj
+*.sbr
+*.swp
+*.sln.ide
+*.tlog
+*.lastbuildstate
+*.idb
+
+# NuGet packages
+*.nupkg
+*.snupkg
+packages/
+.nuget/
+
+# Others
+TestResults/
+*.VSIXProjectLaunch
+.project
+.vsconfig
+
+*.db
+*.db-shm
+*.db-wal
+
+#Core binaries - add rules after ps extension downloading is supported
+*.dylib
+*.dll
+*.so
