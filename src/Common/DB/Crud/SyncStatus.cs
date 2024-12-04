@@ -3,27 +3,30 @@ namespace Common.DB.Crud;
 using System.Text.Json;
 
 
-public class SyncDataFlowStatus
+public class SyncDataFlowStatus(bool downloading = false, bool uploading = false)
 {
-    public bool Downloading { get; set; } = false;
-    public bool Uploading { get; set; } = false;    
+    public bool Downloading { get; set; } = downloading;
+    public bool Uploading { get; set; } = uploading;
 }
 
-
- public class SyncStatusOptions
+public class SyncStatusOptions(
+        bool? connected = null,
+        SyncDataFlowStatus? dataFlow = null,
+        DateTime? lastSyncedAt = null,
+        bool? hasSynced = null)
 {
-    public bool? Connected { get; set; }
-    public SyncDataFlowStatus? DataFlow { get; set; }
-    public DateTime? LastSyncedAt { get; set; }
-    public bool? HasSynced { get; set; }
+    public bool? Connected { get; set; } = connected;
+    public SyncDataFlowStatus? DataFlow { get; set; } = dataFlow;
+    public DateTime? LastSyncedAt { get; set; } = lastSyncedAt;
+    public bool? HasSynced { get; set; } = hasSynced;
 }
 
- public class SyncStatus(SyncStatusOptions options)
+public class SyncStatus(SyncStatusOptions options)
 {
     protected SyncStatusOptions options = options;
 
     public bool Connected => options.Connected ?? false;
-    
+
     public DateTime? LastSyncedAt => options.LastSyncedAt;
 
     public bool? HasSynced => options.HasSynced;
