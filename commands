@@ -12,3 +12,5 @@ dotnet sln ../../root.sln add Common.Tests/Common.Tests.csproj
 dotnet test src/Common/Common.Tests
 dotnet test --logger "console;verbosity=detailed" src/Common/Common.Tests
 dotnet test --logger "console;verbosity=detailed"
+
+dotnet test -v n
