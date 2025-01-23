@@ -50,6 +50,24 @@ public interface ITransaction : ILockContext
     Task<QueryResult> Rollback();
 }
 
+public enum RowUpdateType
+{
+    SQLITE_INSERT = 18,
+    SQLITE_DELETE = 9,
+    SQLITE_UPDATE = 23
+}
+
+public class TableUpdateOperation(RowUpdateType OpType, long RowId)
+{
+    public RowUpdateType OpType { get; set; } = OpType;
+    public long RowId { get; set; } = RowId;
+}
+
+public class UpdateNotification(string table, RowUpdateType OpType, long RowId) : TableUpdateOperation(OpType, RowId)
+{
+    public string Table { get; set; } = table;
+}
+
 public class DBLockOptions
 {
     // Optional timeout in milliseconds.

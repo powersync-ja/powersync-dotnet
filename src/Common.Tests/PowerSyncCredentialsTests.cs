@@ -27,7 +27,18 @@ public class PowerSyncCredentialsTests
         Console.WriteLine("Pre adapter" + db.SdkVersion);
         await db.WaitForReady();
         Console.WriteLine("Post adapter" + db.SdkVersion);
-        // Console.WriteLine("Post adapter");
+
+        await db.Execute(@"CREATE TABLE Users (
+        Id INTEGER PRIMARY KEY AUTOINCREMENT,
+        Name TEXT NOT NULL
+        );");
+
+        await db.Execute(@"INSERT INTO Users (Name) VALUES ('Alice');");
+        await db.Execute(@"UPDATE USERS set Name = 'Wonderland' where Name = 'Alice';");
+
+        var x = await db.Execute("SELECT Name FROM Users;");
+
+        Console.WriteLine("Result: " + x.Rows.Array.First().First());
         // var x = await db.Execute("SELECT powersync_rs_version() as version");
         // Console.WriteLine(x.Rows.Array.First().First());
 

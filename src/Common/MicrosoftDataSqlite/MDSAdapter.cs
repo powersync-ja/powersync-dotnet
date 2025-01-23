@@ -6,24 +6,40 @@ using System.Data;
 using System.Threading.Tasks;
 using Common.DB;
 using Microsoft.Data.Sqlite;
+using SQLitePCL;
 
 public class MDSAdapter : IDBAdapter
 {
     public string Name => throw new NotImplementedException();
 
-    public MDSConnection writeConnection;
+    public MDSConnection? writeConnection;
+
+    private readonly Task initialized;
 
     public MDSAdapter()
     {
-        writeConnection = OpenConnection("powersync.db");
+        initialized = Init();
     }
 
-    protected MDSConnection OpenConnection(string dbFilename)
+    private async Task Init()
+    {
+        writeConnection = await OpenConnection("powersync.db");
+    }
+
+    private static void UpdateHook(IntPtr userData, int type, string database, string table, long rowId)
+    {
+        Console.WriteLine($"Update Hook: Type={type}, Database={database}, Table={table}, RowId={rowId}");
+    }
+
+    protected async Task<MDSConnection> OpenConnection(string dbFilename)
     {
         var db = OpenDatabase(dbFilename);
         LoadExtension(db);
 
-        return new MDSConnection(new MDSConnectionOptions(db));
+        var connection = new MDSConnection(new MDSConnectionOptions(db));
+        await connection.Execute("SELECT powersync_init()");
+
+        return connection;
     }
 
     private static SqliteConnection OpenDatabase(string dbFilename)
@@ -45,9 +61,10 @@ public class MDSAdapter : IDBAdapter
         throw new NotImplementedException();
     }
 
-    public Task<DB.QueryResult> Execute(string query, object[]? parameters = null)
+    public async Task<QueryResult> Execute(string query, object[]? parameters = null)
     {
-        return writeConnection.Execute(query);
+        await initialized;
+        return await writeConnection!.Execute(query);
     }
 
     public Task<DB.QueryResult> ExecuteBatch(string query, object[][]? parameters = null)
@@ -55,9 +72,10 @@ public class MDSAdapter : IDBAdapter
         throw new NotImplementedException();
     }
 
-    public Task<T> Get<T>(string sql, params object[] parameters)
+    public async Task<T> Get<T>(string sql, params object[] parameters)
     {
-        return writeConnection.Get<T>(sql);
+        await initialized;
+        return await writeConnection!.Get<T>(sql);
     }
 
     public Task<List<T>> GetAll<T>(string sql, params object[] parameters)
@@ -65,9 +83,10 @@ public class MDSAdapter : IDBAdapter
         throw new NotImplementedException();
     }
 
-    public Task<T?> GetOptional<T>(string sql, params object[] parameters)
+    public async Task<T?> GetOptional<T>(string sql, params object[] parameters)
     {
-        return writeConnection.GetOptional<T>(sql);
+        await initialized;
+        return await writeConnection!.GetOptional<T>(sql);
     }
 
     public Task<T> ReadLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null)

@@ -1,19 +1,61 @@
 namespace Common.MicrosoftDataSqlite;
 
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Common.DB;
 using Microsoft.Data.Sqlite;
 using Newtonsoft.Json;
-
+using SQLitePCL;
 
 public class MDSConnectionOptions(SqliteConnection database)
 {
     public SqliteConnection Database { get; set; } = database;
 }
 
-public class MDSConnection(MDSConnectionOptions options)
+public class MDSConnection
 {
-    protected SqliteConnection Db { get; set; } = options.Database;
+
+    public SqliteConnection Db;
+    private List<UpdateNotification> updateBuffer;
+    public MDSConnection(MDSConnectionOptions options)
+    {
+        Db = options.Database;
+        updateBuffer = [];
+
+        raw.sqlite3_rollback_hook(Db.Handle, RollbackHook, IntPtr.Zero);
+        raw.sqlite3_update_hook(Db.Handle, UpdateHook, IntPtr.Zero);
+    }
+
+    private void RollbackHook(object user_data)
+    {
+        // TODO: Implement rollback hook
+        Console.WriteLine($"Rollback Hook");
+        updateBuffer.Clear();
+    }
+
+    private void UpdateHook(object user_data, int type, utf8z database, utf8z table, long rowId)
+    {
+        var opType = type switch
+        {
+            18 => RowUpdateType.SQLITE_INSERT,
+            9 => RowUpdateType.SQLITE_DELETE,
+            23 => RowUpdateType.SQLITE_UPDATE,
+            _ => throw new InvalidOperationException($"Unknown update type: {type}"),
+        };
+        updateBuffer.Add(new UpdateNotification(table.utf8_to_string(), opType, rowId));
+    }
+
+    public void FlushUpdates()
+    {
+        if (updateBuffer.Count == 0)
+        {
+            return;
+        }
+
+        // TODO: Implement update flush
+
+        updateBuffer.Clear();
+    }
 
     public async Task<QueryResult> Execute(string query)
     {
@@ -29,6 +71,7 @@ public class MDSConnection(MDSConnectionOptions options)
             var row = new Dictionary<string, object>();
             for (int i = 0; i < reader.FieldCount; i++)
             {
+                // TODO: What should we do with null values?
                 row[reader.GetName(i)] = reader.IsDBNull(i) ? null : reader.GetValue(i);
             }
             rows.Add(row);

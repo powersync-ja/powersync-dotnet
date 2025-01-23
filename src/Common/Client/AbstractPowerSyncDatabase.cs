@@ -11,8 +11,6 @@ public class PowerSyncDatabaseOptions(IDBAdapter database)
     public IDBAdapter Database { get; set; } = database;
 }
 
-
-
 public class AbstractPowerSyncDatabase
 {
 
@@ -37,7 +35,6 @@ public class AbstractPowerSyncDatabase
         SdkVersion = "";
         isReadyTask = Initialize();
     }
-
 
     protected async Task Initialize()
     {
@@ -87,8 +84,20 @@ public class AbstractPowerSyncDatabase
         }
     }
 
-    public Task<QueryResult> Execute(string query, object[]? parameters = null)
+    public async Task<QueryResult> Execute(string query, object[]? parameters = null)
     {
-        return database.Execute(query);
+        await WaitForReady();
+        return await database.Execute(query);
+    }
+
+    public async Task<T?> GetOptional<T>(string query, object[]? parameters = null)
+    {
+        await WaitForReady();
+        return await database.GetOptional<T>(query);
+    }
+    public async Task<T> Get<T>(string query, object[]? parameters = null)
+    {
+        await WaitForReady();
+        return await database.Get<T>(query);
     }
 }
