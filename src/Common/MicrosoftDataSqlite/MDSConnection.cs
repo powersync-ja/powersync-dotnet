@@ -3,6 +3,7 @@ namespace Common.MicrosoftDataSqlite;
 using System.Threading.Tasks;
 using Common.DB;
 using Microsoft.Data.Sqlite;
+using Newtonsoft.Json;
 
 
 public class MDSConnectionOptions(SqliteConnection database)
@@ -37,6 +38,35 @@ public class MDSConnection(MDSConnectionOptions options)
         result.RowsAffected = reader.RecordsAffected;
         result.Rows.Array = rows;
         return result;
+    }
+
+    public async Task<T?> GetOptional<T>(string sql)
+    {
+        var result = await Execute(sql);
+
+        // If there are no rows, return null
+        if (result.Rows.Array.Count == 0)
+        {
+            return default;
+        }
+
+        var firstRow = result.Rows.Array[0];
+
+        if (firstRow == null)
+        {
+            return default;
+        }
+
+        // TODO: Improve mapping errors for when the result fields don't match the target type.
+        // TODO: This conversion may be a performance bottleneck, it's the easiest mechamisn for getting result typing.
+        string json = JsonConvert.SerializeObject(firstRow);
+        return JsonConvert.DeserializeObject<T>(json);
+
+    }
+
+    public async Task<T> Get<T>(string sql)
+    {
+        return await GetOptional<T>(sql) ?? throw new InvalidOperationException("Result set is empty");
     }
 
     public void Close()

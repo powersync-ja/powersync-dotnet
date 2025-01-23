@@ -2,49 +2,76 @@ using Common.DB;
 using Common.DB.Crud;
 
 namespace Common.Client;
+
+public class PowerSyncDatabaseOptions(IDBAdapter database)
+{
+    /**
+    * Source for a SQLite database connection.
+    */
+    public IDBAdapter Database { get; set; } = database;
+}
+
+
+
 public class AbstractPowerSyncDatabase
 {
 
     private IDBAdapter database;
 
     // Returns true if the connection is closed.    
-    bool closed;
-    bool ready;
+    public bool Closed;
+    public bool Ready;
 
-    string sdkVersion;
-    SyncStatus syncStatus;
+    protected Task isReadyTask;
 
-    public AbstractPowerSyncDatabase()
+    public string SdkVersion;
+    public SyncStatus SyncStatus;
+
+    public AbstractPowerSyncDatabase(PowerSyncDatabaseOptions options)
     {
-        this.syncStatus = new SyncStatus(new SyncStatusOptions());
-        this.closed = false;
-        this.ready = false;
+        database = options.Database;
+        SyncStatus = new SyncStatus(new SyncStatusOptions());
+        Closed = false;
+        Ready = false;
 
-        this.sdkVersion = "";
-        this.Initialize();
+        SdkVersion = "";
+        isReadyTask = Initialize();
     }
 
 
-    protected async void Initialize()
+    protected async Task Initialize()
     {
-        await this.loadVersion();
-        // await this.database.execute('PRAGMA RECURSIVE_TRIGGERS=TRUE');
-
+        await LoadVersion();
+        await database.Execute("PRAGMA RECURSIVE_TRIGGERS=TRUE");
+        Ready = true;
     }
 
-    private async Task loadVersion()
+    /// <summary>
+    /// Resolves once initialization is completed.
+    /// </summary>
+    public async Task WaitForReady()
     {
-        string sdkVersion = "0.2.0";
-        this.sdkVersion = sdkVersion;
+        if (Ready)
+        {
+            return;
+        }
+
+        await isReadyTask;
+    }
+    public record VersionResult(string Version);
+
+    private async Task LoadVersion()
+    {
+        string sdkVersion = (await database.Get<VersionResult>("SELECT powersync_rs_version() as version")).Version;
+        SdkVersion = sdkVersion;
+
         int[] versionInts;
         try
         {
-            // Parse the version into an array of integers
-            versionInts = sdkVersion
-                .Split(new[] { '.', '/' }, StringSplitOptions.RemoveEmptyEntries)
+            versionInts = [.. sdkVersion
+                .Split(['.', '/'], StringSplitOptions.RemoveEmptyEntries)
                 .Take(3)
-                .Select(n => int.Parse(n))
-                .ToArray();
+                .Select(n => int.Parse(n))];
         }
         catch (Exception e)
         {
@@ -58,5 +85,10 @@ public class AbstractPowerSyncDatabase
         {
             throw new Exception($"Unsupported PowerSync extension version. Need >=0.2.0 <1.0.0, got: {sdkVersion}");
         }
+    }
+
+    public Task<QueryResult> Execute(string query, object[]? parameters = null)
+    {
+        return database.Execute(query);
     }
 }

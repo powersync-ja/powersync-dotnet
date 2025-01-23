@@ -22,10 +22,14 @@ public class PowerSyncCredentialsTests
     [Fact]
     public async void LoadVersion()
     {
-        var db = new MDSAdapter();
+        // var db = new MDSAdapter();
+        var db = CommonPowerSyncDatabase.Create();
+        Console.WriteLine("Pre adapter" + db.SdkVersion);
+        await db.WaitForReady();
+        Console.WriteLine("Post adapter" + db.SdkVersion);
         // Console.WriteLine("Post adapter");
-        // var x = await db.writeConnection.Execute("SELECT powersync_rs_version() as version");
-        // Console.WriteLine(x.Rows.Array.First().First().Value);
+        // var x = await db.Execute("SELECT powersync_rs_version() as version");
+        // Console.WriteLine(x.Rows.Array.First().First());
 
         // var x = await db.Execute("SELECT powersync_rs_version() as version");
         // using var connection = new SqliteConnection("Data Source=:memory:");

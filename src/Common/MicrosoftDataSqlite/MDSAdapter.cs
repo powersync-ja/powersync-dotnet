@@ -16,25 +16,24 @@ public class MDSAdapter : IDBAdapter
     public MDSAdapter()
     {
         writeConnection = OpenConnection("powersync.db");
-        Console.WriteLine("Opened connection");
     }
 
     protected MDSConnection OpenConnection(string dbFilename)
     {
-        var db = openDatabase(dbFilename);
-        loadExtension(db);
+        var db = OpenDatabase(dbFilename);
+        LoadExtension(db);
 
         return new MDSConnection(new MDSConnectionOptions(db));
     }
 
-    private static SqliteConnection openDatabase(string dbFilename)
+    private static SqliteConnection OpenDatabase(string dbFilename)
     {
         var connection = new SqliteConnection("Data Source=:memory:");
         connection.Open();
         return connection;
     }
 
-    private void loadExtension(SqliteConnection db)
+    private void LoadExtension(SqliteConnection db)
     {
         string extensionPath = Path.Combine(Directory.GetCurrentDirectory(), "../../../libpowersync.dylib");
         db.EnableExtensions(true);
@@ -58,7 +57,7 @@ public class MDSAdapter : IDBAdapter
 
     public Task<T> Get<T>(string sql, params object[] parameters)
     {
-        throw new NotImplementedException();
+        return writeConnection.Get<T>(sql);
     }
 
     public Task<List<T>> GetAll<T>(string sql, params object[] parameters)
@@ -68,7 +67,7 @@ public class MDSAdapter : IDBAdapter
 
     public Task<T?> GetOptional<T>(string sql, params object[] parameters)
     {
-        throw new NotImplementedException();
+        return writeConnection.GetOptional<T>(sql);
     }
 
     public Task<T> ReadLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null)

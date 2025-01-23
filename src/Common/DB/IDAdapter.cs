@@ -25,13 +25,13 @@ public class QueryResult
 
 public interface IDBGetUtils
 {
-    /// Execute a read-only query and return results.
+    // Execute a read-only query and return results.
     Task<List<T>> GetAll<T>(string sql, params object[] parameters);
 
-    /// Execute a read-only query and return the first result, or null if the ResultSet is empty.
+    // Execute a read-only query and return the first result, or null if the ResultSet is empty.
     Task<T?> GetOptional<T>(string sql, params object[] parameters);
 
-    /// Execute a read-only query and return the first result, error if the ResultSet is empty.
+    // Execute a read-only query and return the first result, error if the ResultSet is empty.
     Task<T> Get<T>(string sql, params object[] parameters);
 }
 
