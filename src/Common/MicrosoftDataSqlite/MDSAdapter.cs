@@ -2,11 +2,9 @@ namespace Common.MicrosoftDataSqlite;
 
 using System;
 using System.Collections.Generic;
-using System.Data;
 using System.Threading.Tasks;
 using Common.DB;
 using Microsoft.Data.Sqlite;
-using SQLitePCL;
 
 public class MDSAdapter : IDBAdapter
 {
@@ -24,11 +22,6 @@ public class MDSAdapter : IDBAdapter
     private async Task Init()
     {
         writeConnection = await OpenConnection("powersync.db");
-    }
-
-    private static void UpdateHook(IntPtr userData, int type, string database, string table, long rowId)
-    {
-        Console.WriteLine($"Update Hook: Type={type}, Database={database}, Table={table}, RowId={rowId}");
     }
 
     protected async Task<MDSConnection> OpenConnection(string dbFilename)
@@ -51,9 +44,9 @@ public class MDSAdapter : IDBAdapter
 
     private void LoadExtension(SqliteConnection db)
     {
-        string extensionPath = Path.Combine(Directory.GetCurrentDirectory(), "../../../libpowersync.dylib");
+        string extensionPath = Path.Combine(Directory.GetCurrentDirectory(), "../../../libpowersync");
         db.EnableExtensions(true);
-        db.LoadExtension(extensionPath);
+        db.LoadExtension(extensionPath, "sqlite3_powersync_init");
     }
 
     public void Close()

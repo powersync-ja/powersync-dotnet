@@ -1,6 +1,5 @@
 namespace Common.MicrosoftDataSqlite;
 
-using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Common.DB;
 using Microsoft.Data.Sqlite;
