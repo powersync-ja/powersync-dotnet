@@ -27,8 +27,6 @@ public class MDSConnection
 
     private void RollbackHook(object user_data)
     {
-        // TODO: Implement rollback hook
-        Console.WriteLine($"Rollback Hook");
         updateBuffer.Clear();
     }
 
@@ -56,12 +54,52 @@ public class MDSConnection
         updateBuffer.Clear();
     }
 
-    public async Task<QueryResult> Execute(string query)
+    public async Task<QueryResult> Execute(string query, object[]? parameters = null)
     {
         var result = new QueryResult();
 
         using var command = Db.CreateCommand();
-        command.CommandText = query;
+
+        if (parameters != null && parameters.Length > 0)
+        {
+            var parameterNames = new List<string>();
+
+            // Count placeholders
+            int placeholderCount = query.Count(c => c == '?');
+            if (placeholderCount != parameters.Length)
+            {
+                throw new ArgumentException("Number of provided parameters does not match the number of `?` placeholders in the query.");
+            }
+
+            // Replace `?` sequentially with named parameters
+            for (int i = 0; i < parameters.Length; i++)
+            {
+                string paramName = $"@param{i}";
+                parameterNames.Add(paramName);
+
+                // Replace only the first occurrence of `?`
+                int index = query.IndexOf('?');
+                if (index == -1)
+                {
+                    throw new ArgumentException("Mismatch between placeholders and parameters.");
+                }
+
+                query = string.Concat(query.AsSpan(0, index), paramName, query.AsSpan()[(index + 1)..]);
+            }
+
+            command.CommandText = query;
+
+            // Add parameters to the command
+            for (int i = 0; i < parameters.Length; i++)
+            {
+                command.Parameters.AddWithValue(parameterNames[i], parameters[i]);
+            }
+        }
+        else
+        {
+            command.CommandText = query;
+        }
+
         var rows = new List<Dictionary<string, object>>();
 
         using var reader = await command.ExecuteReaderAsync();

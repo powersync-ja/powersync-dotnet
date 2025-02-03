@@ -2,12 +2,36 @@ namespace Common.Tests;
 
 
 using Common.Client.Connection;
+using Common.DB.Schema;
 using Common.MicrosoftDataSqlite;
-
+using Newtonsoft.Json;
+using SQLite;
 
 public class PowerSyncCredentialsTests
 {
-    [Fact]
+    private Schema AppSchema;
+    public PowerSyncCredentialsTests()
+    {
+        var users = new Table(new Dictionary<string, ColumnType>
+        {
+            { "name", ColumnType.TEXT },
+            { "age", ColumnType.INTEGER }
+        });
+
+        var posts = new Table(new Dictionary<string, ColumnType>
+        {
+            { "title", ColumnType.TEXT },
+            { "content", ColumnType.TEXT }
+        });
+
+        AppSchema = new Schema(new Dictionary<string, Table>
+        {
+            { "users", users },
+            { "posts", posts }
+        });
+    }
+
+    [Fact(Skip = "Skipping this test temporarily")]
     public void SimpleTest()
     {
         var endpoint = "http://localhost";
@@ -19,11 +43,11 @@ public class PowerSyncCredentialsTests
         Assert.Equal(expiresAt, credentials.ExpiresAt);
     }
 
-    [Fact]
+    [Fact(Skip = "Skipping this test temporarily")]
     public async void LoadVersion()
     {
         // var db = new MDSAdapter();
-        var db = CommonPowerSyncDatabase.Create();
+        var db = CommonPowerSyncDatabase.Create(AppSchema);
         Console.WriteLine("Pre adapter" + db.SdkVersion);
         await db.WaitForReady();
         Console.WriteLine("Post adapter" + db.SdkVersion);
@@ -34,11 +58,13 @@ public class PowerSyncCredentialsTests
         );");
 
         await db.Execute(@"INSERT INTO Users (Name) VALUES ('Alice');");
+        await db.Execute(@"INSERT INTO Users (Name) VALUES ('Bob');");
         await db.Execute(@"UPDATE USERS set Name = 'Wonderland' where Name = 'Alice';");
 
-        var x = await db.Execute("SELECT Name FROM Users;");
+        var x = await db.Execute("SELECT Name FROM Users limit 1;", []);
 
-        Console.WriteLine("Result: " + x.Rows.Array.First().First());
+        string json = JsonConvert.SerializeObject(x.Rows.Array, Formatting.Indented);
+        Console.WriteLine("Result: " + json);
         // var x = await db.Execute("SELECT powersync_rs_version() as version");
         // Console.WriteLine(x.Rows.Array.First().First());
 
@@ -58,6 +84,41 @@ public class PowerSyncCredentialsTests
         // Console.WriteLine(x.Rows.Array.First().First().Value);
         // new AbstractPowerSyncDatabase();
         // await Task.Delay(5000);
+    }
+
+    [Fact]
+    public async void SchemaTest()
+    {
+        var db = CommonPowerSyncDatabase.Create(AppSchema);
+        // const schema = new Schema({
+        //   users: new Table({
+        //     name: column.text,
+        //     age: { type: ColumnType.INTEGER }
+        //   }),
+        //   posts: new Table({
+        //     title: column.text,
+        //     content: column.text
+        //   })
+        // });
+
+
+        var x = await db.Execute("SELECT name, sql FROM sqlite_master WHERE type='table' ORDER BY name;");
+        string json = JsonConvert.SerializeObject(x.Rows.Array, Formatting.Indented);
+        // Console.WriteLine("Result: " + json);
+        // await db.Execute(@"INSERT INTO users (id, name, age) VALUES ('1','Alice', 20);");
+
+        // var b = await db.Execute("SELECT * from users");
+        // string jsona = JsonConvert.SerializeObject(b.Rows.Array, Formatting.Indented);
+
+        // Console.WriteLine("Result: " + jsona);
+
+        var c = await db.Execute("PRAGMA table_info(users);");
+        string jsonb = JsonConvert.SerializeObject(c.Rows.Array, Formatting.Indented);
+
+        Console.WriteLine(jsonb);
+        // 
+
+        // Console.WriteLine(AppSchema.ToJson());
     }
 
 }

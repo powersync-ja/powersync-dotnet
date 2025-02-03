@@ -57,10 +57,10 @@ public class MDSAdapter : IDBAdapter
     public async Task<QueryResult> Execute(string query, object[]? parameters = null)
     {
         await initialized;
-        return await writeConnection!.Execute(query);
+        return await writeConnection!.Execute(query, parameters);
     }
 
-    public Task<DB.QueryResult> ExecuteBatch(string query, object[][]? parameters = null)
+    public Task<QueryResult> ExecuteBatch(string query, object[][]? parameters = null)
     {
         throw new NotImplementedException();
     }
@@ -92,9 +92,10 @@ public class MDSAdapter : IDBAdapter
         throw new NotImplementedException();
     }
 
-    public Task RefreshSchema()
+    public async Task RefreshSchema()
     {
-        throw new NotImplementedException();
+        await initialized;
+        await writeConnection!.RefreshSchema();
     }
 
     public Task<T> WriteLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null)
