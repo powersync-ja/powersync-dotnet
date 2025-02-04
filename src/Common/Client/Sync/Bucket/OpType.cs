@@ -1,6 +1,9 @@
 namespace Common.Client.Sync.Bucket;
 using System;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
 
+[JsonConverter(typeof(StringEnumConverter))]
 public enum OpTypeEnum
 {
     CLEAR = 1,
@@ -24,6 +27,6 @@ public class OpType(OpTypeEnum value)
 
     public string ToJSON()
     {
-        return Value.ToString();
+        return JsonConvert.SerializeObject(Value).Trim('"'); // Ensures it's a string without extra quotes
     }
 }

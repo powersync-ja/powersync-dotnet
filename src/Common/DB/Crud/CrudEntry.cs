@@ -1,66 +1,66 @@
 namespace Common.DB.Crud;
-using System;
+
 using System.Collections.Generic;
-using System.Text.Json;
-using System.Text.Json.Serialization;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 public enum UpdateType
 {
-    [JsonPropertyName("PUT")]
+    [JsonProperty("PUT")]
     PUT,
 
-    [JsonPropertyName("PATCH")]
+    [JsonProperty("PATCH")]
     PATCH,
 
-    [JsonPropertyName("DELETE")]
+    [JsonProperty("DELETE")]
     DELETE
 }
 
 public class CrudEntryJSON
 {
-    [JsonPropertyName("id")]
+    [JsonProperty("id")]
     public string Id { get; set; } = null!;
 
-    [JsonPropertyName("data")]
+    [JsonProperty("data")]
     public string Data { get; set; } = null!;
 
-    [JsonPropertyName("tx_id")]
+    [JsonProperty("tx_id")]
     public int? TransactionId { get; set; }
 }
 
 public class CrudEntryDataJSON
 {
-    [JsonPropertyName("data")]
+    [JsonProperty("data")]
     public Dictionary<string, object> Data { get; set; } = new();
 
-    [JsonPropertyName("op")]
+    [JsonProperty("op")]
     public UpdateType Op { get; set; }
 
-    [JsonPropertyName("type")]
+    [JsonProperty("type")]
     public string Type { get; set; } = null!;
 
-    [JsonPropertyName("id")]
+    [JsonProperty("id")]
     public string Id { get; set; } = null!;
 }
 
 public class CrudEntryOutputJSON
 {
-    [JsonPropertyName("op_id")]
+    [JsonProperty("op_id")]
     public int OpId { get; set; }
 
-    [JsonPropertyName("op")]
+    [JsonProperty("op")]
     public UpdateType Op { get; set; }
 
-    [JsonPropertyName("type")]
+    [JsonProperty("type")]
     public string Type { get; set; } = null!;
 
-    [JsonPropertyName("id")]
+    [JsonProperty("id")]
     public string Id { get; set; } = null!;
 
-    [JsonPropertyName("tx_id")]
+    [JsonProperty("tx_id")]
     public int? TransactionId { get; set; }
 
-    [JsonPropertyName("data")]
+    [JsonProperty("data")]
     public Dictionary<string, object>? Data { get; set; }
 }
 
@@ -75,7 +75,9 @@ public class CrudEntry(int clientId, UpdateType op, string table, string id, int
 
     public static CrudEntry FromRow(CrudEntryJSON dbRow)
     {
-        var data = JsonSerializer.Deserialize<CrudEntryDataJSON>(dbRow.Data)!;
+        var data = JsonConvert.DeserializeObject<CrudEntryDataJSON>(dbRow.Data)
+                   ?? throw new JsonException("Invalid JSON format in CrudEntryJSON data.");
+
         return new CrudEntry(
             int.Parse(dbRow.Id),
             data.Op,
@@ -101,12 +103,15 @@ public class CrudEntry(int clientId, UpdateType op, string table, string id, int
 
     public bool Equals(CrudEntry other)
     {
-        return JsonSerializer.Serialize(ToComparisonArray()) == JsonSerializer.Serialize(other.ToComparisonArray());
+        return JToken.DeepEquals(
+            JToken.FromObject(ToComparisonArray()),
+            JToken.FromObject(other.ToComparisonArray())
+        );
     }
 
     public override int GetHashCode()
     {
-        return JsonSerializer.Serialize(ToComparisonArray()).GetHashCode();
+        return JToken.FromObject(ToComparisonArray()).GetHashCode();
     }
 
     private object[] ToComparisonArray()

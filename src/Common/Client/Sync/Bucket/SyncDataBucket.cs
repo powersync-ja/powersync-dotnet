@@ -1,22 +1,24 @@
 namespace Common.Client.Sync.Bucket;
 
-using System.Text.Json.Serialization;
+using System.Collections.Generic;
+using System.Linq;
+using Newtonsoft.Json;
 
 public class SyncDataBucketJSON
 {
-    [JsonPropertyName("bucket")]
+    [JsonProperty("bucket")]
     public string Bucket { get; set; } = null!;
 
-    [JsonPropertyName("has_more")]
+    [JsonProperty("has_more")]
     public bool? HasMore { get; set; }
 
-    [JsonPropertyName("after")]
+    [JsonProperty("after")]
     public string? After { get; set; }
 
-    [JsonPropertyName("next_after")]
+    [JsonProperty("next_after")]
     public string? NextAfter { get; set; }
 
-    [JsonPropertyName("data")]
+    [JsonProperty("data")]
     public List<OplogEntryJSON> Data { get; set; } = [];
 }
 
@@ -52,7 +54,7 @@ public class SyncDataBucket(
             HasMore = HasMore,
             After = After,
             NextAfter = NextAfter,
-            Data = Data.Select(entry => entry.ToJSON()).ToList()
+            Data = [.. Data.Select(entry => entry.ToJSON())]
         };
     }
 }

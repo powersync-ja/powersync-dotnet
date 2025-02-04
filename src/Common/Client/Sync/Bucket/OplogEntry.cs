@@ -1,30 +1,28 @@
 namespace Common.Client.Sync.Bucket;
 
-using System.Text.Json;
-using System.Text.Json.Serialization;
-
+using Newtonsoft.Json;
 
 public class OplogEntryJSON
 {
-    [JsonPropertyName("checksum")]
+    [JsonProperty("checksum")]
     public int Checksum { get; set; }
 
-    [JsonPropertyName("data")]
+    [JsonProperty("data")]
     public string? Data { get; set; }
 
-    [JsonPropertyName("object_id")]
+    [JsonProperty("object_id")]
     public string? ObjectId { get; set; }
 
-    [JsonPropertyName("object_type")]
+    [JsonProperty("object_type")]
     public string? ObjectType { get; set; }
 
-    [JsonPropertyName("op_id")]
+    [JsonProperty("op_id")]
     public string OpId { get; set; } = null!;
 
-    [JsonPropertyName("op")]
+    [JsonProperty("op")]
     public string Op { get; set; } = null!;
 
-    [JsonPropertyName("subkey")]
+    [JsonProperty("subkey")]
     public object? Subkey { get; set; }
 }
 
@@ -52,7 +50,7 @@ public class OplogEntry(
             row.OpId,
             OpType.FromJSON(row.Op),
             row.Checksum,
-            row.Subkey is string subkey ? subkey : JsonSerializer.Serialize(row.Subkey),
+            row.Subkey is string subkey ? subkey : JsonConvert.SerializeObject(row.Subkey),
             row.ObjectType,
             row.ObjectId,
             row.Data
@@ -69,8 +67,7 @@ public class OplogEntry(
             Data = Data,
             ObjectType = ObjectType,
             ObjectId = ObjectId,
-            Subkey = JsonSerializer.Serialize(Subkey)
+            Subkey = JsonConvert.SerializeObject(Subkey)
         };
     }
 }
-

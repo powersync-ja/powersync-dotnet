@@ -92,12 +92,6 @@ public class MDSAdapter : IDBAdapter
         throw new NotImplementedException();
     }
 
-    public async Task RefreshSchema()
-    {
-        await initialized;
-        await writeConnection!.RefreshSchema();
-    }
-
     public Task<T> WriteLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null)
     {
         throw new NotImplementedException();
@@ -105,6 +99,78 @@ public class MDSAdapter : IDBAdapter
 
     public Task<T> WriteTransaction<T>(Func<ITransaction, Task<T>> fn, DBLockOptions? options = null)
     {
-        throw new NotImplementedException();
+        return InternalTransaction(new MDSTransaction(this)!, fn);
+    }
+
+    protected static async Task<T> InternalTransaction<T>(MDSTransaction ctx, Func<ITransaction, Task<T>> fn)
+    {
+        try
+        {
+            await ctx.Execute("BEGIN");
+            var result = await fn(ctx);
+            await ctx.Commit();
+            return result;
+        }
+        catch (Exception)
+        {
+            try
+            {
+                await ctx.Rollback();
+            }
+            catch (Exception)
+            {
+                // In rare cases, a rollback may fail.
+                // Safe to ignore.
+            }
+            throw;
+        }
+    }
+
+    public async Task RefreshSchema()
+    {
+        await initialized;
+        await writeConnection!.RefreshSchema();
+    }
+}
+
+
+public class MDSTransaction(MDSAdapter adapter) : ITransaction
+{
+
+    private readonly MDSAdapter adapter = adapter;
+    private bool finalized = false;
+
+    public async Task Commit()
+    {
+        if (finalized) return;
+        finalized = true;
+        await adapter.Execute("COMMIT");
+    }
+
+    public async Task Rollback()
+    {
+        if (finalized) return;
+        finalized = true;
+        await adapter.Execute("ROLLBACK");
+    }
+
+    public Task<QueryResult> Execute(string query, object[]? parameters = null)
+    {
+        return adapter.Execute(query, parameters);
+    }
+
+    public Task<T> Get<T>(string sql, params object[] parameters)
+    {
+        return adapter.Get<T>(sql, parameters);
+    }
+
+    public Task<List<T>> GetAll<T>(string sql, params object[] parameters)
+    {
+        return adapter.GetAll<T>(sql, parameters);
+    }
+
+    public Task<T?> GetOptional<T>(string sql, params object[] parameters)
+    {
+        return adapter.GetOptional<T>(sql, parameters);
     }
 }

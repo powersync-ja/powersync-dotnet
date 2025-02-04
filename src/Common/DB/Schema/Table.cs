@@ -25,33 +25,44 @@ public class Table
 {
     protected TableOptions Options { get; set; }
 
-    // Represents the mapping of column names to their types
-    public Dictionary<string, ColumnType> MappedColumns;
+    public Dictionary<string, ColumnType> OriginalColumns;
+
+    private readonly List<Column> ConvertedColumns;
+    private readonly List<Index> ConvertedIndexes;
 
     public Table(Dictionary<string, ColumnType> columns, TableOptions? options = null)
     {
-        // Convert columns to a list of Column objects
-        var convertedColumns = columns
-            .Select(kv => new Column(new ColumnOptions(kv.Key, kv.Value)))
-            .ToList();
+        ConvertedColumns = [.. columns.Select(kv => new Column(new ColumnOptions(kv.Key, kv.Value)))];
 
-        // Convert indexes to a list of Index objects
-        var convertedIndexes = (Options?.Indexes ?? new Dictionary<string, List<string>>())
+        ConvertedIndexes = [.. (Options?.Indexes ?? new Dictionary<string, List<string>>())
             .Select(kv =>
                 new Index(new IndexOptions(
                     kv.Key,
-                    kv.Value.Select(name =>
+                    [.. kv.Value.Select(name =>
                         new IndexedColumn(new IndexColumnOptions(
                             name.Replace("-", ""), !name.StartsWith("-")))
-                    ).ToList()
+                    )]
                 ))
-            )
-            .ToList();
+            )];
 
-        // Initialize options
-        Options ??= new TableOptions();
+        Options = options ?? new TableOptions();
 
-        MappedColumns = columns;
+        OriginalColumns = columns;
+    }
+
+    public string ToJson(string Name = "")
+    {
+        var jsonObject = new
+        {
+            view_name = Options.ViewName ?? Name,
+            local_only = Options.LocalOnly,
+            insert_only = Options.InsertOnly,
+            columns = ConvertedColumns.Select(c => JsonConvert.DeserializeObject<object>(c.ToJson())).ToList(),
+            indexes = ConvertedIndexes.Select(e => JsonConvert.DeserializeObject<object>(e.ToJson(this))).ToList()
+
+        };
+
+        return JsonConvert.SerializeObject(jsonObject, Formatting.Indented);
     }
 }
 

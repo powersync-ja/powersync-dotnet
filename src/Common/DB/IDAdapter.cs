@@ -44,10 +44,10 @@ public interface ILockContext : IDBGetUtils
 public interface ITransaction : ILockContext
 {
     // Commit multiple changes to the local DB using the Transaction context.
-    Task<QueryResult> Commit();
+    Task Commit();
 
     // Roll back multiple attempted changes using the Transaction context.
-    Task<QueryResult> Rollback();
+    Task Rollback();
 }
 
 public enum RowUpdateType
@@ -74,13 +74,11 @@ public class DBLockOptions
     public int? TimeoutMs { get; set; }
 }
 
-public interface IDBAdapter : IDBGetUtils
+// TODO remove IDBGetUtils - inheriting from ILockContext
+public interface IDBAdapter : IDBGetUtils, ILockContext
 {
     // Closes the adapter.
     void Close();
-
-    // Execute a single write statement.
-    Task<QueryResult> Execute(string query, object[]? parameters = null);
 
     // Execute a batch of write statements.
     Task<QueryResult> ExecuteBatch(string query, object[][]? parameters = null);

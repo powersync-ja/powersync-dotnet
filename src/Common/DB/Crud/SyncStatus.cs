@@ -1,47 +1,80 @@
 namespace Common.DB.Crud;
 
-using System.Text.Json;
+using System;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
-
-public class SyncDataFlowStatus(bool downloading = false, bool uploading = false)
+public class SyncDataFlowStatus
 {
-    public bool Downloading { get; set; } = downloading;
-    public bool Uploading { get; set; } = uploading;
+    [JsonProperty("downloading")]
+    public bool Downloading { get; set; }
+
+    [JsonProperty("uploading")]
+    public bool Uploading { get; set; }
+
+    public SyncDataFlowStatus(bool downloading = false, bool uploading = false)
+    {
+        Downloading = downloading;
+        Uploading = uploading;
+    }
 }
 
-public class SyncStatusOptions(
+public class SyncStatusOptions
+{
+    [JsonProperty("connected")]
+    public bool? Connected { get; set; }
+
+    [JsonProperty("dataFlow")]
+    public SyncDataFlowStatus? DataFlow { get; set; }
+
+    [JsonProperty("lastSyncedAt")]
+    public DateTime? LastSyncedAt { get; set; }
+
+    [JsonProperty("hasSynced")]
+    public bool? HasSynced { get; set; }
+
+    public SyncStatusOptions(
         bool? connected = null,
         SyncDataFlowStatus? dataFlow = null,
         DateTime? lastSyncedAt = null,
         bool? hasSynced = null)
-{
-    public bool? Connected { get; set; } = connected;
-    public SyncDataFlowStatus? DataFlow { get; set; } = dataFlow;
-    public DateTime? LastSyncedAt { get; set; } = lastSyncedAt;
-    public bool? HasSynced { get; set; } = hasSynced;
+    {
+        Connected = connected;
+        DataFlow = dataFlow;
+        LastSyncedAt = lastSyncedAt;
+        HasSynced = hasSynced;
+    }
 }
 
-public class SyncStatus(SyncStatusOptions options)
+public class SyncStatus
 {
-    protected SyncStatusOptions options = options;
+    private readonly SyncStatusOptions _options;
 
-    public bool Connected => options.Connected ?? false;
+    public SyncStatus(SyncStatusOptions options)
+    {
+        _options = options;
+    }
 
-    public DateTime? LastSyncedAt => options.LastSyncedAt;
+    public bool Connected => _options.Connected ?? false;
 
-    public bool? HasSynced => options.HasSynced;
+    public DateTime? LastSyncedAt => _options.LastSyncedAt;
 
-    public SyncDataFlowStatus DataFlowStatus => options.DataFlow ?? new SyncDataFlowStatus();
+    public bool? HasSynced => _options.HasSynced;
+
+    public SyncDataFlowStatus DataFlowStatus => _options.DataFlow ?? new SyncDataFlowStatus();
 
     public bool IsEqual(SyncStatus status)
     {
-        return JsonSerializer.Serialize(options) == JsonSerializer.Serialize(status.options);
+        return JToken.DeepEquals(
+            JToken.FromObject(_options),
+            JToken.FromObject(status._options)
+        );
     }
 
     public string GetMessage()
     {
         return $"SyncStatus<connected: {Connected}, lastSyncedAt: {LastSyncedAt}, hasSynced: {HasSynced}, " +
-                $"downloading: {DataFlowStatus.Downloading}, uploading: {DataFlowStatus.Uploading}>";
+               $"downloading: {DataFlowStatus.Downloading}, uploading: {DataFlowStatus.Uploading}>";
     }
 
     public SyncStatusOptions ToJson()

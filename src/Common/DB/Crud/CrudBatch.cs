@@ -4,11 +4,11 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-public class CrudBatch(List<CrudEntry> crud, bool haveMore, Func<string?, Task> complete)
+public class CrudBatch(List<CrudEntry> Crud, bool HaveMore, Func<string?, Task> Complete)
 {
-    public List<CrudEntry> Crud { get; private set; } = crud ?? throw new ArgumentNullException(nameof(crud));
+    public List<CrudEntry> Crud { get; private set; } = Crud;
 
-    public bool HaveMore { get; private set; } = haveMore;
+    public bool HaveMore { get; private set; } = HaveMore;
 
-    public Func<string?, Task> Complete { get; private set; } = complete ?? throw new ArgumentNullException(nameof(complete));
+    public Func<string?, Task> Complete { get; private set; } = Complete;
 }

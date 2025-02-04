@@ -14,7 +14,7 @@ public class Index(IndexOptions options)
 
     public List<IndexedColumn> Columns => options.Columns ?? [];
 
-    public object ToJson(Table table)
+    public string ToJson(Table table)
     {
         return JsonConvert.SerializeObject(new
         {
