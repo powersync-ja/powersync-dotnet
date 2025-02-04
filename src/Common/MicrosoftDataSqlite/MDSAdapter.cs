@@ -97,31 +97,58 @@ public class MDSAdapter : IDBAdapter
         throw new NotImplementedException();
     }
 
-    public Task<T> WriteTransaction<T>(Func<ITransaction, Task<T>> fn, DBLockOptions? options = null)
+    public async void Yoink()
     {
-        return InternalTransaction(new MDSTransaction(this)!, fn);
+
+        await this.WriteTransaction(async (tx) =>
+        {
+            return await tx.Execute("INSERT INTO powersync_operations(op, data) VALUES (?, ?)",
+               new object[] { "clear_remove_ops", "" });
+        });
     }
 
-    protected static async Task<T> InternalTransaction<T>(MDSTransaction ctx, Func<ITransaction, Task<T>> fn)
+    public async Task WriteTransaction(Func<ITransaction, Task> fn, DBLockOptions? options = null)
+    {
+        await InternalTransaction(new MDSTransaction(this)!, fn);
+    }
+    public async Task<T> WriteTransaction<T>(Func<ITransaction, Task<T>> fn, DBLockOptions? options = null)
+    {
+        return await InternalTransaction(new MDSTransaction(this)!, fn);
+    }
+
+    protected static Task InternalTransaction(
+        MDSTransaction ctx,
+        Func<ITransaction, Task> fn)
+    {
+        return RunTransaction(ctx, () => fn(ctx));
+    }
+
+    protected static async Task<T> InternalTransaction<T>(
+        MDSTransaction ctx,
+        Func<ITransaction, Task<T>> fn)
+    {
+        T result = default!;
+        await RunTransaction(ctx, async () =>
+        {
+            result = await fn(ctx);
+        });
+        return result;
+    }
+
+    private static async Task RunTransaction(
+        ITransaction ctx,
+        Func<Task> action)
     {
         try
         {
             await ctx.Execute("BEGIN");
-            var result = await fn(ctx);
+            await action();
             await ctx.Commit();
-            return result;
         }
-        catch (Exception)
+        catch
         {
-            try
-            {
-                await ctx.Rollback();
-            }
-            catch (Exception)
-            {
-                // In rare cases, a rollback may fail.
-                // Safe to ignore.
-            }
+            // In rare cases, a rollback may fail. Safe to ignore.
+            try { await ctx.Rollback(); } catch { /* Ignore rollback errors */ }
             throw;
         }
     }
@@ -133,7 +160,7 @@ public class MDSAdapter : IDBAdapter
     }
 }
 
-
+// TODO CL this could been a lock context
 public class MDSTransaction(MDSAdapter adapter) : ITransaction
 {
 

@@ -95,7 +95,8 @@ public interface IDBAdapter : IDBGetUtils, ILockContext
     // Executes a write lock with the given function.
     Task<T> WriteLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null);
 
-    // Executes a write transaction with the given function.
+    // Executes a write transaction with the given function. 
+    Task WriteTransaction(Func<ITransaction, Task> fn, DBLockOptions? options = null);
     Task<T> WriteTransaction<T>(Func<ITransaction, Task<T>> fn, DBLockOptions? options = null);
 
     // This method refreshes the schema information across all connections. This is for advanced use cases, and should generally not be needed.

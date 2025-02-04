@@ -77,9 +77,9 @@ public interface IBucketStorageAdapter : IDisposable
 
     Task<List<BucketState>> GetBucketStates();
 
-    Task<(bool CheckpointValid, bool Ready, List<object>? Failures)> SyncLocalDatabase(Checkpoint checkpoint);
+    Task<SyncLocalDatabaseResult> SyncLocalDatabase(Checkpoint checkpoint);
 
-    Task<CrudEntry?> NextCrudItemAsync();
+    Task<CrudEntry?> NextCrudItem();
     Task<bool> HasCrud();
     Task<CrudBatch?> GetCrudBatch(int? limit = null);
 
