@@ -15,7 +15,7 @@ public class IndexedColumn(IndexColumnOptions options)
     protected bool Ascending { get; set; } = options.Ascending;
 
 
-    public object ToJson(Table table)
+    public object ToJSON(Table table)
     {
         var colType = table.OriginalColumns.GetValueOrDefault(Name);
 

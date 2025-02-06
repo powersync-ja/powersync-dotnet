@@ -14,12 +14,12 @@ public class Index(IndexOptions options)
 
     public List<IndexedColumn> Columns => options.Columns ?? [];
 
-    public string ToJson(Table table)
+    public string ToJSON(Table table)
     {
         return JsonConvert.SerializeObject(new
         {
             name = Name,
-            columns = Columns.Select(column => column.ToJson(table)).ToList()
+            columns = Columns.Select(column => column.ToJSON(table)).ToList()
         });
     }
 }

@@ -77,17 +77,16 @@ public class SyncStatus
                $"downloading: {DataFlowStatus.Downloading}, uploading: {DataFlowStatus.Uploading}>";
     }
 
-    public SyncStatusOptions ToJson()
+    public string ToJSON()
     {
-        return new SyncStatusOptions
+        return JsonConvert.SerializeObject(new SyncStatusOptions
         {
             Connected = Connected,
             DataFlow = DataFlowStatus,
             LastSyncedAt = LastSyncedAt,
             HasSynced = HasSynced
-        };
+        });
     }
-
     public override string ToString()
     {
         return GetMessage();

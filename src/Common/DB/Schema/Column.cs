@@ -23,7 +23,7 @@ public class Column(ColumnOptions options)
 
     public ColumnType Type { get; set; } = options.Type ?? ColumnType.TEXT;
 
-    public string ToJson()
+    public string ToJSON()
     {
         return JsonConvert.SerializeObject(new
         {

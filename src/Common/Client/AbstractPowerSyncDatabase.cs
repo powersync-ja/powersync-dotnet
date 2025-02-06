@@ -156,7 +156,7 @@ public class AbstractPowerSyncDatabase
         }
 
         this.schema = schema;
-        await Database.Execute("SELECT powersync_replace_schema(?)", [schema.ToJson()]);
+        await Database.Execute("SELECT powersync_replace_schema(?)", [schema.ToJSON()]);
         await Database.RefreshSchema();
         // this.iterateListeners(async (cb) => cb.schemaChanged?.(schema));
     }

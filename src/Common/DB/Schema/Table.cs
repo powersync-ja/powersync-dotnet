@@ -50,15 +50,15 @@ public class Table
         OriginalColumns = columns;
     }
 
-    public string ToJson(string Name = "")
+    public string ToJSON(string Name = "")
     {
         var jsonObject = new
         {
             view_name = Options.ViewName ?? Name,
             local_only = Options.LocalOnly,
             insert_only = Options.InsertOnly,
-            columns = ConvertedColumns.Select(c => JsonConvert.DeserializeObject<object>(c.ToJson())).ToList(),
-            indexes = ConvertedIndexes.Select(e => JsonConvert.DeserializeObject<object>(e.ToJson(this))).ToList()
+            columns = ConvertedColumns.Select(c => JsonConvert.DeserializeObject<object>(c.ToJSON())).ToList(),
+            indexes = ConvertedIndexes.Select(e => JsonConvert.DeserializeObject<object>(e.ToJSON(this))).ToList()
         };
 
         return JsonConvert.SerializeObject(jsonObject, Formatting.Indented);
