@@ -1,5 +1,6 @@
 namespace Common.MicrosoftDataSqlite;
 
+using System.Reflection.PortableExecutable;
 using System.Threading.Tasks;
 using Common.DB;
 using Microsoft.Data.Sqlite;
@@ -114,15 +115,43 @@ public class MDSConnection
             rows.Add(row);
         }
 
-        // insertId = await db.Execute("SELECT last_insert_rowid();");
+        result.InsertId = raw.sqlite3_last_insert_rowid(Db.Handle);
         result.RowsAffected = reader.RecordsAffected;
         result.Rows.Array = rows;
         return result;
     }
 
-    public async Task<T?> GetOptional<T>(string sql)
+    public async Task<T[]> GetAll<T>(string sql, object[]? parameters = null)
     {
-        var result = await Execute(sql);
+        var result = await Execute(sql, parameters);
+
+        // If there are no rows, return an empty array.
+        if (result.Rows.Array.Count == 0)
+        {
+            return [];
+        }
+
+        var items = new List<T>();
+
+        // TODO: Improve mapping errors for when the result fields don't match the target type.
+        // TODO: This conversion may be a performance bottleneck, it's the easiest mechamisn for getting result typing.
+        foreach (var row in result.Rows.Array)
+        {
+            if (row != null)
+            {
+                // Serialize the row to JSON and then deserialize it into type T.
+                string json = JsonConvert.SerializeObject(row);
+                T item = JsonConvert.DeserializeObject<T>(json)!;
+                items.Add(item);
+            }
+        }
+
+        return [.. items];
+    }
+
+    public async Task<T?> GetOptional<T>(string sql, object[]? parameters = null)
+    {
+        var result = await Execute(sql, parameters);
 
         // If there are no rows, return null
         if (result.Rows.Array.Count == 0)
@@ -141,12 +170,11 @@ public class MDSConnection
         // TODO: This conversion may be a performance bottleneck, it's the easiest mechamisn for getting result typing.
         string json = JsonConvert.SerializeObject(firstRow);
         return JsonConvert.DeserializeObject<T>(json);
-
     }
 
-    public async Task<T> Get<T>(string sql)
+    public async Task<T> Get<T>(string sql, object[]? parameters = null)
     {
-        return await GetOptional<T>(sql) ?? throw new InvalidOperationException("Result set is empty");
+        return await GetOptional<T>(sql, parameters) ?? throw new InvalidOperationException("Result set is empty");
     }
 
     public void Close()

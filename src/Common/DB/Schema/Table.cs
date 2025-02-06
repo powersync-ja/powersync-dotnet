@@ -34,7 +34,7 @@ public class Table
     {
         ConvertedColumns = [.. columns.Select(kv => new Column(new ColumnOptions(kv.Key, kv.Value)))];
 
-        ConvertedIndexes = [.. (Options?.Indexes ?? new Dictionary<string, List<string>>())
+        ConvertedIndexes = [.. (Options?.Indexes ?? [])
             .Select(kv =>
                 new Index(new IndexOptions(
                     kv.Key,
@@ -59,7 +59,6 @@ public class Table
             insert_only = Options.InsertOnly,
             columns = ConvertedColumns.Select(c => JsonConvert.DeserializeObject<object>(c.ToJson())).ToList(),
             indexes = ConvertedIndexes.Select(e => JsonConvert.DeserializeObject<object>(e.ToJson(this))).ToList()
-
         };
 
         return JsonConvert.SerializeObject(jsonObject, Formatting.Indented);

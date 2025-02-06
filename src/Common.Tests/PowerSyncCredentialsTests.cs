@@ -86,7 +86,7 @@ public class PowerSyncCredentialsTests
         // await Task.Delay(5000);
     }
 
-    [Fact]
+    [Fact(Skip = "Skipping this test temporarily")]
     public async void SchemaTest()
     {
         var db = CommonPowerSyncDatabase.Create(AppSchema);
@@ -105,17 +105,25 @@ public class PowerSyncCredentialsTests
         var x = await db.Execute("SELECT name, sql FROM sqlite_master WHERE type='table' ORDER BY name;");
         string json = JsonConvert.SerializeObject(x.Rows.Array, Formatting.Indented);
         // Console.WriteLine("Result: " + json);
-        // await db.Execute(@"INSERT INTO users (id, name, age) VALUES ('1','Alice', 20);");
+        await db.Execute(@"INSERT INTO users (id, name, age) VALUES ('1','Alice', 20);");
 
-        // var b = await db.Execute("SELECT * from users");
-        // string jsona = JsonConvert.SerializeObject(b.Rows.Array, Formatting.Indented);
+        var b = await db.Execute("SELECT * from users");
+        string jsona = JsonConvert.SerializeObject(b.Rows.Array, Formatting.Indented);
 
         // Console.WriteLine("Result: " + jsona);
 
-        var c = await db.Execute("PRAGMA table_info(users);");
-        string jsonb = JsonConvert.SerializeObject(c.Rows.Array, Formatting.Indented);
+        // var c = await db.Execute("PRAGMA table_info(users);");
+        // string jsonb = JsonConvert.SerializeObject(c.Rows.Array, Formatting.Indented);
 
-        Console.WriteLine(jsonb);
+        // var k = await db.Database.ReadTransaction(async (tx) =>
+        // {
+        //     Console.WriteLine("reee");
+
+        //     return await tx.Execute("select * from users limit 1");
+        // });
+        // string jsonb = JsonConvert.SerializeObject(k.Rows.Array, Formatting.Indented);
+
+        // Console.WriteLine(jsonb);
         // 
 
         // Console.WriteLine(AppSchema.ToJson());

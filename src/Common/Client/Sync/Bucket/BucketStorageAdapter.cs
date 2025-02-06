@@ -13,7 +13,7 @@ public class Checkpoint
     public string LastOpId { get; set; } = null!;
 
     [JsonProperty("buckets")]
-    public List<BucketChecksum> Buckets { get; set; } = new();
+    public BucketChecksum[] Buckets { get; set; } = [];
 
     [JsonProperty("write_checkpoint")]
     public string? WriteCheckpoint { get; set; }
@@ -37,7 +37,18 @@ public class SyncLocalDatabaseResult
     public bool CheckpointValid { get; set; }
 
     [JsonProperty("checkpointFailures")]
-    public List<string>? CheckpointFailures { get; set; }
+    public string[]? CheckpointFailures { get; set; }
+
+    public override bool Equals(object? obj)
+    {
+        if (obj is not SyncLocalDatabaseResult other) return false;
+        return JsonConvert.SerializeObject(this) == JsonConvert.SerializeObject(other);
+    }
+
+    public override int GetHashCode()
+    {
+        return JsonConvert.SerializeObject(this).GetHashCode();
+    }
 }
 
 public class BucketChecksum
@@ -57,6 +68,7 @@ public class BucketChecksum
     [JsonProperty("count")]
     public int? Count { get; set; }
 }
+
 public static class PSInternalTable
 {
     public static readonly string DATA = "ps_data";
@@ -70,18 +82,18 @@ public interface IBucketStorageAdapter : IDisposable
 {
     Task Init();
     Task SaveSyncData(SyncDataBatch batch);
-    Task RemoveBuckets(List<string> buckets);
+    Task RemoveBuckets(string[] buckets);
     Task SetTargetCheckpoint(Checkpoint checkpoint);
 
     void StartSession();
 
-    Task<List<BucketState>> GetBucketStates();
+    Task<BucketState[]> GetBucketStates();
 
     Task<SyncLocalDatabaseResult> SyncLocalDatabase(Checkpoint checkpoint);
 
     Task<CrudEntry?> NextCrudItem();
     Task<bool> HasCrud();
-    Task<CrudBatch?> GetCrudBatch(int? limit = null);
+    Task<CrudBatch?> GetCrudBatch(int limit = 100);
 
     Task<bool> HasCompletedSync();
     Task<bool> UpdateLocalTarget(Func<Task<string>> callback);

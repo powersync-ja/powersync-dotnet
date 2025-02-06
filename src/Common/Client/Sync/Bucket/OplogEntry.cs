@@ -8,7 +8,7 @@ public class OplogEntryJSON
     public int Checksum { get; set; }
 
     [JsonProperty("data")]
-    public string? Data { get; set; }
+    public object? Data { get; set; }
 
     [JsonProperty("object_id")]
     public string? ObjectId { get; set; }
@@ -33,7 +33,7 @@ public class OplogEntry(
     string subkey,
     string? objectType = null,
     string? objectId = null,
-    string? data = null
+    object? data = null
     )
 {
     public string OpId { get; private set; } = opId;
@@ -42,7 +42,7 @@ public class OplogEntry(
     public string Subkey { get; private set; } = subkey;
     public string? ObjectType { get; private set; } = objectType;
     public string? ObjectId { get; private set; } = objectId;
-    public string? Data { get; private set; } = data;
+    public object? Data { get; private set; } = data;
 
     public static OplogEntry FromRow(OplogEntryJSON row)
     {
@@ -57,9 +57,9 @@ public class OplogEntry(
         );
     }
 
-    public OplogEntryJSON ToJSON()
+    public string ToJSON()
     {
-        return new OplogEntryJSON
+        var jsonObject = new OplogEntryJSON
         {
             OpId = OpId,
             Op = Op.ToJSON(),
@@ -67,7 +67,9 @@ public class OplogEntry(
             Data = Data,
             ObjectType = ObjectType,
             ObjectId = ObjectId,
-            Subkey = JsonConvert.SerializeObject(Subkey)
+            Subkey = Subkey
         };
+
+        return JsonConvert.SerializeObject(jsonObject, Formatting.None);
     }
 }

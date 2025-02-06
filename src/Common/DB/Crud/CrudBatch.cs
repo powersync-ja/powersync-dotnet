@@ -4,9 +4,9 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-public class CrudBatch(List<CrudEntry> Crud, bool HaveMore, Func<string?, Task> Complete)
+public class CrudBatch(CrudEntry[] Crud, bool HaveMore, Func<string?, Task> Complete)
 {
-    public List<CrudEntry> Crud { get; private set; } = Crud;
+    public CrudEntry[] Crud { get; private set; } = Crud;
 
     public bool HaveMore { get; private set; } = HaveMore;
 

@@ -29,7 +29,7 @@ public class PowerSyncDatabaseOptions(IDBAdapter database, Schema schema) : Base
 public class AbstractPowerSyncDatabase
 {
 
-    private readonly IDBAdapter database;
+    public IDBAdapter Database;
     private Schema schema;
     private static readonly Regex POWERSYNC_TABLE_MATCH = new Regex(@"(^ps_data__|^ps_data_local__)", RegexOptions.Compiled);
 
@@ -44,7 +44,7 @@ public class AbstractPowerSyncDatabase
 
     public AbstractPowerSyncDatabase(PowerSyncDatabaseOptions options)
     {
-        database = options.Database;
+        Database = options.Database;
         SyncStatus = new SyncStatus(new SyncStatusOptions());
         Closed = false;
         Ready = false;
@@ -56,11 +56,10 @@ public class AbstractPowerSyncDatabase
 
     protected async Task Initialize()
     {
-        Console.WriteLine("test");
         await LoadVersion();
         await UpdateSchema(schema);
         await UpdateHasSynced();
-        await database.Execute("PRAGMA RECURSIVE_TRIGGERS=TRUE");
+        await Database.Execute("PRAGMA RECURSIVE_TRIGGERS=TRUE");
         Ready = true;
     }
 
@@ -76,11 +75,11 @@ public class AbstractPowerSyncDatabase
 
         await isReadyTask;
     }
-    public record VersionResult(string Version);
+    private record VersionResult(string Version);
 
     private async Task LoadVersion()
     {
-        string sdkVersion = (await database.Get<VersionResult>("SELECT powersync_rs_version() as version")).Version;
+        string sdkVersion = (await Database.Get<VersionResult>("SELECT powersync_rs_version() as version")).Version;
         SdkVersion = sdkVersion;
 
         int[] versionInts;
@@ -106,14 +105,14 @@ public class AbstractPowerSyncDatabase
     }
 
     // { synced_at: string | null }
-    public record LastSyncedResult(string? synced_at);
+    private record LastSyncedResult(string? synced_at);
     // 
     protected async Task UpdateHasSynced()
     {
-        var syncedAt = (await database.Get<LastSyncedResult>("SELECT powersync_last_synced_at() as synced_at")).synced_at;
-        var result = await database.Execute("SELECT powersync_last_synced_at() as synced_at");
+        var syncedAt = (await Database.Get<LastSyncedResult>("SELECT powersync_last_synced_at() as synced_at")).synced_at;
+        var result = await Database.Execute("SELECT powersync_last_synced_at() as synced_at");
 
-        Console.WriteLine("Result: " + syncedAt);
+        Console.WriteLine("Synced at: " + syncedAt);
         // const hasSynced = result.synced_at != null;
         // const syncedAt = result.synced_at != null ? new Date(result.synced_at! + 'Z') : undefined;
 
@@ -149,27 +148,91 @@ public class AbstractPowerSyncDatabase
         }
 
         this.schema = schema;
-        Console.WriteLine("Schema update start");
-        await database.Execute("SELECT powersync_replace_schema(?)", [schema.ToJson()]);
-        await database.RefreshSchema();
-        Console.WriteLine("Schema updated!");
+        await Database.Execute("SELECT powersync_replace_schema(?)", [schema.ToJson()]);
+        await Database.RefreshSchema();
         // this.iterateListeners(async (cb) => cb.schemaChanged?.(schema));
+    }
+
+    /// Wait for initialization to complete.
+    /// While initializing is automatic, this helps to catch and report initialization errors.
+    public async Task Init()
+    {
+        await WaitForReady();
+    }
+
+    public void Connect()
+    {
+
+    }
+
+    public async Task Disconnect()
+    {
+        await this.WaitForReady();
+        // await this.syncStreamImplementation?.disconnect();
+        // this.syncStatusListenerDisposer?.();
+        // await this.syncStreamImplementation?.dispose();
+        // this.syncStreamImplementation = undefined;
+
+    }
+
+    public async Task DisconnectAndClear()
+    {
+        await Disconnect();
+        await WaitForReady();
+
+        // bool clearLocal = options?.ClearLocal ?? false;
+        bool clearLocal = true;
+
+        // TODO: Verify necessity of DB name with the extension
+        await Database.WriteTransaction(async tx =>
+        {
+            await tx.Execute("SELECT powersync_clear(?)", [clearLocal ? 1 : 0]);
+        });
+
+        // The data has been deleted - reset the sync status
+        // this.currentStatus = new SyncStatus({ });
+        // this.iterateListeners((l) => l.statusChanged?.(this.currentStatus));
+    }
+
+    public async Task Close()
+    {
+        await WaitForReady();
+
+
+        // if (options.Disconnect)
+        // {
+        //     await Disconnect();
+        // }
+
+        // if (syncStreamImplementation != null)
+        // {
+        //     await syncStreamImplementation.DisposeAsync();
+        // }
+
+        Database.Close();
+        Closed = true;
     }
 
     public async Task<QueryResult> Execute(string query, object[]? parameters = null)
     {
         await WaitForReady();
-        return await database.Execute(query, parameters);
+        return await Database.Execute(query, parameters);
+    }
+
+    public async Task<T[]> GetAll<T>(string query, object[]? parameters = null)
+    {
+        await WaitForReady();
+        return await Database.GetAll<T>(query, parameters);
     }
 
     public async Task<T?> GetOptional<T>(string query, object[]? parameters = null)
     {
         await WaitForReady();
-        return await database.GetOptional<T>(query);
+        return await Database.GetOptional<T>(query, parameters);
     }
     public async Task<T> Get<T>(string query, object[]? parameters = null)
     {
         await WaitForReady();
-        return await database.Get<T>(query);
+        return await Database.Get<T>(query, parameters);
     }
 }

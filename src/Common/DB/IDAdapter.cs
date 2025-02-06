@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 public class QueryResult
 {
     // Represents the auto-generated row id if applicable.
-    public int? InsertId { get; set; }
+    public long? InsertId { get; set; }
 
     // Number of affected rows if result of an update query.
     public int RowsAffected { get; set; }
@@ -15,7 +15,7 @@ public class QueryResult
     public class QueryRows
     {
         // Raw array with all dataset.
-        public List<Dictionary<string, object>> Array { get; set; } = new List<Dictionary<string, object>>();
+        public List<Dictionary<string, object>> Array { get; set; } = [];
 
         // The length of the dataset.
         public int Length => Array.Count;
@@ -26,13 +26,13 @@ public class QueryResult
 public interface IDBGetUtils
 {
     // Execute a read-only query and return results.
-    Task<List<T>> GetAll<T>(string sql, params object[] parameters);
+    Task<T[]> GetAll<T>(string sql, params object[]? parameters);
 
     // Execute a read-only query and return the first result, or null if the ResultSet is empty.
-    Task<T?> GetOptional<T>(string sql, params object[] parameters);
+    Task<T?> GetOptional<T>(string sql, params object[]? parameters);
 
     // Execute a read-only query and return the first result, error if the ResultSet is empty.
-    Task<T> Get<T>(string sql, params object[] parameters);
+    Task<T> Get<T>(string sql, params object[]? parameters);
 }
 
 public interface ILockContext : IDBGetUtils

@@ -51,7 +51,7 @@ public class MDSAdapter : IDBAdapter
 
     public void Close()
     {
-        throw new NotImplementedException();
+        writeConnection?.Close();
     }
 
     public async Task<QueryResult> Execute(string query, object[]? parameters = null)
@@ -65,21 +65,22 @@ public class MDSAdapter : IDBAdapter
         throw new NotImplementedException();
     }
 
-    public async Task<T> Get<T>(string sql, params object[] parameters)
+    public async Task<T> Get<T>(string sql, params object[]? parameters)
     {
         await initialized;
-        return await writeConnection!.Get<T>(sql);
+        return await writeConnection!.Get<T>(sql, parameters);
     }
 
-    public Task<List<T>> GetAll<T>(string sql, params object[] parameters)
-    {
-        throw new NotImplementedException();
-    }
-
-    public async Task<T?> GetOptional<T>(string sql, params object[] parameters)
+    public async Task<T[]> GetAll<T>(string sql, params object[]? parameters)
     {
         await initialized;
-        return await writeConnection!.GetOptional<T>(sql);
+        return await writeConnection!.GetAll<T>(sql, parameters);
+    }
+
+    public async Task<T?> GetOptional<T>(string sql, params object[]? parameters)
+    {
+        await initialized;
+        return await writeConnection!.GetOptional<T>(sql, parameters);
     }
 
     public Task<T> ReadLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null)
@@ -87,24 +88,14 @@ public class MDSAdapter : IDBAdapter
         throw new NotImplementedException();
     }
 
-    public Task<T> ReadTransaction<T>(Func<ITransaction, Task<T>> fn, DBLockOptions? options = null)
+    public async Task<T> ReadTransaction<T>(Func<ITransaction, Task<T>> fn, DBLockOptions? options = null)
     {
-        throw new NotImplementedException();
+        return await InternalTransaction(new MDSTransaction(this)!, fn);
     }
 
     public Task<T> WriteLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null)
     {
         throw new NotImplementedException();
-    }
-
-    public async void Yoink()
-    {
-
-        await this.WriteTransaction(async (tx) =>
-        {
-            return await tx.Execute("INSERT INTO powersync_operations(op, data) VALUES (?, ?)",
-               new object[] { "clear_remove_ops", "" });
-        });
     }
 
     public async Task WriteTransaction(Func<ITransaction, Task> fn, DBLockOptions? options = null)
@@ -186,17 +177,17 @@ public class MDSTransaction(MDSAdapter adapter) : ITransaction
         return adapter.Execute(query, parameters);
     }
 
-    public Task<T> Get<T>(string sql, params object[] parameters)
+    public Task<T> Get<T>(string sql, params object[]? parameters)
     {
         return adapter.Get<T>(sql, parameters);
     }
 
-    public Task<List<T>> GetAll<T>(string sql, params object[] parameters)
+    public Task<T[]> GetAll<T>(string sql, params object[]? parameters)
     {
         return adapter.GetAll<T>(sql, parameters);
     }
 
-    public Task<T?> GetOptional<T>(string sql, params object[] parameters)
+    public Task<T?> GetOptional<T>(string sql, params object[]? parameters)
     {
         return adapter.GetOptional<T>(sql, parameters);
     }
