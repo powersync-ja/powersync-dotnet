@@ -5,8 +5,8 @@ namespace Common.MicrosoftDataSqlite;
 
 public class CommonPowerSyncDatabase(PowerSyncDatabaseOptions options) : AbstractPowerSyncDatabase(options)
 {
-    public static CommonPowerSyncDatabase Create(Schema schema)
+    public static CommonPowerSyncDatabase Create(Schema schema, string name)
     {
-        return new CommonPowerSyncDatabase(new PowerSyncDatabaseOptions(new MDSAdapter(), schema));
+        return new CommonPowerSyncDatabase(new PowerSyncDatabaseOptions(new MDSAdapter(new MDSAdapterOptions(name)), schema));
     }
 }

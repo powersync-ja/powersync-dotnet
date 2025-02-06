@@ -6,6 +6,12 @@ using System.Threading.Tasks;
 using Common.DB;
 using Microsoft.Data.Sqlite;
 
+
+public class MDSAdapterOptions(string name)
+{
+    public string Name { get; set; } = name;
+}
+
 public class MDSAdapter : IDBAdapter
 {
     public string Name => throw new NotImplementedException();
@@ -14,14 +20,17 @@ public class MDSAdapter : IDBAdapter
 
     private readonly Task initialized;
 
-    public MDSAdapter()
+    protected MDSAdapterOptions options;
+
+    public MDSAdapter(MDSAdapterOptions options)
     {
+        this.options = options;
         initialized = Init();
     }
 
     private async Task Init()
     {
-        writeConnection = await OpenConnection("powersync.db");
+        writeConnection = await OpenConnection(options.Name);
     }
 
     protected async Task<MDSConnection> OpenConnection(string dbFilename)
@@ -37,7 +46,7 @@ public class MDSAdapter : IDBAdapter
 
     private static SqliteConnection OpenDatabase(string dbFilename)
     {
-        var connection = new SqliteConnection("Data Source=:memory:");
+        var connection = new SqliteConnection($"Data Source={dbFilename}");
         connection.Open();
         return connection;
     }

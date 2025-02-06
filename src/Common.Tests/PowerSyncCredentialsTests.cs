@@ -47,7 +47,7 @@ public class PowerSyncCredentialsTests
     public async void LoadVersion()
     {
         // var db = new MDSAdapter();
-        var db = CommonPowerSyncDatabase.Create(AppSchema);
+        var db = CommonPowerSyncDatabase.Create(AppSchema, "x.db");
         Console.WriteLine("Pre adapter" + db.SdkVersion);
         await db.WaitForReady();
         Console.WriteLine("Post adapter" + db.SdkVersion);
@@ -89,7 +89,7 @@ public class PowerSyncCredentialsTests
     [Fact(Skip = "Skipping this test temporarily")]
     public async void SchemaTest()
     {
-        var db = CommonPowerSyncDatabase.Create(AppSchema);
+        var db = CommonPowerSyncDatabase.Create(AppSchema, "xxx.db");
         // const schema = new Schema({
         //   users: new Table({
         //     name: column.text,

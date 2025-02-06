@@ -1,11 +1,8 @@
-using System.Diagnostics;
-using System.Reflection.Metadata;
-using System.Runtime.ConstrainedExecution;
 using System.Text.RegularExpressions;
+using Common.Client.Sync.Bucket;
 using Common.DB;
 using Common.DB.Crud;
 using Common.DB.Schema;
-using Newtonsoft.Json;
 
 namespace Common.Client;
 
@@ -40,12 +37,17 @@ public class AbstractPowerSyncDatabase
     protected Task isReadyTask;
 
     public string SdkVersion;
+
+    protected IBucketStorageAdapter bucketStorageAdapter;
+
     public SyncStatus SyncStatus;
 
     public AbstractPowerSyncDatabase(PowerSyncDatabaseOptions options)
     {
         Database = options.Database;
         SyncStatus = new SyncStatus(new SyncStatusOptions());
+        bucketStorageAdapter = generateBucketStorageAdapter();
+
         Closed = false;
         Ready = false;
 
@@ -54,13 +56,9 @@ public class AbstractPowerSyncDatabase
         isReadyTask = Initialize();
     }
 
-    protected async Task Initialize()
+    protected IBucketStorageAdapter generateBucketStorageAdapter()
     {
-        await LoadVersion();
-        await UpdateSchema(schema);
-        await UpdateHasSynced();
-        await Database.Execute("PRAGMA RECURSIVE_TRIGGERS=TRUE");
-        Ready = true;
+        return new SqliteBucketStorage(Database);
     }
 
     /// <summary>
@@ -75,6 +73,17 @@ public class AbstractPowerSyncDatabase
 
         await isReadyTask;
     }
+
+    protected async Task Initialize()
+    {
+        await bucketStorageAdapter.Init();
+        await LoadVersion();
+        await UpdateSchema(schema);
+        await UpdateHasSynced();
+        await Database.Execute("PRAGMA RECURSIVE_TRIGGERS=TRUE");
+        Ready = true;
+    }
+
     private record VersionResult(string Version);
 
     private async Task LoadVersion()
@@ -110,7 +119,6 @@ public class AbstractPowerSyncDatabase
     protected async Task UpdateHasSynced()
     {
         var syncedAt = (await Database.Get<LastSyncedResult>("SELECT powersync_last_synced_at() as synced_at")).synced_at;
-        var result = await Database.Execute("SELECT powersync_last_synced_at() as synced_at");
 
         Console.WriteLine("Synced at: " + syncedAt);
         // const hasSynced = result.synced_at != null;
@@ -211,6 +219,15 @@ public class AbstractPowerSyncDatabase
 
         Database.Close();
         Closed = true;
+    }
+
+
+    /// Get an unique client id for this database.
+    ///
+    /// The id is not reset when the database is cleared, only when the database is deleted.
+    public async Task<string> GetClientId()
+    {
+        return await bucketStorageAdapter.GetClientId();
     }
 
     public async Task<QueryResult> Execute(string query, object[]? parameters = null)

@@ -1,9 +1,12 @@
 
+using System.ComponentModel;
 using System.Threading.Tasks;
 using Common.Client;
 using Common.Client.Sync.Bucket;
 using Common.DB.Schema;
 using Common.MicrosoftDataSqlite;
+using Microsoft.Data.Sqlite;
+using Newtonsoft.Json;
 
 class TestData
 {
@@ -87,13 +90,13 @@ class TestData
 
 public class BucketStorageTests : IAsyncLifetime
 {
-    private AbstractPowerSyncDatabase db;
-    private IBucketStorageAdapter bucketStorage;
+    private AbstractPowerSyncDatabase db = default!;
+    private IBucketStorageAdapter bucketStorage = default!;
 
 
     public async Task InitializeAsync()
     {
-        db = CommonPowerSyncDatabase.Create(TestData.appSchema);
+        db = CommonPowerSyncDatabase.Create(TestData.appSchema, "powersync.db");
         await db.Init();
         bucketStorage = new SqliteBucketStorage(db.Database);
 
@@ -474,7 +477,87 @@ public class BucketStorageTests : IAsyncLifetime
         Assert.Equal(new AssetResult("O2", "bar"), result);
     }
 
-    // bottom ---------
+    [Fact]
+    public async Task UpdateWithNewTypes()
+    {
+        var dbName = "test-bucket-storage-new-types.db";
+        var powersync = CommonPowerSyncDatabase.Create(new Schema([]), dbName);
+        await powersync.Init();
+        bucketStorage = new SqliteBucketStorage(powersync.Database);
+
+        await bucketStorage.SaveSyncData(
+            new SyncDataBatch(
+            [new SyncDataBucket("bucket1", [TestData.putAsset1_1, TestData.putAsset2_2, TestData.putAsset1_3], false)])
+        );
+
+        await SyncLocalChecked(new Checkpoint
+        {
+            LastOpId = "4",
+            Buckets = [new BucketChecksum { Bucket = "bucket1", Checksum = 6 }]
+        });
+
+        // Ensure an exception is thrown due to missing table
+        await Assert.ThrowsAsync<SqliteException>(async () =>
+            await powersync.GetAll<AssetResult>("SELECT * FROM assets"));
+
+        await powersync.Close();
+
+        powersync = CommonPowerSyncDatabase.Create(TestData.appSchema, dbName);
+        await powersync.Init();
+
+        await ExpectAsset1_3(powersync);
+
+        await powersync.DisconnectAndClear();
+        await powersync.Close();
+    }
+
+    [Fact]
+    public async Task ShouldRemoveTypes()
+    {
+        var dbName = "test-bucket-storage-remove-types.db";
+
+        // Create database with initial schema
+        var powersync = CommonPowerSyncDatabase.Create(TestData.appSchema, dbName);
+        await powersync.Init();
+        bucketStorage = new SqliteBucketStorage(powersync.Database);
+
+        await bucketStorage.SaveSyncData(
+            new SyncDataBatch(
+            [
+                new SyncDataBucket("bucket1", [TestData.putAsset1_1, TestData.putAsset2_2, TestData.putAsset1_3], false)
+            ])
+        );
+
+        await SyncLocalChecked(new Checkpoint
+        {
+            LastOpId = "3",
+            Buckets =
+            [
+            new BucketChecksum { Bucket = "bucket1", Checksum = 6 }
+        ]
+        });
+
+        await ExpectAsset1_3(powersync);
+        await powersync.Close();
+
+        // Now open another instance with an empty schema
+        powersync = CommonPowerSyncDatabase.Create(new Schema([]), dbName);
+        await powersync.Init();
+
+        await Assert.ThrowsAsync<SqliteException>(async () =>
+            await powersync.Execute("SELECT * FROM assets"));
+
+        await powersync.Close();
+
+        // Reopen database with the original schema
+        powersync = CommonPowerSyncDatabase.Create(TestData.appSchema, dbName);
+        await powersync.Init();
+
+        await ExpectAsset1_3(powersync);
+
+        await powersync.DisconnectAndClear();
+        await powersync.Close();
+    }
 
     private record OplogStats(string Type, string Id, int Count);
 

@@ -23,6 +23,7 @@ public class SqliteBucketStorage(IDBAdapter db) : IBucketStorageAdapter
     private record ExistingTableRowsResult(string name);
     public async Task Init()
     {
+
         hasCompletedSync = false;
         var existingTableRows = await db.GetAll<ExistingTableRowsResult>("SELECT name FROM sqlite_master WHERE type='table' AND name GLOB 'ps_data_*'");
 
@@ -36,13 +37,13 @@ public class SqliteBucketStorage(IDBAdapter db) : IBucketStorageAdapter
     {
         Console.WriteLine("Disposing SqliteBucketStorage...");
     }
-
+    private record ClientIdResult(string? client_id);
     public async Task<string> GetClientId()
     {
         if (clientId == null)
         {
-            var row = await db.Get<Dictionary<string, string>>("SELECT powersync_client_id() as client_id");
-            clientId = row["client_id"];
+            var row = await db.Get<ClientIdResult>("SELECT powersync_client_id() as client_id");
+            clientId = row.client_id ?? "";
         }
 
         return clientId;
@@ -97,14 +98,14 @@ public class SqliteBucketStorage(IDBAdapter db) : IBucketStorageAdapter
         pendingBucketDeletes = true;
     }
 
+    private record LastSyncedResult(string? synced_at);
     public async Task<bool> HasCompletedSync()
     {
         if (hasCompletedSync) return true;
 
-        var result = await db.ReadTransaction(async tx =>
-            await tx.Get<Dictionary<string, string>>("SELECT powersync_last_synced_at() as synced_at"));
+        var result = await db.Get<LastSyncedResult>("SELECT powersync_last_synced_at() as synced_at");
 
-        hasCompletedSync = result["synced_at"] != null;
+        hasCompletedSync = result.synced_at != null;
         return hasCompletedSync;
     }
 
