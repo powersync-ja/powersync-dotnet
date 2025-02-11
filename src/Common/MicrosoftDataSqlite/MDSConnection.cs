@@ -1,6 +1,5 @@
 namespace Common.MicrosoftDataSqlite;
 
-using System.Reflection.PortableExecutable;
 using System.Threading.Tasks;
 using Common.DB;
 using Microsoft.Data.Sqlite;
@@ -85,7 +84,8 @@ public class MDSConnection
                     throw new ArgumentException("Mismatch between placeholders and parameters.");
                 }
 
-                query = string.Concat(query.AsSpan(0, index), paramName, query.AsSpan()[(index + 1)..]);
+
+                query = string.Concat(query.Substring(0, index), paramName, query.Substring(index + 1));
             }
 
             command.CommandText = query;

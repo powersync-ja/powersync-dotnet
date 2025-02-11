@@ -84,11 +84,11 @@ public class AbstractPowerSyncDatabase
         Ready = true;
     }
 
-    private record VersionResult(string Version);
+    private record VersionResult(string version);
 
     private async Task LoadVersion()
     {
-        string sdkVersion = (await Database.Get<VersionResult>("SELECT powersync_rs_version() as version")).Version;
+        string sdkVersion = (await Database.Get<VersionResult>("SELECT powersync_rs_version() as version")).version;
         SdkVersion = sdkVersion;
 
         int[] versionInts;

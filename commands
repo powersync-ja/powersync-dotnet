@@ -12,5 +12,14 @@ dotnet sln ../../root.sln add Common.Tests/Common.Tests.csproj
 dotnet test src/Common/Common.Tests
 dotnet test --logger "console;verbosity=detailed" src/Common/Common.Tests
 dotnet test --logger "console;verbosity=detailed"
+dotnet add package RSocket.Core --version 0.2.7
 
 dotnet test -v n
+
+---
+dotnet test --framework net8.0
+dotnet test --framework net48
+
+dotnet test --framework net48
+dotnet test --framework net6.0 ./src/Common.Tests
+brew install mono

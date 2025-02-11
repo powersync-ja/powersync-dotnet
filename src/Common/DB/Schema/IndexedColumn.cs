@@ -17,7 +17,7 @@ public class IndexedColumn(IndexColumnOptions options)
 
     public object ToJSON(Table table)
     {
-        var colType = table.OriginalColumns.GetValueOrDefault(Name);
+        var colType = table.OriginalColumns.TryGetValue(Name, out var value) ? value : default;
 
         return JsonConvert.SerializeObject(
          new
