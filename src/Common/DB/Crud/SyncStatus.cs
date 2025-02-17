@@ -1,28 +1,22 @@
-namespace Common.DB.Crud;
-
 using System;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 
 public class SyncDataFlowStatus
 {
     [JsonProperty("downloading")]
-    public bool Downloading { get; set; }
+    public bool Downloading { get; set; } = false;
 
     [JsonProperty("uploading")]
-    public bool Uploading { get; set; }
-
-    public SyncDataFlowStatus(bool downloading = false, bool uploading = false)
-    {
-        Downloading = downloading;
-        Uploading = uploading;
-    }
+    public bool Uploading { get; set; } = false;
 }
 
 public class SyncStatusOptions
 {
     [JsonProperty("connected")]
     public bool? Connected { get; set; }
+
+    [JsonProperty("connecting")]
+    public bool? Connecting { get; set; }
 
     [JsonProperty("dataFlow")]
     public SyncDataFlowStatus? DataFlow { get; set; }
@@ -32,63 +26,47 @@ public class SyncStatusOptions
 
     [JsonProperty("hasSynced")]
     public bool? HasSynced { get; set; }
-
-    public SyncStatusOptions(
-        bool? connected = null,
-        SyncDataFlowStatus? dataFlow = null,
-        DateTime? lastSyncedAt = null,
-        bool? hasSynced = null)
-    {
-        Connected = connected;
-        DataFlow = dataFlow;
-        LastSyncedAt = lastSyncedAt;
-        HasSynced = hasSynced;
-    }
 }
 
-public class SyncStatus
+public class SyncStatus(SyncStatusOptions options)
 {
-    private readonly SyncStatusOptions _options;
+    protected SyncStatusOptions Options { get; } = options ?? new SyncStatusOptions();
 
-    public SyncStatus(SyncStatusOptions options)
-    {
-        _options = options;
-    }
+    public bool Connected => Options.Connected ?? false;
 
-    public bool Connected => _options.Connected ?? false;
+    public bool Connecting => Options.Connecting ?? false;
 
-    public DateTime? LastSyncedAt => _options.LastSyncedAt;
+    /// <summary>
+    /// Time that the last sync has fully completed, if any.
+    /// Currently, this is reset to null after a restart.
+    /// </summary>
+    public DateTime? LastSyncedAt => Options.LastSyncedAt;
 
-    public bool? HasSynced => _options.HasSynced;
+    /// <summary>
+    /// Indicates whether there has been at least one full sync.
+    /// Is null when unknown, for example when state is still being loaded from the database.
+    /// </summary>
+    public bool? HasSynced => Options.HasSynced;
 
-    public SyncDataFlowStatus DataFlowStatus => _options.DataFlow ?? new SyncDataFlowStatus();
+    /// <summary>
+    /// Upload/download status.
+    /// </summary>
+    public SyncDataFlowStatus DataFlowStatus => Options.DataFlow ?? new SyncDataFlowStatus();
+
 
     public bool IsEqual(SyncStatus status)
     {
-        return JToken.DeepEquals(
-            JToken.FromObject(_options),
-            JToken.FromObject(status._options)
-        );
+        return JsonConvert.SerializeObject(Options) == JsonConvert.SerializeObject(status.Options);
     }
 
     public string GetMessage()
     {
-        return $"SyncStatus<connected: {Connected}, lastSyncedAt: {LastSyncedAt}, hasSynced: {HasSynced}, " +
-               $"downloading: {DataFlowStatus.Downloading}, uploading: {DataFlowStatus.Uploading}>";
+        var dataFlow = DataFlowStatus;
+        return $"SyncStatus<connected: {Connected} connecting: {Connecting} lastSyncedAt: {LastSyncedAt} hasSynced: {HasSynced}. Downloading: {dataFlow.Downloading}. Uploading: {dataFlow.Uploading}>";
     }
 
     public string ToJSON()
     {
-        return JsonConvert.SerializeObject(new SyncStatusOptions
-        {
-            Connected = Connected,
-            DataFlow = DataFlowStatus,
-            LastSyncedAt = LastSyncedAt,
-            HasSynced = HasSynced
-        });
-    }
-    public override string ToString()
-    {
-        return GetMessage();
+        return JsonConvert.SerializeObject(this, Formatting.Indented);
     }
 }
