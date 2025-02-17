@@ -6,13 +6,12 @@ using Supabase.Postgrest.Models;
 
 namespace Supabase.Tests;
 
-
 public class SupabaseConnector : IPowerSyncBackendConnector
 {
 
-    static readonly string SupabaseUrl = "";
-    static readonly string SupabaseAnonKey = "";
-    static readonly string PowerSyncUrl = "";
+    static readonly string SupabaseUrl = "https://jngrpbvcbzmwkgzvgjel.supabase.co";
+    static readonly string SupabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpuZ3JwYnZjYnptd2tnenZnamVsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTgyNzEyMjEsImV4cCI6MjAzMzg0NzIyMX0.ZKknr7_y5W7yg4DtdfKmBfh2g9-L3aU0jznmXcNlEpU";
+    static readonly string PowerSyncUrl = "https://67af2e42fa9789f5199a0949.powersync.staging.journeyapps.com";
 
     private Client Client;
     public SupabaseConnector()
@@ -38,6 +37,11 @@ public class SupabaseConnector : IPowerSyncBackendConnector
         public int CountryId { get; set; }
 
         //... etc.
+    }
+
+    public async Task Login()
+    {
+        await Client.Auth.SignInWithPassword("9@9.com", "9@9.com");
     }
 
     public async Task<PowerSyncCredentials?> FetchCredentials()

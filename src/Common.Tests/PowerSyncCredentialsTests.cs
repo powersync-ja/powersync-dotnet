@@ -89,7 +89,8 @@ public class PowerSyncCredentialsTests
     [Fact(Skip = "Skipping this test temporarily")]
     public async void SchemaTest()
     {
-        var db = CommonPowerSyncDatabase.Create(AppSchema, "xxx.db");
+        var db = CommonPowerSyncDatabase.Create(AppSchema, "xxxa.db");
+        await db.DisconnectAndClear();
         // const schema = new Schema({
         //   users: new Table({
         //     name: column.text,
@@ -110,7 +111,7 @@ public class PowerSyncCredentialsTests
         var b = await db.Execute("SELECT * from users");
         string jsona = JsonConvert.SerializeObject(b.Rows.Array, Formatting.Indented);
 
-        // Console.WriteLine("Result: " + jsona);
+        Console.WriteLine("Result xxx: " + jsona);
 
         // var c = await db.Execute("PRAGMA table_info(users);");
         // string jsonb = JsonConvert.SerializeObject(c.Rows.Array, Formatting.Indented);

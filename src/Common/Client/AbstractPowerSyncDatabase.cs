@@ -1,11 +1,10 @@
+namespace Common.Client;
+
 using System.Text.RegularExpressions;
 using Common.Client.Sync.Bucket;
 using Common.DB;
 using Common.DB.Crud;
 using Common.DB.Schema;
-
-namespace Common.Client;
-
 
 public class BasePowerSyncDatabaseOptions(Schema schema)
 {

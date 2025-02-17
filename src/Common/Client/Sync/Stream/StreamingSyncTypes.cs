@@ -1,5 +1,5 @@
-using System;
-using System.Collections.Generic;
+namespace Common.Client.Sync.Stream;
+
 using Common.Client.Sync.Bucket;
 using Common.DB.Crud;
 using Newtonsoft.Json;
@@ -58,7 +58,7 @@ public class StreamingSyncRequest
     public List<BucketRequest>? Buckets { get; set; }
 
     [JsonProperty("only")]
-    public List<string>? Only { get; set; }
+    public List<string>? Only { get; set; } = [];
 
     [JsonProperty("include_checksum")]
     public bool IncludeChecksum { get; set; }
@@ -82,13 +82,21 @@ public class BucketRequest
     public string After { get; set; } = "";
 }
 
-public class StreamingSyncCheckpoint
+public abstract class StreamingSyncLine
+{
+    public static bool IsStreamingSyncData(StreamingSyncLine line) => line is StreamingSyncDataJSON json && json.Data != null;
+    public static bool IsStreamingKeepalive(StreamingSyncLine line) => line is StreamingSyncKeepalive keepalive && keepalive.TokenExpiresIn != null;
+    public static bool IsStreamingSyncCheckpoint(StreamingSyncLine line) => line is StreamingSyncCheckpoint checkpoint && checkpoint.Checkpoint != null;
+    public static bool IsStreamingSyncCheckpointComplete(StreamingSyncLine line) => line is StreamingSyncCheckpointComplete complete && complete.CheckpointComplete != null;
+}
+
+public class StreamingSyncCheckpoint : StreamingSyncLine
 {
     [JsonProperty("checkpoint")]
     public Checkpoint Checkpoint { get; set; } = new();
 }
 
-public class StreamingSyncCheckpointDiff
+public class StreamingSyncCheckpointDiff : StreamingSyncLine
 {
     [JsonProperty("checkpoint_diff")]
     public CheckpointDiff CheckpointDiff { get; set; } = new();
@@ -109,13 +117,13 @@ public class CheckpointDiff
     public string WriteCheckpoint { get; set; } = "";
 }
 
-public class StreamingSyncDataJSON
+public class StreamingSyncDataJSON : StreamingSyncLine
 {
     [JsonProperty("data")]
     public SyncDataBucketJSON Data { get; set; } = new();
 }
 
-public class StreamingSyncCheckpointComplete
+public class StreamingSyncCheckpointComplete : StreamingSyncLine
 {
     [JsonProperty("checkpoint_complete")]
     public CheckpointComplete CheckpointComplete { get; set; } = new();
@@ -127,11 +135,12 @@ public class CheckpointComplete
     public string LastOpId { get; set; } = "";
 }
 
-public class StreamingSyncKeepalive
+public class StreamingSyncKeepalive : StreamingSyncLine
 {
     [JsonProperty("token_expires_in")]
-    public int TokenExpiresIn { get; set; }
+    public int? TokenExpiresIn { get; set; }
 }
+
 
 public class CrudRequest
 {

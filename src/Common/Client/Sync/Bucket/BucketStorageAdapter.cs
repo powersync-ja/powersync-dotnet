@@ -56,11 +56,8 @@ public class BucketChecksum
     [JsonProperty("bucket")]
     public string Bucket { get; set; } = null!;
 
-    /// <summary>
-    /// 32-bit unsigned hash.
-    /// </summary>
     [JsonProperty("checksum")]
-    public uint Checksum { get; set; }
+    public int Checksum { get; set; }
 
     /// <summary>
     /// Count of operations - informational only.
