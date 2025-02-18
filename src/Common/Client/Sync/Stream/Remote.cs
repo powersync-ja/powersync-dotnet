@@ -69,26 +69,27 @@ public class Remote
         return $"powersync-dotnet/{version}";
     }
 
+    public async Task<T> Get<T>(string path, Dictionary<string, string>? headers = null)
+    {
+        var request = await BuildRequest(HttpMethod.Get, path, data: null, additionalHeaders: headers);
+
+        using var client = new HttpClient();
+        var response = await client.SendAsync(request);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorMessage = await response.Content.ReadAsStringAsync();
+            throw new HttpRequestException($"Received {response.StatusCode} - {response.ReasonPhrase} when getting from {path}: {errorMessage}");
+        }
+
+        var responseData = await response.Content.ReadAsStringAsync();
+        return JsonConvert.DeserializeObject<T>(responseData)!;
+    }
+
+
     public async IAsyncEnumerable<StreamingSyncLine?> PostStream(SyncStreamOptions options)
     {
-        var request = await BuildRequest(options.Path);
-        using var requestMessage = new HttpRequestMessage(HttpMethod.Post, request.Url)
-        {
-            Content = new StringContent(JsonConvert.SerializeObject(options.Data), Encoding.UTF8, "application/json"),
-        };
-
-        // Add the built headers
-        foreach (var header in request.Headers)
-        {
-            requestMessage.Headers.TryAddWithoutValidation(header.Key, header.Value);
-        }
-
-        // Add the options headers
-        foreach (var header in options.Headers)
-        {
-            requestMessage.Headers.TryAddWithoutValidation(header.Key, header.Value);
-        }
-
+        using var requestMessage = await BuildRequest(HttpMethod.Post, options.Path, options.Data, options.Headers);
         using var response = await httpClient.SendAsync(requestMessage, HttpCompletionOption.ResponseHeadersRead, options.CancellationToken);
 
         if (!response.IsSuccessStatusCode || response.Content == null)
@@ -138,7 +139,7 @@ public class Remote
         }
     }
 
-    private async Task<RequestDetails> BuildRequest(string path)
+    private async Task<HttpRequestMessage> BuildRequest(HttpMethod method, string path, object? data = null, Dictionary<string, string>? additionalHeaders = null)
     {
         var credentials = await GetCredentials();
 
@@ -156,15 +157,25 @@ public class Remote
 
         var userAgent = GetUserAgent();
 
-        return new RequestDetails
+        var request = new HttpRequestMessage(method, credentials.Endpoint + path)
         {
-            Url = credentials.Endpoint + path,
-            Headers = new Dictionary<string, string>
-            {
-                { "content-type", "application/json" },
-                { "Authorization", $"Token {credentials.Token}" },
-                { "x-user-agent", userAgent }
-            }
+            Content = data != null ?
+                new StringContent(JsonConvert.SerializeObject(data), Encoding.UTF8, "application/json")
+                : null
         };
+
+        request.Headers.TryAddWithoutValidation("content-type", "application/json");
+        request.Headers.TryAddWithoutValidation("Authorization", $"Token {credentials.Token}");
+        request.Headers.TryAddWithoutValidation("x-user-agent", userAgent);
+
+        if (additionalHeaders != null)
+        {
+            foreach (var header in additionalHeaders)
+            {
+                request.Headers.TryAddWithoutValidation(header.Key, header.Value);
+            }
+        }
+
+        return request;
     }
 }
