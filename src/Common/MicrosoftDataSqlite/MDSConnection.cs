@@ -1,9 +1,13 @@
 namespace Common.MicrosoftDataSqlite;
 
 using System.Threading.Tasks;
-using Common.DB;
+
 using Microsoft.Data.Sqlite;
+
+using Common.DB;
+
 using Newtonsoft.Json;
+
 using SQLitePCL;
 
 public class MDSConnectionOptions(SqliteConnection database)

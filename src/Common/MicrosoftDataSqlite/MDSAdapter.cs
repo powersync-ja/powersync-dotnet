@@ -1,11 +1,11 @@
 namespace Common.MicrosoftDataSqlite;
 
 using System;
-using System.Collections.Generic;
 using System.Threading.Tasks;
-using Common.DB;
+
 using Microsoft.Data.Sqlite;
 
+using Common.DB;
 
 public class MDSAdapterOptions(string name)
 {

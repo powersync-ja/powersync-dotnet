@@ -1,4 +1,5 @@
-using System;
+namespace Common.DB.Crud;
+
 using Newtonsoft.Json;
 
 public class SyncDataFlowStatus

@@ -2,7 +2,7 @@ namespace Common.DB.Schema;
 
 using Newtonsoft.Json;
 
-// Need to port this to C#
+// TODO CL Need to port this to C#
 // export const InvalidSQLCharacters = /["'%,.#\s[\]]/;
 
 

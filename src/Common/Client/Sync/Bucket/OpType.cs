@@ -1,5 +1,7 @@
 namespace Common.Client.Sync.Bucket;
+
 using System;
+
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 

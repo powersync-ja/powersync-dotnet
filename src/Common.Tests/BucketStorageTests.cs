@@ -1,12 +1,13 @@
+namespace Common.Tests;
 
-using System.ComponentModel;
 using System.Threading.Tasks;
+
+using Microsoft.Data.Sqlite;
+
 using Common.Client;
 using Common.Client.Sync.Bucket;
 using Common.DB.Schema;
 using Common.MicrosoftDataSqlite;
-using Microsoft.Data.Sqlite;
-using Newtonsoft.Json;
 
 class TestData
 {

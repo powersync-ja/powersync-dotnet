@@ -2,9 +2,10 @@
 namespace Common.Client.Sync.Bucket;
 
 using System;
-using System.Collections.Generic;
 using System.Threading.Tasks;
+
 using Common.DB.Crud;
+
 using Newtonsoft.Json;
 
 public class Checkpoint
