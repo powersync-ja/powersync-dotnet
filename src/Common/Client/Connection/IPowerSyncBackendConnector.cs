@@ -16,8 +16,8 @@ public interface IPowerSyncBackendConnector
 
     // Upload local changes to the app backend.
     //
-    // Use {@link AbstractPowerSyncDatabase.getCrudBatch} to get a batch of changes to upload.
+    // Use {@link IPowerSyncDatabase.getCrudBatch} to get a batch of changes to upload.
     //
     // Any thrown errors will result in a retry after the configured wait period (default: 5 seconds).
-    Task UploadData(AbstractPowerSyncDatabase database);
+    Task UploadData(IPowerSyncDatabase database);
 }

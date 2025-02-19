@@ -1,7 +1,10 @@
 namespace Common.Client;
 
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
+using Common.Client.Connection;
 using Common.Client.Sync.Bucket;
+using Common.Client.Sync.Stream;
 using Common.DB;
 using Common.DB.Crud;
 using Common.DB.Schema;
@@ -22,7 +25,12 @@ public class PowerSyncDatabaseOptions(IDBAdapter database, Schema schema) : Base
     public IDBAdapter Database { get; set; } = database;
 }
 
-public class AbstractPowerSyncDatabase
+public interface IPowerSyncDatabase
+{
+
+}
+
+public class AbstractPowerSyncDatabase : IPowerSyncDatabase
 {
 
     public IDBAdapter Database;
@@ -35,9 +43,10 @@ public class AbstractPowerSyncDatabase
 
     protected Task isReadyTask;
 
+    private StreamingSyncImplementation? syncStreamImplementation;
     public string SdkVersion;
 
-    protected IBucketStorageAdapter bucketStorageAdapter;
+    protected IBucketStorageAdapter BucketStorageAdapter;
 
     public SyncStatus SyncStatus;
 
@@ -45,7 +54,7 @@ public class AbstractPowerSyncDatabase
     {
         Database = options.Database;
         SyncStatus = new SyncStatus(new SyncStatusOptions());
-        bucketStorageAdapter = generateBucketStorageAdapter();
+        BucketStorageAdapter = generateBucketStorageAdapter();
 
         Closed = false;
         Ready = false;
@@ -75,12 +84,15 @@ public class AbstractPowerSyncDatabase
 
     protected async Task Initialize()
     {
-        await bucketStorageAdapter.Init();
+        await BucketStorageAdapter.Init();
         await LoadVersion();
         await UpdateSchema(schema);
         await UpdateHasSynced();
         await Database.Execute("PRAGMA RECURSIVE_TRIGGERS=TRUE");
         Ready = true;
+
+        // TODO CL
+        // this.iterateListeners((cb) => cb.initialized?.());
     }
 
     private record VersionResult(string version);
@@ -120,6 +132,7 @@ public class AbstractPowerSyncDatabase
         var syncedAt = (await Database.Get<LastSyncedResult>("SELECT powersync_last_synced_at() as synced_at")).synced_at;
 
         Console.WriteLine("Synced at: " + syncedAt);
+        // TODO CL
         // const hasSynced = result.synced_at != null;
         // const syncedAt = result.synced_at != null ? new Date(result.synced_at! + 'Z') : undefined;
 
@@ -167,19 +180,70 @@ public class AbstractPowerSyncDatabase
         await WaitForReady();
     }
 
-    public void Connect()
+    private RequiredAdditionalConnectionOptions resolveConnectionOptions(PowerSyncConnectionOptions? options)
     {
+        var defaults = RequiredAdditionalConnectionOptions.DEFAULT_ADDITIONAL_CONNECTION_OPTIONS;
+        return new RequiredAdditionalConnectionOptions
+        {
+            RetryDelayMs = options?.RetryDelayMs ?? defaults.RetryDelayMs,
+            CrudUploadThrottleMs = options?.CrudUploadThrottleMs ?? defaults.CrudUploadThrottleMs,
+        };
+    }
 
+
+    public async Task Connect(IPowerSyncBackendConnector connector, PowerSyncConnectionOptions? options = null)
+    {
+        await WaitForReady();
+
+        // close connection if one is open
+        await Disconnect();
+        if (Closed)
+        {
+            throw new Exception("Cannot connect using a closed client");
+        }
+
+        var resolvedOptions = resolveConnectionOptions(options);
+        syncStreamImplementation = new StreamingSyncImplementation(new StreamingSyncImplementationOptions
+        {
+            Adapter = BucketStorageAdapter,
+            Remote = new Remote(connector),
+            UploadCrud = async () =>
+            {
+                await WaitForReady();
+                await connector.UploadData(this);
+            },
+            RetryDelayMs = resolvedOptions.RetryDelayMs,
+            CrudUploadThrottleMs = resolvedOptions.CrudUploadThrottleMs,
+        });
+
+        // TODO CL
+        //     this.syncStatusListenerDisposer = this.syncStreamImplementation.registerListener({
+        //     statusChanged: (status) =>
+        //     {
+        //         this.currentStatus = new SyncStatus({
+        //       ...status.toJSON(),
+        //       hasSynced: this.currentStatus?.hasSynced || !!status.lastSyncedAt
+        //     });
+        //         this.iterateListeners((cb) => cb.statusChanged?.(this.currentStatus));
+        //     }
+        // });
+
+        await syncStreamImplementation.WaitForReady();
+        syncStreamImplementation.TriggerCrudUpload();
+        await syncStreamImplementation.Connect(options);
     }
 
     public async Task Disconnect()
     {
-        await this.WaitForReady();
-        // await this.syncStreamImplementation?.disconnect();
+        await WaitForReady();
+        if (syncStreamImplementation != null)
+        {
+            await syncStreamImplementation.Disconnect();
+            syncStreamImplementation.Dispose();
+            syncStreamImplementation = null;
+        }
+        // TODO CL
         // this.syncStatusListenerDisposer?.();
-        // await this.syncStreamImplementation?.dispose();
-        // this.syncStreamImplementation = undefined;
-
     }
 
     public async Task DisconnectAndClear()
@@ -187,7 +251,7 @@ public class AbstractPowerSyncDatabase
         await Disconnect();
         await WaitForReady();
 
-        // bool clearLocal = options?.ClearLocal ?? false;
+        // TODO CL bool clearLocal = options?.ClearLocal ?? false;
         bool clearLocal = true;
 
         // TODO: Verify necessity of DB name with the extension
@@ -226,7 +290,7 @@ public class AbstractPowerSyncDatabase
     /// The id is not reset when the database is cleared, only when the database is deleted.
     public async Task<string> GetClientId()
     {
-        return await bucketStorageAdapter.GetClientId();
+        return await BucketStorageAdapter.GetClientId();
     }
 
     public async Task<QueryResult> Execute(string query, object[]? parameters = null)

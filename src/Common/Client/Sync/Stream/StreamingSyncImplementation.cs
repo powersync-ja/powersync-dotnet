@@ -20,11 +20,26 @@ public class AdditionalConnectionOptions(int? retryDelayMs = null, int? crudUplo
     public int? CrudUploadThrottleMs { get; set; } = crudUploadThrottleMs;
 }
 
+public class RequiredAdditionalConnectionOptions : AdditionalConnectionOptions
+{
+    public static RequiredAdditionalConnectionOptions DEFAULT_ADDITIONAL_CONNECTION_OPTIONS = new()
+    {
+        CrudUploadThrottleMs = 1000,
+        RetryDelayMs = 5000
+    };
+
+    public required new int RetryDelayMs { get; set; }
+
+    public required new int CrudUploadThrottleMs { get; set; }
+
+}
+
+
 // TODO CL make these required
 public class StreamingSyncImplementationOptions : AdditionalConnectionOptions
 {
     public required IBucketStorageAdapter Adapter { get; init; }
-    public Func<Task> UploadCrud { get; init; }
+    public required Func<Task> UploadCrud { get; init; }
     public required Remote Remote { get; init; }
 }
 
@@ -38,7 +53,7 @@ public class BaseConnectionOptions(Dictionary<string, object>? parameters = null
 
 public class RequiredPowerSyncConnectionOptions : BaseConnectionOptions
 {
-    public new Dictionary<string, object> Params { get; set; } = new();
+    public required new Dictionary<string, object> Params { get; set; } = new();
 }
 
 
@@ -59,54 +74,6 @@ public class PowerSyncConnectionOptions(
     public int? CrudUploadThrottleMs { get; set; } = crudUploadThrottleMs;
 }
 
-public interface IStreamingSyncImplementation : IDisposable
-{
-    /// <summary>
-    /// Indicates if the sync service is connected.
-    // /// </summary>
-    // public bool IsConnected { get; protected set; }
-
-    // /// <summary>
-    // /// The timestamp of the last successful sync.
-    // /// </summary>
-    // public DateTime? LastSyncedAt { get; set; }
-
-    // /// <summary>
-    // /// The current synchronization status.
-    // /// </summary>
-    // public SyncStatus SyncStatus { get; set; }
-
-    /// <summary>
-    /// Connects to the sync service.
-    /// </summary>
-    public abstract Task Connect(PowerSyncConnectionOptions? options = null);
-
-    /// <summary>
-    /// Disconnects from the sync service.
-    /// </summary>
-    /// <exception cref="InvalidOperationException">Thrown if not connected or if abort is not controlled internally.</exception>
-    public abstract Task Disconnect();
-
-    /// <summary>
-    /// Gets the current write checkpoint.
-    /// </summary>
-    public abstract Task<string> GetWriteCheckpoint();
-
-    /// <summary>
-    /// Checks whether the sync has completed.
-    /// </summary>
-    public abstract Task<bool> HasCompletedSync();
-
-    /// <summary>
-    /// Waits until the sync service is fully ready.
-    /// </summary>
-    public abstract Task WaitForReady();
-
-    /// <summary>
-    /// Waits until the sync status matches the specified status.
-    /// </summary>
-    public abstract Task WaitForStatus(SyncStatusOptions status);
-}
 
 public class Logger
 {
@@ -127,9 +94,9 @@ public class Logger
 }
 
 
-public class StreamingSyncImplementation : IStreamingSyncImplementation
+public class StreamingSyncImplementation
 {
-    public RequiredPowerSyncConnectionOptions DEFAULT_STREAM_CONNECTION_OPTIONS = new()
+    public static RequiredPowerSyncConnectionOptions DEFAULT_STREAM_CONNECTION_OPTIONS = new()
     {
         Params = []
     };

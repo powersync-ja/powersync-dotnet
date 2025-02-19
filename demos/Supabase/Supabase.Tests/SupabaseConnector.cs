@@ -58,7 +58,7 @@ public class SupabaseConnector : IPowerSyncBackendConnector
         return new PowerSyncCredentials(PowerSyncUrl, session.AccessToken ?? "", session.ExpiresAt());
     }
 
-    public async Task UploadData(AbstractPowerSyncDatabase database)
+    public async Task UploadData(IPowerSyncDatabase database)
     {
         // TODO CL
         // database.GetNextCrudTransaction

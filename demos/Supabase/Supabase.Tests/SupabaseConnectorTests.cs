@@ -51,37 +51,33 @@ public class SupabaseConnectorTests
     [Fact]
     public async void StreamTest()
     {
-        var db = CommonPowerSyncDatabase.Create(TestData.appSchema, "powersync12x11.db");
+        var db = CommonPowerSyncDatabase.Create(TestData.appSchema, "ConnectorTests.db");
         await db.Init();
         await db.DisconnectAndClear();
 
-        var bucketStorage = new SqliteBucketStorage(db.Database);
-        Console.WriteLine("Supabase Stream Test");
         var connector = new SupabaseConnector();
         await connector.Login();
 
-        Remote remote = new(connector);
-        // var creds = await connector.FetchCredentials();
-        // var creds = await remote.GetCredentials();
+        Console.WriteLine("Calling connect...");
 
-        // var cts = new CancellationTokenSource(); // Equivalent to `AbortController` in TS
+        await db.Connect(connector);
 
-        Console.WriteLine("Starting stream...");
+        // var syncImplementation = new StreamingSyncImplementation(new StreamingSyncImplementationOptions
+        // {
+        //     Adapter = bucketStorage,
+        //     Remote = remote,
+        //     UploadCrud = () => Task.CompletedTask,
+        // });
 
-
-        var syncImplementation = new StreamingSyncImplementation(new StreamingSyncImplementationOptions
-        {
-            Adapter = bucketStorage,
-            Remote = remote
-        });
-
-        syncImplementation.Connect();
+        // _ = syncImplementation.Connect();
 
         await Task.Delay(5000);
 
         var b = await db.Execute("SELECT * from lists");
         string jsona = JsonConvert.SerializeObject(b.Rows.Array, Formatting.Indented);
         Console.WriteLine("Lists: " + jsona);
+
+
         // await foreach (var item in remote.PostStream(syncOptions))
         // {
         //     // Console.WriteLine($"Parsed object type: {item.GetType().Name}");
