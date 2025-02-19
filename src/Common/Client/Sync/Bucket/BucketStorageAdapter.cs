@@ -58,7 +58,7 @@ public class BucketChecksum
     public string Bucket { get; set; } = null!;
 
     [JsonProperty("checksum")]
-    public int Checksum { get; set; }
+    public long Checksum { get; set; }
 
     /// <summary>
     /// Count of operations - informational only.

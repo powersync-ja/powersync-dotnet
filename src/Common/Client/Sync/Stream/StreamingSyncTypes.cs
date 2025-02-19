@@ -84,10 +84,6 @@ public class BucketRequest
 
 public abstract class StreamingSyncLine
 {
-    public static bool IsStreamingSyncData(StreamingSyncLine line) => line is StreamingSyncDataJSON json && json.Data != null;
-    public static bool IsStreamingKeepalive(StreamingSyncLine line) => line is StreamingSyncKeepalive keepalive && keepalive.TokenExpiresIn != null;
-    public static bool IsStreamingSyncCheckpoint(StreamingSyncLine line) => line is StreamingSyncCheckpoint checkpoint && checkpoint.Checkpoint != null;
-    public static bool IsStreamingSyncCheckpointComplete(StreamingSyncLine line) => line is StreamingSyncCheckpointComplete complete && complete.CheckpointComplete != null;
 }
 
 public class StreamingSyncCheckpoint : StreamingSyncLine

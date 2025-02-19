@@ -51,8 +51,10 @@ public class SupabaseConnectorTests
     [Fact]
     public async void StreamTest()
     {
-        var db = CommonPowerSyncDatabase.Create(TestData.appSchema, "powersync1.db");
+        var db = CommonPowerSyncDatabase.Create(TestData.appSchema, "powersync12x11.db");
         await db.Init();
+        await db.DisconnectAndClear();
+
         var bucketStorage = new SqliteBucketStorage(db.Database);
         Console.WriteLine("Supabase Stream Test");
         var connector = new SupabaseConnector();
@@ -65,28 +67,21 @@ public class SupabaseConnectorTests
         // var cts = new CancellationTokenSource(); // Equivalent to `AbortController` in TS
 
         Console.WriteLine("Starting stream...");
-        // var syncOptions = new SyncStreamOptions
-        // {
-        //     Path = "/sync/stream",
-        //     CancellationToken = cts.Token,
-        //     Data = new StreamingSyncRequest
-        //     {
-        //         Buckets = [],  // Replace `new object()` with actual data
-        //         IncludeChecksum = true,
-        //         RawData = true,
-        //         Parameters = new Dictionary<string, object>(), // Replace with actual params
-        //         ClientId = "cfe62ca2-8a28-495d-9b46-20991b5c2ac3"
-        //     }
-        // };
 
-        var x = new StreamingSyncImplementation(new StreamingSyncImplementationOptions
+
+        var syncImplementation = new StreamingSyncImplementation(new StreamingSyncImplementationOptions
         {
             Adapter = bucketStorage,
             Remote = remote
         });
 
-        await x.GetWriteCheckpoint();
+        syncImplementation.Connect();
 
+        await Task.Delay(5000);
+
+        var b = await db.Execute("SELECT * from lists");
+        string jsona = JsonConvert.SerializeObject(b.Rows.Array, Formatting.Indented);
+        Console.WriteLine("Lists: " + jsona);
         // await foreach (var item in remote.PostStream(syncOptions))
         // {
         //     // Console.WriteLine($"Parsed object type: {item.GetType().Name}");

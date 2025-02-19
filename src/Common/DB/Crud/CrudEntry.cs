@@ -2,7 +2,6 @@ namespace Common.DB.Crud;
 
 using System.Collections.Generic;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 
 public enum UpdateType
 {
@@ -101,17 +100,15 @@ public class CrudEntry(int clientId, UpdateType op, string table, string id, int
         };
     }
 
-    public bool Equals(CrudEntry other)
+    public override bool Equals(object? obj)
     {
-        return JToken.DeepEquals(
-            JToken.FromObject(ToComparisonArray()),
-            JToken.FromObject(other.ToComparisonArray())
-        );
+        if (obj is not CrudEntry other) return false;
+        return JsonConvert.SerializeObject(this) == JsonConvert.SerializeObject(other);
     }
 
     public override int GetHashCode()
     {
-        return JToken.FromObject(ToComparisonArray()).GetHashCode();
+        return JsonConvert.SerializeObject(this).GetHashCode();
     }
 
     private object[] ToComparisonArray()

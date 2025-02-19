@@ -5,7 +5,7 @@ using Newtonsoft.Json;
 public class OplogEntryJSON
 {
     [JsonProperty("checksum")]
-    public int Checksum { get; set; }
+    public long Checksum { get; set; }
 
     [JsonProperty("data")]
     public object? Data { get; set; }
@@ -29,7 +29,7 @@ public class OplogEntryJSON
 public class OplogEntry(
     string opId,
     OpType op,
-    int checksum,
+    long checksum,
     string subkey,
     string? objectType = null,
     string? objectId = null,
@@ -38,7 +38,7 @@ public class OplogEntry(
 {
     public string OpId { get; private set; } = opId;
     public OpType Op { get; private set; } = op;
-    public int Checksum { get; private set; } = checksum;
+    public long Checksum { get; private set; } = checksum;
     public string Subkey { get; private set; } = subkey;
     public string? ObjectType { get; private set; } = objectType;
     public string? ObjectId { get; private set; } = objectId;

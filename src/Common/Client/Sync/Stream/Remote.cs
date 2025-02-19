@@ -42,7 +42,7 @@ public class Remote
 
     public async Task<PowerSyncCredentials?> GetCredentials()
     {
-        if (credentials?.ExpiresAt > DateTime.UtcNow.AddMilliseconds(REFRESH_CREDENTIALS_SAFETY_PERIOD_MS))
+        if (credentials?.ExpiresAt > DateTime.Now.AddMilliseconds(REFRESH_CREDENTIALS_SAFETY_PERIOD_MS))
         {
             return credentials;
         }
@@ -106,6 +106,7 @@ public class Remote
 
         while ((line = await reader.ReadLineAsync()) != null)
         {
+            Console.WriteLine("XX" + line);
             yield return ParseStreamingSyncLine(JObject.Parse(line));
         }
     }
