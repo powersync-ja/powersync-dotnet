@@ -106,7 +106,6 @@ public class Remote
 
         while ((line = await reader.ReadLineAsync()) != null)
         {
-            Console.WriteLine("XX" + line);
             yield return ParseStreamingSyncLine(JObject.Parse(line));
         }
     }

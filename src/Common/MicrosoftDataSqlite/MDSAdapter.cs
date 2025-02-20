@@ -7,9 +7,9 @@ using Microsoft.Data.Sqlite;
 
 using Common.DB;
 
-public class MDSAdapterOptions(string name)
+public class MDSAdapterOptions()
 {
-    public string Name { get; set; } = name;
+    public required string Name { get; set; }
 }
 
 public class MDSAdapter : IDBAdapter

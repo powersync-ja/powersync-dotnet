@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.0;net6.0;net8.0;net48</TargetFrameworks>
+    <TargetFrameworks>netstandard2.0;net6.0;net8.0</TargetFrameworks>
     <LangVersion>12</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -17,7 +17,10 @@
     <PackageReference Include="sqlite-net-pcl" Version="1.9.172" />
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.10" />
     <PackageReference Include="xunit" Version="2.5.3" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
   </ItemGroup>
 
   <ItemGroup>

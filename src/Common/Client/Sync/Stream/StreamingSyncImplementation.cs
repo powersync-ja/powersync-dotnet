@@ -4,6 +4,10 @@ using Common.Client.Sync.Bucket;
 using Common.DB.Crud;
 using Newtonsoft.Json;
 
+
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+
 public class AdditionalConnectionOptions(int? retryDelayMs = null, int? crudUploadThrottleMs = null)
 {
     /// <summary>
@@ -41,6 +45,8 @@ public class StreamingSyncImplementationOptions : AdditionalConnectionOptions
     public required IBucketStorageAdapter Adapter { get; init; }
     public required Func<Task> UploadCrud { get; init; }
     public required Remote Remote { get; init; }
+
+    public ILogger? Logger { get; init; }
 }
 
 public class BaseConnectionOptions(Dictionary<string, object>? parameters = null)
@@ -75,25 +81,6 @@ public class PowerSyncConnectionOptions(
 }
 
 
-public class Logger
-{
-    public void Debug(string message)
-    {
-        Console.WriteLine($"[DEBUG] {DateTime.Now:O} - {message}");
-    }
-
-    public void Warn(string message)
-    {
-        Console.WriteLine($"[WARN] {DateTime.Now:O} - {message}");
-    }
-
-    public void Error(string message)
-    {
-        Console.WriteLine($"[ERROR] {DateTime.Now:O} - {message}");
-    }
-}
-
-
 public class StreamingSyncImplementation
 {
     public static RequiredPowerSyncConnectionOptions DEFAULT_STREAM_CONNECTION_OPTIONS = new()
@@ -111,7 +98,7 @@ public class StreamingSyncImplementation
     private Task? streamingSyncTask;
     public Action TriggerCrudUpload { get; }
 
-    private readonly Logger logger = new Logger();
+    private readonly ILogger logger;
 
     public StreamingSyncImplementation(StreamingSyncImplementationOptions options)
     {
@@ -127,6 +114,8 @@ public class StreamingSyncImplementation
                 Downloading = false
             }
         });
+
+        logger = options.Logger ?? NullLogger.Instance;
 
         CancellationTokenSource = null;
 
@@ -192,7 +181,7 @@ public class StreamingSyncImplementation
         catch (Exception ex)
         {
             // The operation might have failed, all we care about is if it has completed
-            logger.Warn(ex.Message);
+            logger.LogWarning(ex.Message);
         }
 
         streamingSyncTask = null;
@@ -247,7 +236,7 @@ public class StreamingSyncImplementation
             }
             catch (Exception ex)
             {
-                logger.Error($"Caught exception in streaming sync: {ex.Message}");
+                logger.LogError($"Caught exception in streaming sync: {ex.Message}");
                 /**
                 * Either:
                 *  - A network request failed with a failed connection or not OKAY response code.
@@ -296,7 +285,7 @@ public class StreamingSyncImplementation
             Params = options?.Params ?? DEFAULT_STREAM_CONNECTION_OPTIONS.Params
         };
 
-        logger.Debug("Streaming sync iteration started");
+        logger.LogDebug("Streaming sync iteration started");
         Options.Adapter.StartSession();
         var bucketEntries = await Options.Adapter.GetBucketStates();
         var initialBuckets = new Dictionary<string, string>();
@@ -322,7 +311,7 @@ public class StreamingSyncImplementation
 
         var clientId = await Options.Adapter.GetClientId();
 
-        logger.Debug("Requesting stream from server");
+        logger.LogDebug("Requesting stream from server");
 
         var syncOptions = new SyncStreamOptions
         {
@@ -345,14 +334,15 @@ public class StreamingSyncImplementation
             if (first)
             {
                 first = false;
-                logger.Debug("Stream established. Processing events");
+                logger.LogDebug("Stream established. Processing events");
             }
 
-            Console.WriteLine("line:" + line.GetType().Name + JsonConvert.SerializeObject(line, Formatting.Indented));
+            // 
+            logger.LogDebug("Processing line:" + line.GetType().Name + JsonConvert.SerializeObject(line, Formatting.Indented).ToString());
 
             if (line == null)
             {
-                logger.Debug("Stream has closed while waiting");
+                logger.LogDebug("Stream has closed while waiting");
                 // The stream has closed while waiting
                 return new StreamingSyncIterationResult { Retry = true };
             }
@@ -360,7 +350,7 @@ public class StreamingSyncImplementation
             // // A connection is active and messages are being received
             if (!SyncStatus.Connected)
             {
-                logger.Debug("TO BE CONNECTED NOW");
+                logger.LogDebug("TO BE CONNECTED NOW");
                 // There is a connection now
                 UpdateSyncStatus(new SyncStatusOptions
                 {
@@ -371,7 +361,7 @@ public class StreamingSyncImplementation
 
             if (line is StreamingSyncCheckpoint syncCheckpoint)
             {
-                logger.Debug("Sync checkpoint: " + syncCheckpoint);
+                logger.LogDebug("Sync checkpoint: " + syncCheckpoint);
 
                 targetCheckpoint = syncCheckpoint.Checkpoint;
                 var bucketsToDelete = new HashSet<string>(bucketSet);
@@ -384,7 +374,7 @@ public class StreamingSyncImplementation
                 }
                 if (bucketsToDelete.Count > 0)
                 {
-                    logger.Debug("Removing buckets: " + string.Join(", ", bucketsToDelete));
+                    logger.LogDebug("Removing buckets: " + string.Join(", ", bucketsToDelete));
                 }
 
                 bucketSet = newBuckets;
@@ -393,7 +383,7 @@ public class StreamingSyncImplementation
             }
             else if (line is StreamingSyncCheckpointComplete checkpointComplete)
             {
-                logger.Debug("Checkpoint complete: " + targetCheckpoint);
+                logger.LogDebug("Checkpoint complete: " + targetCheckpoint);
                 var result = await Options.Adapter.SyncLocalDatabase(targetCheckpoint!);
 
                 if (!result.CheckpointValid)
@@ -412,7 +402,7 @@ public class StreamingSyncImplementation
                 else
                 {
                     appliedCheckpoint = targetCheckpoint;
-                    logger.Debug("Validated checkpoint: " + appliedCheckpoint);
+                    logger.LogDebug("Validated checkpoint: " + appliedCheckpoint);
 
                     UpdateSyncStatus(new SyncStatusOptions
                     {
@@ -465,7 +455,7 @@ public class StreamingSyncImplementation
                 var bucketsToDelete = diff.RemovedBuckets.ToArray();
                 if (bucketsToDelete.Length > 0)
                 {
-                    logger.Debug("Remove buckets: " + string.Join(", ", bucketsToDelete));
+                    logger.LogDebug("Remove buckets: " + string.Join(", ", bucketsToDelete));
                 }
 
                 // Perform async operations
@@ -489,7 +479,7 @@ public class StreamingSyncImplementation
                 if (remainingSeconds == 0)
                 {
                     // Connection would be closed automatically right after this
-                    logger.Debug("Token expiring; reconnect");
+                    logger.LogDebug("Token expiring; reconnect");
 
                     // For a rare case where the backend connector does not update the token
                     // (uses the same one), this should have some delay.
@@ -501,7 +491,7 @@ public class StreamingSyncImplementation
             }
             else
             {
-                logger.Debug("Sync complete");
+                logger.LogDebug("Sync complete");
 
                 if (targetCheckpoint == appliedCheckpoint)
                 {
@@ -543,7 +533,7 @@ public class StreamingSyncImplementation
             }
         }
 
-        logger.Debug("Stream input empty");
+        logger.LogDebug("Stream input empty");
         // Connection closed. Likely due to auth issue.
         return new StreamingSyncIterationResult { Retry = true };
     }
@@ -588,7 +578,7 @@ public class StreamingSyncImplementation
                 {
                     if (checkedCrudItem?.ClientId == nextCrudItem.ClientId)
                     {
-                        logger.Warn(
+                        logger.LogWarning(
                             "Potentially previously uploaded CRUD entries are still present in the upload queue. " +
                             "Make sure to handle uploads and complete CRUD transactions or batches by calling and awaiting their `.Complete()` method. " +
                             "The next upload iteration will be delayed."
@@ -619,7 +609,7 @@ public class StreamingSyncImplementation
                     break;
                 }
 
-                logger.Debug($"Caught exception when uploading. Upload will retry after a delay. Exception: {ex.Message}");
+                logger.LogDebug($"Caught exception when uploading. Upload will retry after a delay. Exception: {ex.Message}");
             }
             finally
             {
@@ -662,7 +652,7 @@ public class StreamingSyncImplementation
         if (!SyncStatus.Equals(updatedStatus))
         {
             SyncStatus = updatedStatus;
-            Console.WriteLine($"[Sync status updated]: {updatedStatus.ToJSON()}");
+            logger.LogDebug($"[Sync status updated]: {updatedStatus.ToJSON()}");
             // Only trigger this if there was a change
             // IterateListeners(cb => cb.StatusChanged?.Invoke(updatedStatus));
         }

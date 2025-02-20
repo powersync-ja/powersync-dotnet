@@ -8,21 +8,26 @@ using Common.Client.Sync.Stream;
 using Common.DB;
 using Common.DB.Crud;
 using Common.DB.Schema;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
-public class BasePowerSyncDatabaseOptions(Schema schema)
+public class BasePowerSyncDatabaseOptions()
 {
     /**
      * Schema used for the local database.
      */
-    public Schema Schema { get; set; } = schema;
+    public required Schema Schema { get; set; }
+
+    public ILogger? Logger { get; set; }
+
 }
 
-public class PowerSyncDatabaseOptions(IDBAdapter database, Schema schema) : BasePowerSyncDatabaseOptions(schema)
+public class PowerSyncDatabaseOptions() : BasePowerSyncDatabaseOptions()
 {
     /**
     * Source for a SQLite database connection.
     */
-    public IDBAdapter Database { get; set; } = database;
+    public required IDBAdapter Database { get; set; }
 }
 
 public interface IPowerSyncDatabase
@@ -50,9 +55,12 @@ public class AbstractPowerSyncDatabase : IPowerSyncDatabase
 
     public SyncStatus SyncStatus;
 
+    public ILogger Logger;
+
     public AbstractPowerSyncDatabase(PowerSyncDatabaseOptions options)
     {
         Database = options.Database;
+        Logger = options.Logger ?? NullLogger.Instance;
         SyncStatus = new SyncStatus(new SyncStatusOptions());
         BucketStorageAdapter = generateBucketStorageAdapter();
 
@@ -144,11 +152,9 @@ public class AbstractPowerSyncDatabase : IPowerSyncDatabase
         // }
     }
 
-    /**
-       * Replace the schema with a new version. This is for advanced use cases - typically the schema should just be specified once in the constructor.
-       *
-       * Cannot be used while connected - this should only be called before {@link AbstractPowerSyncDatabase.connect}.
-       */
+
+    /// Replace the schema with a new version. This is for advanced use cases - typically the schema should just be specified once in the constructor.
+    /// Cannot be used while connected - this should only be called before {@link AbstractPowerSyncDatabase.connect}.
     public async Task UpdateSchema(Schema schema)
     {
         // TODO throw on 'connected'
@@ -162,9 +168,9 @@ public class AbstractPowerSyncDatabase : IPowerSyncDatabase
         {
             // schema.Validate();
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // this.options.logger?.Warn('Schema validation failed. Unexpected behaviour could occur', ex);
+            Logger.LogWarning("Schema validation failed. Unexpected behavior could occur: {Exception}", ex);
         }
 
         this.schema = schema;
@@ -214,6 +220,7 @@ public class AbstractPowerSyncDatabase : IPowerSyncDatabase
             },
             RetryDelayMs = resolvedOptions.RetryDelayMs,
             CrudUploadThrottleMs = resolvedOptions.CrudUploadThrottleMs,
+            Logger = Logger
         });
 
         // TODO CL

@@ -2,6 +2,7 @@ using Common.Client.Sync.Bucket;
 using Common.Client.Sync.Stream;
 using Common.DB.Schema;
 using Common.MicrosoftDataSqlite;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Supabase.Storage;
 
@@ -51,7 +52,7 @@ public class SupabaseConnectorTests
     [Fact]
     public async void StreamTest()
     {
-        var db = CommonPowerSyncDatabase.Create(TestData.appSchema, "ConnectorTests.db");
+        var db = CommonPowerSyncDatabase.Create(TestData.appSchema, "ConnectorTests.db", createLogger());
         await db.Init();
         await db.DisconnectAndClear();
 
@@ -61,28 +62,25 @@ public class SupabaseConnectorTests
         Console.WriteLine("Calling connect...");
 
         await db.Connect(connector);
-
-        // var syncImplementation = new StreamingSyncImplementation(new StreamingSyncImplementationOptions
-        // {
-        //     Adapter = bucketStorage,
-        //     Remote = remote,
-        //     UploadCrud = () => Task.CompletedTask,
-        // });
-
-        // _ = syncImplementation.Connect();
-
         await Task.Delay(5000);
 
         var b = await db.Execute("SELECT * from lists");
+
+
+        // proof data has synced
         string jsona = JsonConvert.SerializeObject(b.Rows.Array, Formatting.Indented);
         Console.WriteLine("Lists: " + jsona);
-
-
-        // await foreach (var item in remote.PostStream(syncOptions))
-        // {
-        //     // Console.WriteLine($"Parsed object type: {item.GetType().Name}");
-        //     Console.WriteLine(JsonConvert.SerializeObject(item, Formatting.Indented));
-        // }
-        Console.WriteLine("XXXX---completed");
     }
+
+    private ILogger createLogger()
+    {
+        ILoggerFactory loggerFactory = LoggerFactory.Create(builder =>
+        {
+            builder.AddConsole(); // Enable console logging
+            builder.SetMinimumLevel(LogLevel.Debug);
+        });
+
+        return loggerFactory.CreateLogger("TestLogger");
+    }
+
 }
