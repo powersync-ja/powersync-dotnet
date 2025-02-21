@@ -1,8 +1,9 @@
+namespace Common.MicrosoftDataSqlite;
+
 using Common.Client;
 using Common.DB.Schema;
 using Microsoft.Extensions.Logging;
 
-namespace Common.MicrosoftDataSqlite;
 
 public class CommonPowerSyncDatabase(PowerSyncDatabaseOptions options) : AbstractPowerSyncDatabase(options)
 {
