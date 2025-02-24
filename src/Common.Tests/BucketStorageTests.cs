@@ -8,6 +8,7 @@ using Common.Client;
 using Common.Client.Sync.Bucket;
 using Common.DB.Schema;
 using Common.MicrosoftDataSqlite;
+using Microsoft.Extensions.Logging;
 
 class TestData
 {
@@ -99,7 +100,7 @@ public class BucketStorageTests : IAsyncLifetime
     {
         db = CommonPowerSyncDatabase.Create(TestData.appSchema, "powersync.db");
         await db.Init();
-        bucketStorage = new SqliteBucketStorage(db.Database);
+        bucketStorage = new SqliteBucketStorage(db.Database, createLogger());
 
     }
 
@@ -135,6 +136,17 @@ public class BucketStorageTests : IAsyncLifetime
     {
         var result = await bucketStorage.SyncLocalDatabase(checkpoint);
         Assert.Equal(new SyncLocalDatabaseResult { Ready = true, CheckpointValid = true }, result);
+    }
+
+    private ILogger createLogger()
+    {
+        ILoggerFactory loggerFactory = LoggerFactory.Create(builder =>
+        {
+            builder.AddConsole(); // Enable console logging
+            builder.SetMinimumLevel(LogLevel.Debug);
+        });
+
+        return loggerFactory.CreateLogger("TestLogger");
     }
 
     [Fact]

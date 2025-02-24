@@ -23,3 +23,5 @@ dotnet test --framework net48
 dotnet test --framework net48
 dotnet test --framework net6.0 ./src/Common.Tests
 brew install mono
+
+dotnet test -v n --framework net8.0 --filter "StreamTest"     

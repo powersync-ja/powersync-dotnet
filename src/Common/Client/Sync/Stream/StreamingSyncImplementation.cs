@@ -7,6 +7,7 @@ using Newtonsoft.Json;
 
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Common.Utils;
 
 public class AdditionalConnectionOptions(int? retryDelayMs = null, int? crudUploadThrottleMs = null)
 {
@@ -32,9 +33,9 @@ public class RequiredAdditionalConnectionOptions : AdditionalConnectionOptions
         RetryDelayMs = 5000
     };
 
-    public required new int RetryDelayMs { get; set; }
+    public new int RetryDelayMs { get; set; }
 
-    public required new int CrudUploadThrottleMs { get; set; }
+    public new int CrudUploadThrottleMs { get; set; }
 
 }
 
@@ -42,9 +43,9 @@ public class RequiredAdditionalConnectionOptions : AdditionalConnectionOptions
 // TODO CL make these required
 public class StreamingSyncImplementationOptions : AdditionalConnectionOptions
 {
-    public required IBucketStorageAdapter Adapter { get; init; }
-    public required Func<Task> UploadCrud { get; init; }
-    public required Remote Remote { get; init; }
+    public IBucketStorageAdapter Adapter { get; init; } = null!;
+    public Func<Task> UploadCrud { get; init; } = null!;
+    public Remote Remote { get; init; } = null!;
 
     public ILogger? Logger { get; init; }
 }
@@ -59,9 +60,21 @@ public class BaseConnectionOptions(Dictionary<string, object>? parameters = null
 
 public class RequiredPowerSyncConnectionOptions : BaseConnectionOptions
 {
-    public required new Dictionary<string, object> Params { get; set; } = new();
+    public new Dictionary<string, object> Params { get; set; } = new();
 }
 
+public class StreamingSyncImplementationEvent
+{
+    /// <summary>
+    /// Set whenever a status update has been attempted to be made or refreshed.
+    /// </summary>
+    public SyncStatusOptions? StatusUpdated { get; set; }
+
+    /// <summary>
+    /// Set whenever the status' members have changed in value.
+    /// </summary>
+    public SyncStatus? StatusChanged { get; set; }
+}
 
 public class PowerSyncConnectionOptions(
     Dictionary<string, object>? @params = null,
@@ -81,7 +94,7 @@ public class PowerSyncConnectionOptions(
 }
 
 
-public class StreamingSyncImplementation
+public class StreamingSyncImplementation : EventStream<StreamingSyncImplementationEvent>
 {
     public static RequiredPowerSyncConnectionOptions DEFAULT_STREAM_CONNECTION_OPTIONS = new()
     {
@@ -156,6 +169,31 @@ public class StreamingSyncImplementation
 
 
         streamingSyncTask = StreamingSync(CancellationTokenSource.Token, options);
+
+        var tcs = new TaskCompletionSource();
+        var cts = new CancellationTokenSource();
+
+        var runner = Task.Run(() =>
+        {
+            foreach (var status in Listen(cts.Token))
+            {
+                if (status.StatusUpdated != null)
+                {
+                    if (status.StatusUpdated.Connected != null)
+                    {
+                        if (status.StatusUpdated.Connected == false)
+                        {
+                            logger.LogWarning("Initial connect attempt did not successfully connect to server");
+                        }
+
+                        tcs.SetResult();
+                        cts.Cancel();
+                    }
+                }
+            }
+        });
+
+        await tcs.Task;
     }
 
     public async Task Disconnect()
@@ -337,9 +375,6 @@ public class StreamingSyncImplementation
                 logger.LogDebug("Stream established. Processing events");
             }
 
-            // 
-            logger.LogDebug("Processing line:" + line.GetType().Name + JsonConvert.SerializeObject(line, Formatting.Indented).ToString());
-
             if (line == null)
             {
                 logger.LogDebug("Stream has closed while waiting");
@@ -361,7 +396,7 @@ public class StreamingSyncImplementation
 
             if (line is StreamingSyncCheckpoint syncCheckpoint)
             {
-                logger.LogDebug("Sync checkpoint: " + syncCheckpoint);
+                logger.LogDebug("Sync checkpoint: {message}", syncCheckpoint);
 
                 targetCheckpoint = syncCheckpoint.Checkpoint;
                 var bucketsToDelete = new HashSet<string>(bucketSet);
@@ -609,7 +644,7 @@ public class StreamingSyncImplementation
                     break;
                 }
 
-                logger.LogDebug($"Caught exception when uploading. Upload will retry after a delay. Exception: {ex.Message}");
+                logger.LogDebug("Caught exception when uploading. Upload will retry after a delay. Exception: {message}", ex.Message);
             }
             finally
             {
@@ -629,12 +664,6 @@ public class StreamingSyncImplementation
         await Task.CompletedTask;
     }
 
-    public Task WaitForStatus(SyncStatusOptions status)
-    {
-        throw new NotImplementedException();
-    }
-
-
     protected void UpdateSyncStatus(SyncStatusOptions options)
     {
         var updatedStatus = new SyncStatus(new SyncStatusOptions
@@ -652,13 +681,13 @@ public class StreamingSyncImplementation
         if (!SyncStatus.Equals(updatedStatus))
         {
             SyncStatus = updatedStatus;
-            logger.LogDebug($"[Sync status updated]: {updatedStatus.ToJSON()}");
+            logger.LogDebug("[Sync status updated]: {message}", updatedStatus.ToJSON());
             // Only trigger this if there was a change
-            // IterateListeners(cb => cb.StatusChanged?.Invoke(updatedStatus));
+            Emit(new StreamingSyncImplementationEvent { StatusChanged = updatedStatus });
         }
 
         // Trigger this for all updates
-        // IterateListeners(cb => cb.StatusUpdated?.Invoke(options));
+        Emit(new StreamingSyncImplementationEvent { StatusUpdated = options });
     }
 
     private async Task DelayRetry()

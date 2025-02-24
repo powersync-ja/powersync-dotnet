@@ -68,6 +68,13 @@ public class UpdateNotification(string table, RowUpdateType OpType, long RowId) 
     public string Table { get; set; } = table;
 }
 
+public class BatchedUpdateNotification
+{
+    public UpdateNotification[] RawUpdates { get; set; } = [];
+    public string[] Tables { get; set; } = [];
+    public Dictionary<string, TableUpdateOperation[]> GroupedUpdates { get; set; } = [];
+}
+
 public class DBLockOptions
 {
     // Optional timeout in milliseconds.
@@ -101,4 +108,14 @@ public interface IDBAdapter : IDBGetUtils, ILockContext
 
     // This method refreshes the schema information across all connections. This is for advanced use cases, and should generally not be needed.
     Task RefreshSchema();
+
+    public static string[] ExtractTableUpdates(object update)
+    {
+        return update switch
+        {
+            BatchedUpdateNotification batchedUpdate => batchedUpdate.Tables,
+            UpdateNotification singleUpdate => [singleUpdate.Table],
+            _ => throw new ArgumentException("Invalid update type", nameof(update))
+        };
+    }
 }

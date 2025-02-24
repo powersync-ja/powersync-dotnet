@@ -4,14 +4,33 @@ using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 
-public class EventStream<T>
+public interface IEventStream<T>
 {
-    public ConcurrentBag<Channel<T>> subscribers = [];
+    void Emit(T item);
 
+    Task EmitAsync(T item);
+
+    IAsyncEnumerable<T> ListenAsync(CancellationToken cancellationToken);
+
+    IEnumerable<T> Listen(CancellationToken cancellationToken);
+
+    void Close();
+}
+
+public class EventStream<T> : IEventStream<T>
+{
+
+    // Closest implementation to a ConcurrentList<T> in .Net
+    private readonly ConcurrentDictionary<Channel<T>, byte> subscribers = new();
+
+    public int SubscriberCount()
+    {
+        return subscribers.Count;
+    }
 
     public void Emit(T item)
     {
-        foreach (var subscriber in subscribers)
+        foreach (var subscriber in subscribers.Keys)
         {
             subscriber.Writer.TryWrite(item);
         }
@@ -19,7 +38,7 @@ public class EventStream<T>
 
     public async Task EmitAsync(T item)
     {
-        foreach (var subscriber in subscribers)
+        foreach (var subscriber in subscribers.Keys)
         {
             await subscriber.Writer.WriteAsync(item);
         }
@@ -28,14 +47,14 @@ public class EventStream<T>
     public IAsyncEnumerable<T> ListenAsync(CancellationToken cancellationToken)
     {
         var channel = Channel.CreateUnbounded<T>();
-        subscribers.Add(channel);
+        subscribers.TryAdd(channel, 0);
         return ReadFromChannelAsync(channel, cancellationToken);
     }
 
     public IEnumerable<T> Listen(CancellationToken cancellationToken)
     {
         var channel = Channel.CreateUnbounded<T>();
-        subscribers.Add(channel);
+        subscribers.TryAdd(channel, 0);
         return ReadFromChannel(channel, cancellationToken);
     }
 
@@ -51,6 +70,12 @@ public class EventStream<T>
                 while (channel.Reader.TryRead(out var item))
                 {
                     yield return item;
+
+                    // Check cancellation between iterations
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        yield break;
+                    }
                 }
             }
         }
@@ -81,9 +106,17 @@ public class EventStream<T>
         }
     }
 
+    public void Close()
+    {
+        foreach (var subscriber in subscribers.Keys)
+        {
+            subscriber.Writer.TryComplete();
+            RemoveSubscriber(subscriber);
+        }
+    }
+
     private void RemoveSubscriber(Channel<T> channel)
     {
-        // Workaround for ConcurrentBag<T> (cannot remove items directly), maybe a dictionary/set?
-        subscribers = [.. subscribers.Where(c => c != channel)];
+        subscribers.TryRemove(channel, out _);
     }
 }

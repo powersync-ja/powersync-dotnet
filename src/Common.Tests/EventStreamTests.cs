@@ -12,15 +12,15 @@ public class EventStreamTests
         var cts = new CancellationTokenSource();
         var receivedMessages = new List<SyncStatus>();
 
-        var completedTask = new TaskCompletionSource<bool>();
-        var listenerReadySource = new TaskCompletionSource<bool>();
+        var completedTask = new TaskCompletionSource();
+        var listenerReadySource = new TaskCompletionSource();
 
 
         var listenTask = Task.Run(async () =>
         {
             var stream = eventStream.ListenAsync(cts.Token);
 
-            listenerReadySource.TrySetResult(true);
+            listenerReadySource.SetResult();
 
             await foreach (var status in stream)
             {
@@ -29,12 +29,13 @@ public class EventStreamTests
                 if (receivedMessages.Count == 2)
                 {
                     cts.Cancel();
-                    completedTask.TrySetResult(true);
                 }
             }
+            completedTask.SetResult();
         });
 
         await listenerReadySource.Task;
+        Assert.Equal(1, eventStream.SubscriberCount());
 
         var status1 = new SyncStatus(new SyncStatusOptions
         {
@@ -55,6 +56,7 @@ public class EventStreamTests
         Assert.Equal(2, receivedMessages.Count);
         Assert.Contains(status1, receivedMessages);
         Assert.Contains(status2, receivedMessages);
+        Assert.Equal(0, eventStream.SubscriberCount());
     }
 
     [Fact]
@@ -64,14 +66,14 @@ public class EventStreamTests
         var cts = new CancellationTokenSource();
         var receivedMessages = new List<SyncStatus>();
 
-        var completedTask = new TaskCompletionSource<bool>();
-        var listenerReadySource = new TaskCompletionSource<bool>();
+        var completedTask = new TaskCompletionSource();
+        var listenerReadySource = new TaskCompletionSource();
 
         var listenTask = Task.Run(() =>
         {
             var stream = eventStream.Listen(cts.Token);
 
-            listenerReadySource.TrySetResult(true);
+            listenerReadySource.SetResult();
 
             foreach (var status in stream)
             {
@@ -79,13 +81,13 @@ public class EventStreamTests
                 if (receivedMessages.Count == 2)
                 {
                     cts.Cancel();
-                    completedTask.TrySetResult(true);
-                    break;
                 }
             }
+            completedTask.SetResult();
         });
 
         await listenerReadySource.Task;
+        Assert.Equal(1, eventStream.SubscriberCount());
 
         var status1 = new SyncStatus(new SyncStatusOptions
         {
@@ -105,5 +107,6 @@ public class EventStreamTests
         Assert.Equal(2, receivedMessages.Count);
         Assert.Contains(status1, receivedMessages);
         Assert.Contains(status2, receivedMessages);
+        Assert.Equal(0, eventStream.SubscriberCount());
     }
 }

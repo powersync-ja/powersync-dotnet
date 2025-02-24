@@ -9,7 +9,7 @@ using Common.DB;
 
 public class MDSAdapterOptions()
 {
-    public required string Name { get; set; }
+    public string Name { get; set; } = null!;
 }
 
 public class MDSAdapter : IDBAdapter

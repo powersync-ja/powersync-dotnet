@@ -16,9 +16,9 @@ public class BasePowerSyncDatabaseOptions()
     /**
      * Schema used for the local database.
      */
-    public required Schema Schema { get; set; }
+    public Schema Schema { get; set; } = null!;
 
-    public ILogger? Logger { get; set; }
+    public ILogger? Logger { get; set; } = null!;
 
 }
 
@@ -27,7 +27,7 @@ public class PowerSyncDatabaseOptions() : BasePowerSyncDatabaseOptions()
     /**
     * Source for a SQLite database connection.
     */
-    public required IDBAdapter Database { get; set; }
+    public IDBAdapter Database { get; set; } = null!;
 }
 
 public interface IPowerSyncDatabase
@@ -74,7 +74,7 @@ public class AbstractPowerSyncDatabase : IPowerSyncDatabase
 
     protected IBucketStorageAdapter generateBucketStorageAdapter()
     {
-        return new SqliteBucketStorage(Database);
+        return new SqliteBucketStorage(Database, Logger);
     }
 
     /// <summary>

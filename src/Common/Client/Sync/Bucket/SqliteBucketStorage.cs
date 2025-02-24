@@ -7,21 +7,48 @@ using System.Threading.Tasks;
 
 using Common.DB;
 using Common.DB.Crud;
-
+using Common.Utils;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Newtonsoft.Json;
 
-public class SqliteBucketStorage(IDBAdapter db) : IBucketStorageAdapter
+public class SqliteBucketStorage : EventStream<BucketStorageListenerEvent>, IBucketStorageAdapter
 {
-    private readonly IDBAdapter db = db;
-    private bool hasCompletedSync = false;
-    private bool pendingBucketDeletes = true;
-    private readonly HashSet<string> tableNames = [];
+
+    public static readonly string MAX_OP_ID = "9223372036854775807";
+
+    private readonly IDBAdapter db;
+    private bool hasCompletedSync;
+    private bool pendingBucketDeletes;
+    private readonly HashSet<string> tableNames;
     private string? clientId;
 
     private static readonly int COMPACT_OPERATION_INTERVAL = 1000;
     private int compactCounter = COMPACT_OPERATION_INTERVAL;
 
+    private ILogger logger;
+
     private record ExistingTableRowsResult(string name);
+
+    public SqliteBucketStorage(IDBAdapter db, ILogger? logger = null)
+    {
+        this.db = db;
+        this.logger = logger ?? NullLogger.Instance; ;
+        hasCompletedSync = false;
+        pendingBucketDeletes = true;
+        tableNames = [];
+
+        //     this.updateListener = db.registerListener({
+        //   tablesUpdated: (update) => {
+        //     const tables = extractTableUpdates(update);
+        //     if (tables.includes(PSInternalTable.CRUD)) {
+        //       this.iterateListeners((l) => l.crudUpdate?.());
+        //     }
+        //   }
+        // });
+
+    }
+
     public async Task Init()
     {
 
@@ -38,6 +65,7 @@ public class SqliteBucketStorage(IDBAdapter db) : IBucketStorageAdapter
     {
         Console.WriteLine("Disposing SqliteBucketStorage...");
     }
+
     private record ClientIdResult(string? client_id);
     public async Task<string> GetClientId()
     {
@@ -70,9 +98,9 @@ public class SqliteBucketStorage(IDBAdapter db) : IBucketStorageAdapter
             int count = 0;
             foreach (var b in batch.Buckets)
             {
-                await tx.Execute("INSERT INTO powersync_operations(op, data) VALUES(?, ?)",
+                var result = await tx.Execute("INSERT INTO powersync_operations(op, data) VALUES(?, ?)",
                     ["save", JsonConvert.SerializeObject(new { buckets = new[] { b.ToJSON() } })]);
-                Console.WriteLine("saveSyncData: Saved batch.");
+                logger.LogDebug("saveSyncData {message}", JsonConvert.SerializeObject(result));
                 count += b.Data.Length;
             }
             compactCounter += count;
@@ -95,7 +123,7 @@ public class SqliteBucketStorage(IDBAdapter db) : IBucketStorageAdapter
                 ["delete_bucket", bucket]);
         });
 
-        Console.WriteLine("Done deleting bucket.");
+        logger.LogDebug("Done deleting bucket");
         pendingBucketDeletes = true;
     }
 
@@ -115,7 +143,7 @@ public class SqliteBucketStorage(IDBAdapter db) : IBucketStorageAdapter
         var validation = await ValidateChecksums(checkpoint);
         if (!validation.CheckpointValid)
         {
-            Console.WriteLine($"Checksums failed for: {JsonConvert.SerializeObject(validation.CheckpointFailures)}");
+            logger.LogError("Checksums failed for {failures}", JsonConvert.SerializeObject(validation.CheckpointFailures));
             foreach (var failedBucket in validation.CheckpointFailures ?? [])
             {
                 await DeleteBucket(failedBucket);
@@ -148,7 +176,7 @@ public class SqliteBucketStorage(IDBAdapter db) : IBucketStorageAdapter
         var valid = await UpdateObjectsFromBuckets(checkpoint);
         if (!valid)
         {
-            Console.WriteLine("Not at a consistent checkpoint - cannot update local db");
+            logger.LogDebug("Not at a consistent checkpoint - cannot update local db");
             return new SyncLocalDatabaseResult
             {
                 Ready = false,
@@ -193,8 +221,7 @@ public class SqliteBucketStorage(IDBAdapter db) : IBucketStorageAdapter
         var result = await db.Get<ResultResult>("SELECT powersync_validate_checkpoint(?) as result",
                 [JsonConvert.SerializeObject(checkpoint)]);
 
-        Console.WriteLine("validateChecksums result item: " + result);
-
+        logger.LogDebug("validateChecksums result item {message}", JsonConvert.SerializeObject(result));
 
         if (result == null) return new SyncLocalDatabaseResult { CheckpointValid = false, Ready = false };
 
@@ -259,23 +286,69 @@ public class SqliteBucketStorage(IDBAdapter db) : IBucketStorageAdapter
     }
 
     private record TargetOpResult(string target_op);
+    private record SequenceResult(int seq);
+
     public async Task<bool> UpdateLocalTarget(Func<Task<string>> callback)
     {
         var rs1 = await db.GetAll<TargetOpResult>(
-                "SELECT target_op FROM ps_buckets WHERE name = '$local' AND target_op = CAST(? as INTEGER)",
-                [GetMaxOpId()]);
+            "SELECT target_op FROM ps_buckets WHERE name = '$local' AND target_op = CAST(? as INTEGER)",
+            [GetMaxOpId()]
+        );
 
-        if (rs1.Length == 0) return false;
+        if (rs1.Length == 0)
+        {
+            // Nothing to update
+            return false;
+        }
 
+        var rs = await db.GetAll<SequenceResult>(
+            "SELECT seq FROM sqlite_sequence WHERE name = 'ps_crud'"
+        );
+
+        if (rs.Length == 0)
+        {
+            // Nothing to update
+            return false;
+        }
+
+        int seqBefore = rs[0].seq;
         string opId = await callback();
-        Console.WriteLine($"[updateLocalTarget] Updating target to checkpoint {opId}");
+
+        logger.LogDebug("[updateLocalTarget] Updating target to checkpoint {message}", opId);
 
         return await db.WriteTransaction(async tx =>
         {
-            var result = await tx.Execute("UPDATE ps_buckets SET target_op = CAST(? as INTEGER) WHERE name='$local'",
-                [opId]);
+            var anyData = await tx.Execute("SELECT 1 FROM ps_crud LIMIT 1");
+            if (anyData.RowsAffected > 0)
+            {
+                logger.LogDebug("[updateLocalTarget] ps crud is not empty");
+                return false;
+            }
 
-            Console.WriteLine("[updateLocalTarget] Response: " + JsonConvert.SerializeObject(result));
+            var rsAfter = await tx.GetAll<SequenceResult>(
+                "SELECT seq FROM sqlite_sequence WHERE name = 'ps_crud'"
+            );
+
+            if (rsAfter.Length == 0)
+            {
+                throw new Exception("SQLite Sequence should not be empty");
+            }
+
+            int seqAfter = rsAfter[0].seq;
+            logger.LogDebug("[updateLocalTarget] seqAfter: {seq}", seqAfter);
+
+            if (seqAfter != seqBefore)
+            {
+                logger.LogDebug("[updateLocalTarget] seqAfter ({seqAfter}) != seqBefore ({seqBefore})", seqAfter, seqBefore);
+                return false;
+            }
+
+            var response = await tx.Execute(
+               "UPDATE ps_buckets SET target_op = CAST(? as INTEGER) WHERE name='$local'",
+               [opId]
+           );
+
+            logger.LogDebug("[updateLocalTarget] Response from updating target_op: {response}", JsonConvert.SerializeObject(response));
             return true;
         });
     }

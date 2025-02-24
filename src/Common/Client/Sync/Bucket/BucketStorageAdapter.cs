@@ -5,7 +5,7 @@ using System;
 using System.Threading.Tasks;
 
 using Common.DB.Crud;
-
+using Common.Utils;
 using Newtonsoft.Json;
 
 public class Checkpoint
@@ -76,7 +76,12 @@ public static class PSInternalTable
     public static readonly string UNTYPED = "ps_untyped";
 }
 
-public interface IBucketStorageAdapter : IDisposable
+public class BucketStorageListenerEvent
+{
+    public bool CrudUpdate { get; set; }
+}
+
+public interface IBucketStorageAdapter : IEventStream<BucketStorageListenerEvent>
 {
     Task Init();
     Task SaveSyncData(SyncDataBatch batch);
