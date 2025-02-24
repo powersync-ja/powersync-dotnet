@@ -66,7 +66,6 @@ public class SupabaseConnectorTests
 
         var b = await db.Execute("SELECT * from lists");
 
-
         // proof data has synced
         string jsona = JsonConvert.SerializeObject(b.Rows.Array, Formatting.Indented);
         Console.WriteLine("Lists: " + jsona);

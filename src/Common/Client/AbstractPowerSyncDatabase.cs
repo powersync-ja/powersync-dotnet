@@ -8,6 +8,7 @@ using Common.Client.Sync.Stream;
 using Common.DB;
 using Common.DB.Crud;
 using Common.DB.Schema;
+using Common.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -30,19 +31,24 @@ public class PowerSyncDatabaseOptions() : BasePowerSyncDatabaseOptions()
     public IDBAdapter Database { get; set; } = null!;
 }
 
-public interface IPowerSyncDatabase
+public class PowerSyncDBEvent : StreamingSyncImplementationEvent
+{
+    public bool? Initialized { get; set; }
+    public Schema? SchemaChanged { get; set; }
+}
+
+public interface IPowerSyncDatabase : IEventStream<PowerSyncDBEvent>
 {
 
 }
 
-public class AbstractPowerSyncDatabase : IPowerSyncDatabase
+public class AbstractPowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDatabase
 {
 
     public IDBAdapter Database;
     private Schema schema;
     private static readonly Regex POWERSYNC_TABLE_MATCH = new Regex(@"(^ps_data__|^ps_data_local__)", RegexOptions.Compiled);
 
-    // Returns true if the connection is closed.    
     public bool Closed;
     public bool Ready;
 
@@ -53,7 +59,9 @@ public class AbstractPowerSyncDatabase : IPowerSyncDatabase
 
     protected IBucketStorageAdapter BucketStorageAdapter;
 
-    public SyncStatus SyncStatus;
+    protected CancellationTokenSource? syncStreamStatusCts;
+
+    protected SyncStatus CurrentStatus;
 
     public ILogger Logger;
 
@@ -61,7 +69,7 @@ public class AbstractPowerSyncDatabase : IPowerSyncDatabase
     {
         Database = options.Database;
         Logger = options.Logger ?? NullLogger.Instance;
-        SyncStatus = new SyncStatus(new SyncStatusOptions());
+        CurrentStatus = new SyncStatus(new SyncStatusOptions());
         BucketStorageAdapter = generateBucketStorageAdapter();
 
         Closed = false;
@@ -90,6 +98,37 @@ public class AbstractPowerSyncDatabase : IPowerSyncDatabase
         await isReadyTask;
     }
 
+    public async Task WaitForFirstSync(CancellationToken? cancellationToken = null)
+    {
+        if (CurrentStatus.HasSynced == true)
+        {
+            return;
+        }
+
+        var tcs = new TaskCompletionSource();
+        var cts = new CancellationTokenSource();
+
+        var _ = Task.Run(() =>
+        {
+            foreach (var update in Listen(cts.Token))
+            {
+                if (update.StatusChanged?.HasSynced == true)
+                {
+                    cts.Cancel();
+                    tcs.SetResult();
+                }
+            }
+        });
+
+        cancellationToken?.Register(() =>
+        {
+            cts.Cancel();
+            tcs.SetCanceled();
+        });
+
+        await tcs.Task;
+    }
+
     protected async Task Initialize()
     {
         await BucketStorageAdapter.Init();
@@ -98,9 +137,7 @@ public class AbstractPowerSyncDatabase : IPowerSyncDatabase
         await UpdateHasSynced();
         await Database.Execute("PRAGMA RECURSIVE_TRIGGERS=TRUE");
         Ready = true;
-
-        // TODO CL
-        // this.iterateListeners((cb) => cb.initialized?.());
+        Emit(new PowerSyncDBEvent { Initialized = true });
     }
 
     private record VersionResult(string version);
@@ -132,37 +169,36 @@ public class AbstractPowerSyncDatabase : IPowerSyncDatabase
         }
     }
 
-    // { synced_at: string | null }
     private record LastSyncedResult(string? synced_at);
-    // 
+
     protected async Task UpdateHasSynced()
     {
-        var syncedAt = (await Database.Get<LastSyncedResult>("SELECT powersync_last_synced_at() as synced_at")).synced_at;
+        var result = await Database.Get<LastSyncedResult>("SELECT powersync_last_synced_at() as synced_at");
 
-        Console.WriteLine("Synced at: " + syncedAt);
-        // TODO CL
-        // const hasSynced = result.synced_at != null;
-        // const syncedAt = result.synced_at != null ? new Date(result.synced_at! + 'Z') : undefined;
+        var hasSynced = result.synced_at != null;
+        DateTime? syncedAt = result.synced_at != null ? DateTime.Parse(result.synced_at + "Z") : null;
 
+        if (hasSynced != CurrentStatus.HasSynced)
+        {
+            CurrentStatus = new SyncStatus(new SyncStatusOptions(CurrentStatus.Options)
+            {
+                HasSynced = hasSynced,
+                LastSyncedAt = syncedAt
+            });
 
-        // communicate update
-        // if (hasSynced != this.currentStatus.hasSynced) {
-        //   this.currentStatus = new SyncStatus({ ...this.currentStatus.toJSON(), hasSynced, lastSyncedAt: syncedAt });
-        //   this.iterateListeners((l) => l.statusChanged?.(this.currentStatus));
-        // }
+            Emit(new PowerSyncDBEvent { StatusChanged = CurrentStatus });
+        }
     }
-
 
     /// Replace the schema with a new version. This is for advanced use cases - typically the schema should just be specified once in the constructor.
     /// Cannot be used while connected - this should only be called before {@link AbstractPowerSyncDatabase.connect}.
     public async Task UpdateSchema(Schema schema)
     {
         // TODO throw on 'connected'
-        //  if (this.syncStreamImplementation)
-        // {
-        //     throw new Error('Cannot update schema while connected');
-        // }
-
+        if (syncStreamImplementation != null)
+        {
+            throw new Exception("Cannot update schema while connected");
+        }
 
         try
         {
@@ -176,7 +212,7 @@ public class AbstractPowerSyncDatabase : IPowerSyncDatabase
         this.schema = schema;
         await Database.Execute("SELECT powersync_replace_schema(?)", [schema.ToJSON()]);
         await Database.RefreshSchema();
-        // this.iterateListeners(async (cb) => cb.schemaChanged?.(schema));
+        Emit(new PowerSyncDBEvent { SchemaChanged = schema });
     }
 
     /// Wait for initialization to complete.
@@ -223,17 +259,21 @@ public class AbstractPowerSyncDatabase : IPowerSyncDatabase
             Logger = Logger
         });
 
-        // TODO CL
-        //     this.syncStatusListenerDisposer = this.syncStreamImplementation.registerListener({
-        //     statusChanged: (status) =>
-        //     {
-        //         this.currentStatus = new SyncStatus({
-        //       ...status.toJSON(),
-        //       hasSynced: this.currentStatus?.hasSynced || !!status.lastSyncedAt
-        //     });
-        //         this.iterateListeners((cb) => cb.statusChanged?.(this.currentStatus));
-        //     }
-        // });
+        syncStreamStatusCts = new CancellationTokenSource();
+        var _ = Task.Run(() =>
+        {
+            foreach (var update in syncStreamImplementation.Listen(syncStreamStatusCts.Token))
+            {
+                if (update.StatusChanged != null)
+                {
+                    CurrentStatus = new SyncStatus(new SyncStatusOptions(update.StatusChanged.Options)
+                    {
+                        HasSynced = CurrentStatus?.HasSynced == true || update.StatusChanged.LastSyncedAt != null,
+                    });
+                    Emit(new PowerSyncDBEvent { StatusChanged = CurrentStatus });
+                }
+            }
+        });
 
         await syncStreamImplementation.WaitForReady();
         syncStreamImplementation.TriggerCrudUpload();
@@ -249,8 +289,7 @@ public class AbstractPowerSyncDatabase : IPowerSyncDatabase
             syncStreamImplementation.Close();
             syncStreamImplementation = null;
         }
-        // TODO CL
-        // this.syncStatusListenerDisposer?.();
+        syncStreamStatusCts?.Cancel();
     }
 
     public async Task DisconnectAndClear()
@@ -261,19 +300,19 @@ public class AbstractPowerSyncDatabase : IPowerSyncDatabase
         // TODO CL bool clearLocal = options?.ClearLocal ?? false;
         bool clearLocal = true;
 
-        // TODO: Verify necessity of DB name with the extension
         await Database.WriteTransaction(async tx =>
         {
             await tx.Execute("SELECT powersync_clear(?)", [clearLocal ? 1 : 0]);
         });
 
         // The data has been deleted - reset the sync status
-        // this.currentStatus = new SyncStatus({ });
-        // this.iterateListeners((l) => l.statusChanged?.(this.currentStatus));
+        CurrentStatus = new SyncStatus(new SyncStatusOptions());
+        Emit(new PowerSyncDBEvent { StatusChanged = CurrentStatus });
     }
 
-    public async Task Close()
+    public new async Task Close()
     {
+        base.Close();
         await WaitForReady();
 
 

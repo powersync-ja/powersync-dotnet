@@ -5,7 +5,7 @@ public class EventStreamTests
 {
 
     [Fact]
-    public async Task EventStream_ShouldReceiveTwoMessages()
+    public async Task EventStream_ShouldReceiveTwoMessages_Async()
     {
         var eventStream = new EventStream<SyncStatus>();
 
@@ -20,7 +20,7 @@ public class EventStreamTests
         {
             var stream = eventStream.ListenAsync(cts.Token);
 
-            listenerReadySource.SetResult();
+            listenerReadySource.TrySetResult();
 
             await foreach (var status in stream)
             {

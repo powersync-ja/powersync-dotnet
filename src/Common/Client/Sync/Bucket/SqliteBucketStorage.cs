@@ -48,7 +48,6 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
                 if (update.TablesUpdated != null)
                 {
                     var tables = DBAdapterUtils.ExtractTableUpdates(update.TablesUpdated);
-                    int[] x = [];
                     if (tables.Contains(PSInternalTable.CRUD))
                     {
                         Emit(new BucketStorageEvent { CrudUpdate = true });

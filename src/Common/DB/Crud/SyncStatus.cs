@@ -13,6 +13,18 @@ public class SyncDataFlowStatus
 
 public class SyncStatusOptions
 {
+    public SyncStatusOptions() { }
+
+    public SyncStatusOptions(SyncStatusOptions options)
+    {
+        Connected = options.Connected;
+        Connecting = options.Connecting;
+        DataFlow = options.DataFlow;
+        LastSyncedAt = options.LastSyncedAt;
+        HasSynced = options.HasSynced;
+    }
+
+
     [JsonProperty("connected")]
     public bool? Connected { get; set; }
 
@@ -31,7 +43,7 @@ public class SyncStatusOptions
 
 public class SyncStatus(SyncStatusOptions options)
 {
-    protected SyncStatusOptions Options { get; } = options ?? new SyncStatusOptions();
+    public SyncStatusOptions Options { get; } = options ?? new SyncStatusOptions();
 
     public bool Connected => Options.Connected ?? false;
 

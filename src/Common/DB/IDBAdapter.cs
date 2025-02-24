@@ -93,7 +93,7 @@ public class BatchedUpdateNotification : INotification
 
 public class DBAdapterEvent
 {
-    public INotification? TablesUpdated;
+    public INotification? TablesUpdated { get; set; }
 }
 
 public class DBLockOptions
