@@ -76,12 +76,12 @@ public static class PSInternalTable
     public static readonly string UNTYPED = "ps_untyped";
 }
 
-public class BucketStorageListenerEvent
+public class BucketStorageEvent
 {
     public bool CrudUpdate { get; set; }
 }
 
-public interface IBucketStorageAdapter : IEventStream<BucketStorageListenerEvent>
+public interface IBucketStorageAdapter : IEventStream<BucketStorageEvent>
 {
     Task Init();
     Task SaveSyncData(SyncDataBatch batch);

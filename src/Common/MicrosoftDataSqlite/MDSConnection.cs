@@ -9,13 +9,14 @@ using Common.DB;
 using Newtonsoft.Json;
 
 using SQLitePCL;
+using Common.Utils;
 
 public class MDSConnectionOptions(SqliteConnection database)
 {
     public SqliteConnection Database { get; set; } = database;
 }
 
-public class MDSConnection
+public class MDSConnection : EventStream<DBAdapterEvent>
 {
 
     public SqliteConnection Db;
@@ -53,9 +54,22 @@ public class MDSConnection
             return;
         }
 
-        // TODO: Implement update flush
+        var groupedUpdates = updateBuffer
+       .GroupBy(update => update.Table)
+       .ToDictionary(
+           group => group.Key,
+           group => group.Select(update => new TableUpdateOperation(update.OpType, update.RowId)).ToArray()
+       );
+
+        var batchedUpdate = new BatchedUpdateNotification
+        {
+            GroupedUpdates = groupedUpdates,
+            RawUpdates = updateBuffer.ToArray(),
+            Tables = groupedUpdates.Keys.ToArray()
+        };
 
         updateBuffer.Clear();
+        Emit(new DBAdapterEvent { TablesUpdated = batchedUpdate });
     }
 
     public async Task<QueryResult> Execute(string query, object[]? parameters = null)
@@ -181,8 +195,9 @@ public class MDSConnection
         return await GetOptional<T>(sql, parameters) ?? throw new InvalidOperationException("Result set is empty");
     }
 
-    public void Close()
+    public new void Close()
     {
+        base.Close();
         Db.Close();
     }
 

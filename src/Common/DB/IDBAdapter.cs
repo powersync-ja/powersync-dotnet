@@ -2,6 +2,7 @@ namespace Common.DB;
 
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Common.Utils;
 
 public class QueryResult
 {
@@ -63,16 +64,36 @@ public class TableUpdateOperation(RowUpdateType OpType, long RowId)
     public long RowId { get; set; } = RowId;
 }
 
-public class UpdateNotification(string table, RowUpdateType OpType, long RowId) : TableUpdateOperation(OpType, RowId)
+public interface INotification
+{
+}
+
+public class UpdateNotification(string table, RowUpdateType OpType, long RowId) : TableUpdateOperation(OpType, RowId), INotification
 {
     public string Table { get; set; } = table;
 }
 
-public class BatchedUpdateNotification
+public class BatchedUpdateNotification : INotification
 {
     public UpdateNotification[] RawUpdates { get; set; } = [];
     public string[] Tables { get; set; } = [];
     public Dictionary<string, TableUpdateOperation[]> GroupedUpdates { get; set; } = [];
+}
+
+
+// export interface DBAdapterListener extends BaseListener {
+//   /**
+//    * Listener for table updates.
+//    * Allows for single table updates in order to maintain API compatibility
+//    * without the need for a major version bump
+//    * The DB adapter can also batch update notifications if supported.
+//    */
+//   tablesUpdated: (updateNotification: BatchedUpdateNotification | UpdateNotification) => void;
+// }
+
+public class DBAdapterEvent
+{
+    public INotification? TablesUpdated;
 }
 
 public class DBLockOptions
@@ -81,11 +102,25 @@ public class DBLockOptions
     public int? TimeoutMs { get; set; }
 }
 
-// TODO remove IDBGetUtils - inheriting from ILockContext
-public interface IDBAdapter : IDBGetUtils, ILockContext
+public class DBAdapterUtils
 {
+    public static string[] ExtractTableUpdates(INotification update)
+    {
+        return update switch
+        {
+            BatchedUpdateNotification batchedUpdate => batchedUpdate.Tables,
+            UpdateNotification singleUpdate => [singleUpdate.Table],
+            _ => throw new ArgumentException("Invalid update type", nameof(update))
+        };
+    }
+}
+
+// TODO remove IDBGetUtils - inheriting from ILockContext
+public interface IDBAdapter : IEventStream<DBAdapterEvent>, IDBGetUtils, ILockContext
+{
+
     // Closes the adapter.
-    void Close();
+    new void Close();
 
     // Execute a batch of write statements.
     Task<QueryResult> ExecuteBatch(string query, object[][]? parameters = null);
@@ -108,14 +143,4 @@ public interface IDBAdapter : IDBGetUtils, ILockContext
 
     // This method refreshes the schema information across all connections. This is for advanced use cases, and should generally not be needed.
     Task RefreshSchema();
-
-    public static string[] ExtractTableUpdates(object update)
-    {
-        return update switch
-        {
-            BatchedUpdateNotification batchedUpdate => batchedUpdate.Tables,
-            UpdateNotification singleUpdate => [singleUpdate.Table],
-            _ => throw new ArgumentException("Invalid update type", nameof(update))
-        };
-    }
 }

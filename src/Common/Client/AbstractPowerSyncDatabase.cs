@@ -246,7 +246,7 @@ public class AbstractPowerSyncDatabase : IPowerSyncDatabase
         if (syncStreamImplementation != null)
         {
             await syncStreamImplementation.Disconnect();
-            syncStreamImplementation.Dispose();
+            syncStreamImplementation.Close();
             syncStreamImplementation = null;
         }
         // TODO CL

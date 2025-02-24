@@ -6,13 +6,17 @@ using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 
 using Common.DB;
+using Common.Utils;
 
 public class MDSAdapterOptions()
 {
     public string Name { get; set; } = null!;
+
+    public SqliteOptions? SqliteOptions;
+
 }
 
-public class MDSAdapter : IDBAdapter
+public class MDSAdapter : EventStream<DBAdapterEvent>, IDBAdapter
 {
     public string Name => throw new NotImplementedException();
 
@@ -22,15 +26,79 @@ public class MDSAdapter : IDBAdapter
 
     protected MDSAdapterOptions options;
 
+    protected RequiredSqliteOptions resolvedSqliteOptions;
+    private CancellationTokenSource? tablesUpdatedCts;
+
     public MDSAdapter(MDSAdapterOptions options)
     {
         this.options = options;
+        resolvedSqliteOptions = resolveSqliteOptions(options.SqliteOptions);
         initialized = Init();
+    }
+
+    private RequiredSqliteOptions resolveSqliteOptions(SqliteOptions? options)
+    {
+        var defaults = RequiredSqliteOptions.DEFAULT_SQLITE_OPTIONS;
+        return new RequiredSqliteOptions
+        {
+            JournalMode = options?.JournalMode ?? defaults.JournalMode,
+            Synchronous = options?.Synchronous ?? defaults.Synchronous,
+            JournalSizeLimit = options?.JournalSizeLimit ?? defaults.JournalSizeLimit,
+            CacheSizeKb = options?.CacheSizeKb ?? defaults.CacheSizeKb,
+            TemporaryStorage = options?.TemporaryStorage ?? defaults.TemporaryStorage,
+            LockTimeoutMs = options?.LockTimeoutMs ?? defaults.LockTimeoutMs,
+            EncryptionKey = options?.EncryptionKey ?? defaults.EncryptionKey,
+            Extensions = options?.Extensions ?? defaults.Extensions
+        };
     }
 
     private async Task Init()
     {
         writeConnection = await OpenConnection(options.Name);
+
+        string[] baseStatements =
+        [
+            $"PRAGMA busy_timeout = {resolvedSqliteOptions.LockTimeoutMs}",
+            $"PRAGMA cache_size = -{resolvedSqliteOptions.CacheSizeKb}",
+            $"PRAGMA temp_store = {resolvedSqliteOptions.TemporaryStorage}"
+        ];
+
+        string[] writeConnectionStatements =
+        [
+            .. baseStatements,
+            $"PRAGMA journal_mode = {resolvedSqliteOptions.JournalMode}",
+            $"PRAGMA journal_size_limit = {resolvedSqliteOptions.JournalSizeLimit}",
+            $"PRAGMA synchronous = {resolvedSqliteOptions.Synchronous}",
+        ];
+
+        foreach (var statement in writeConnectionStatements)
+        {
+            for (int tries = 0; tries < 30; tries++)
+            {
+                try
+                {
+                    await writeConnection!.Execute(statement);
+                    tries = 30;
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e.Message);
+                    throw;
+                }
+            }
+        }
+
+        tablesUpdatedCts = new CancellationTokenSource();
+        var _ = Task.Run(() =>
+        {
+            foreach (var notification in Listen(tablesUpdatedCts.Token))
+            {
+                if (notification.TablesUpdated != null)
+                {
+                    Emit(notification);
+                }
+            }
+        });
     }
 
     protected async Task<MDSConnection> OpenConnection(string dbFilename)
@@ -58,8 +126,10 @@ public class MDSAdapter : IDBAdapter
         db.LoadExtension(extensionPath, "sqlite3_powersync_init");
     }
 
-    public void Close()
+    public new void Close()
     {
+        tablesUpdatedCts?.Cancel();
+        base.Close();
         writeConnection?.Close();
     }
 
@@ -104,6 +174,24 @@ public class MDSAdapter : IDBAdapter
 
     public Task<T> WriteLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null)
     {
+        //     return new Promise(async (resolve, reject) => {
+        //   try {
+        //     await this.locks
+        //       .acquire(
+        //         LockType.WRITE,
+        //         async () => {
+        //           resolve(await fn(this.writeConnection!));
+        //         },
+        //         { timeout: options?.timeoutMs }
+        //       )
+        //       .then(() => {
+        //         // flush updates once a write lock has been released
+        //         this.writeConnection!.flushUpdates();
+        //       });
+        //   } catch (ex) {
+        //     reject(ex);
+        //   }
+        // });
         throw new NotImplementedException();
     }
 

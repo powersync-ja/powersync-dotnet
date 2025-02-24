@@ -12,7 +12,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Newtonsoft.Json;
 
-public class SqliteBucketStorage : EventStream<BucketStorageListenerEvent>, IBucketStorageAdapter
+public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStorageAdapter
 {
 
     public static readonly string MAX_OP_ID = "9223372036854775807";
@@ -28,6 +28,8 @@ public class SqliteBucketStorage : EventStream<BucketStorageListenerEvent>, IBuc
 
     private ILogger logger;
 
+    private CancellationTokenSource updateCts;
+
     private record ExistingTableRowsResult(string name);
 
     public SqliteBucketStorage(IDBAdapter db, ILogger? logger = null)
@@ -38,15 +40,22 @@ public class SqliteBucketStorage : EventStream<BucketStorageListenerEvent>, IBuc
         pendingBucketDeletes = true;
         tableNames = [];
 
-        //     this.updateListener = db.registerListener({
-        //   tablesUpdated: (update) => {
-        //     const tables = extractTableUpdates(update);
-        //     if (tables.includes(PSInternalTable.CRUD)) {
-        //       this.iterateListeners((l) => l.crudUpdate?.());
-        //     }
-        //   }
-        // });
-
+        updateCts = new CancellationTokenSource();
+        var _ = Task.Run(() =>
+        {
+            foreach (var update in db.Listen(updateCts.Token))
+            {
+                if (update.TablesUpdated != null)
+                {
+                    var tables = DBAdapterUtils.ExtractTableUpdates(update.TablesUpdated);
+                    int[] x = [];
+                    if (tables.Contains(PSInternalTable.CRUD))
+                    {
+                        Emit(new BucketStorageEvent { CrudUpdate = true });
+                    }
+                }
+            }
+        });
     }
 
     public async Task Init()
@@ -61,9 +70,10 @@ public class SqliteBucketStorage : EventStream<BucketStorageListenerEvent>, IBuc
         }
     }
 
-    public void Dispose()
+    public new void Close()
     {
-        Console.WriteLine("Disposing SqliteBucketStorage...");
+        updateCts.Cancel();
+        base.Close();
     }
 
     private record ClientIdResult(string? client_id);

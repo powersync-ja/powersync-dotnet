@@ -36,9 +36,7 @@ public class RequiredAdditionalConnectionOptions : AdditionalConnectionOptions
     public new int RetryDelayMs { get; set; }
 
     public new int CrudUploadThrottleMs { get; set; }
-
 }
-
 
 // TODO CL make these required
 public class StreamingSyncImplementationOptions : AdditionalConnectionOptions
@@ -110,7 +108,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
 
     private Task? streamingSyncTask;
     public Action TriggerCrudUpload { get; }
-
+    private CancellationTokenSource? crudUpdateCts;
     private readonly ILogger logger;
 
     public StreamingSyncImplementation(StreamingSyncImplementationOptions options)
@@ -173,7 +171,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
         var tcs = new TaskCompletionSource();
         var cts = new CancellationTokenSource();
 
-        var runner = Task.Run(() =>
+        var _ = Task.Run(() =>
         {
             foreach (var status in Listen(cts.Token))
             {
@@ -219,7 +217,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
         catch (Exception ex)
         {
             // The operation might have failed, all we care about is if it has completed
-            logger.LogWarning(ex.Message);
+            logger.LogWarning("{Message}", ex.Message);
         }
 
         streamingSyncTask = null;
@@ -236,14 +234,14 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
             signal = CancellationTokenSource.Token;
         }
 
-        // TODO CL listener package
-        /**
-        * Listen for CRUD updates and trigger upstream uploads
-        */
-        // this.crudUpdateListener = this.options.adapter.registerListener({
-        //   crudUpdate: () => this.triggerCrudUpload()
-        // });
-
+        crudUpdateCts = new CancellationTokenSource();
+        var _ = Task.Run(() =>
+        {
+            foreach (var _ in Options.Adapter.Listen(crudUpdateCts.Token))
+            {
+                TriggerCrudUpload();
+            }
+        });
 
 
         /// This loops runs until [retry] is false or the abort signal is set to aborted.
@@ -573,11 +571,11 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
         return new StreamingSyncIterationResult { Retry = true };
     }
 
-    public void Dispose()
+    public new void Close()
     {
-        throw new NotImplementedException();
-        // this.crudUpdateListener?.();
-        // this.crudUpdateListener = undefined;
+        crudUpdateCts?.Cancel();
+        base.Close();
+        crudUpdateCts = null;
     }
 
     public record ResponseData(
