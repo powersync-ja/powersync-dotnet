@@ -92,7 +92,7 @@ class TestData
 
 public class BucketStorageTests : IAsyncLifetime
 {
-    private AbstractPowerSyncDatabase db = default!;
+    private PowerSyncDatabase db = default!;
     private IBucketStorageAdapter bucketStorage = default!;
 
 
@@ -114,19 +114,19 @@ public class BucketStorageTests : IAsyncLifetime
     private record DescriptionResult(string description);
     private record AssetResult(string id, string description, string? make = null);
 
-    static async Task ExpectAsset1_3(AbstractPowerSyncDatabase database)
+    static async Task ExpectAsset1_3(PowerSyncDatabase database)
     {
         var result = await database.GetAll<AssetResult>("SELECT id, description, make FROM assets WHERE id = 'O1'");
         Assert.Equal(new AssetResult("O1", "bard", null), result[0]);
     }
 
-    static async Task ExpectNoAsset1(AbstractPowerSyncDatabase database)
+    static async Task ExpectNoAsset1(PowerSyncDatabase database)
     {
         var result = await database.GetAll<AssetResult>("SELECT id, description, make FROM assets WHERE id = 'O1'");
         Assert.Empty(result);
     }
 
-    static async Task ExpectNoAssets(AbstractPowerSyncDatabase database)
+    static async Task ExpectNoAssets(PowerSyncDatabase database)
     {
         var result = await database.GetAll<AssetResult>("SELECT id, description, make FROM assets");
         Assert.Empty(result);

@@ -5,7 +5,7 @@ using Common.DB.Schema;
 using Microsoft.Extensions.Logging;
 
 
-public class CommonPowerSyncDatabase(PowerSyncDatabaseOptions options) : AbstractPowerSyncDatabase(options)
+public class CommonPowerSyncDatabase(PowerSyncDatabaseOptions options) : PowerSyncDatabase(options)
 {
     public static CommonPowerSyncDatabase Create(Schema schema, string name, ILogger? logger = null)
     {
@@ -17,5 +17,3 @@ public class CommonPowerSyncDatabase(PowerSyncDatabaseOptions options) : Abstrac
         });
     }
 }
-
-// new MDSAdapter(new MDSAdapterOptions(name)), schema)

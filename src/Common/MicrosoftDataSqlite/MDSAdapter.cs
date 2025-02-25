@@ -236,7 +236,11 @@ public class MDSAdapter : EventStream<DBAdapterEvent>, IDBAdapter
         catch
         {
             // In rare cases, a rollback may fail. Safe to ignore.
-            try { await ctx.Rollback(); } catch { /* Ignore rollback errors */ }
+            try { await ctx.Rollback(); }
+            catch
+            {
+                // Ignore rollback errors
+            }
             throw;
         }
     }

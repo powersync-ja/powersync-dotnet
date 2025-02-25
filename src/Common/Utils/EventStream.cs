@@ -12,6 +12,8 @@ public interface IEventStream<T>
 
     IAsyncEnumerable<T> ListenAsync(CancellationToken cancellationToken);
 
+    CancellationTokenSource RunListener(Action<T> callback);
+
     IEnumerable<T> Listen(CancellationToken cancellationToken);
 
     void Close();
@@ -44,11 +46,57 @@ public class EventStream<T> : IEventStream<T>
         }
     }
 
+    // crudUpdateCts = RunListenerAsync(
+    //     async status =>
+    //     {
+    //         ProcessUpdate(update);
+    //         await Task.Delay(500);
+    //     },
+    // );
+    public CancellationTokenSource RunListenerAsync(
+    Func<T, Task> callback)
+    {
+        var cts = new CancellationTokenSource();
+
+        _ = Task.Run(async () =>
+        {
+            await foreach (var value in ListenAsync(cts.Token))
+            {
+                await callback(value);
+            }
+
+        }, cts.Token);
+
+        return cts;
+    }
+
     public IAsyncEnumerable<T> ListenAsync(CancellationToken cancellationToken)
     {
         var channel = Channel.CreateUnbounded<T>();
         subscribers.TryAdd(channel, 0);
         return ReadFromChannelAsync(channel, cancellationToken);
+    }
+
+    // crudUpdateCts = RunListener(
+    //     update =>
+    //     {
+    //         Console.WriteLine($"Received update: {update}");
+    //         ProcessUpdate(update);
+    //     }
+    // );
+    public CancellationTokenSource RunListener(Action<T> callback)
+    {
+        var cts = new CancellationTokenSource();
+
+        _ = Task.Run(() =>
+        {
+            foreach (var value in Listen(cts.Token))
+            {
+                callback(value);
+            }
+        }, cts.Token);
+
+        return cts;
     }
 
     public IEnumerable<T> Listen(CancellationToken cancellationToken)

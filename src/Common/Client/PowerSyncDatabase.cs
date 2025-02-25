@@ -14,9 +14,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 public class BasePowerSyncDatabaseOptions()
 {
-    /**
-     * Schema used for the local database.
-     */
+    /// Schema used for the local database.
     public Schema Schema { get; set; } = null!;
 
     public ILogger? Logger { get; set; } = null!;
@@ -25,9 +23,7 @@ public class BasePowerSyncDatabaseOptions()
 
 public class PowerSyncDatabaseOptions() : BasePowerSyncDatabaseOptions()
 {
-    /**
-    * Source for a SQLite database connection.
-    */
+    /// Source for a SQLite database connection.
     public IDBAdapter Database { get; set; } = null!;
 }
 
@@ -42,7 +38,7 @@ public interface IPowerSyncDatabase : IEventStream<PowerSyncDBEvent>
 
 }
 
-public class AbstractPowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDatabase
+public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDatabase
 {
 
     public IDBAdapter Database;
@@ -65,7 +61,7 @@ public class AbstractPowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSy
 
     public ILogger Logger;
 
-    public AbstractPowerSyncDatabase(PowerSyncDatabaseOptions options)
+    public PowerSyncDatabase(PowerSyncDatabaseOptions options)
     {
         Database = options.Database;
         Logger = options.Logger ?? NullLogger.Instance;
@@ -194,7 +190,6 @@ public class AbstractPowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSy
     /// Cannot be used while connected - this should only be called before {@link AbstractPowerSyncDatabase.connect}.
     public async Task UpdateSchema(Schema schema)
     {
-        // TODO throw on 'connected'
         if (syncStreamImplementation != null)
         {
             throw new Exception("Cannot update schema while connected");

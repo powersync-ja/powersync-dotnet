@@ -244,8 +244,32 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
         });
 
 
+        // crudUpdateCts = Options.Adapter.RunListener(
+        //     update =>
+        //         {
+        //             TriggerCrudUpload();
+        //         }
+        // );
+
+
+        // Create a new cancellation token source for nested operations.
+        // This is needed to close any previous connections.
+        var nestedCts = new CancellationTokenSource();
+        signal.Value.Register(() =>
+        {
+            nestedCts.Cancel();
+            crudUpdateCts?.Cancel();
+            crudUpdateCts = null;
+            UpdateSyncStatus(new SyncStatusOptions
+            {
+                Connected = false,
+                Connecting = false,
+                DataFlow = new SyncDataFlowStatus { Downloading = false }
+            });
+        });
+
         /// This loops runs until [retry] is false or the abort signal is set to aborted.
-        /// Aborting the nestedAbortController will:
+        /// Aborting the nestedCts will:
         /// - Abort any pending fetch requests
         /// - Close any sync stream ReadableStreams (which will also close any established network requests)
         while (true)
@@ -258,29 +282,28 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                 {
                     break;
                 }
-                // use nestedAbortController.
-                var iterationResult = await StreamingSyncIteration(signal.Value, options);
+                var iterationResult = await StreamingSyncIteration(nestedCts.Token, options);
                 if (!iterationResult.Retry)
                 {
 
                     // A sync error ocurred that we cannot recover from here.
                     // This loop must terminate.
-                    // The nestedAbortController will close any open network requests and streams below.
+                    // The nestedCts will close any open network requests and streams below.
                     break;
                 }
                 // Continue immediately
             }
             catch (Exception ex)
             {
-                logger.LogError($"Caught exception in streaming sync: {ex.Message}");
-                /**
-                * Either:
-                *  - A network request failed with a failed connection or not OKAY response code.
-                *  - There was a sync processing error.
-                * This loop will retry.
-                * The nested abort controller will cleanup any open network requests and streams.
-                * The WebRemote should only abort pending fetch requests or close active Readable streams.
-                */
+                logger.LogError("Caught exception in streaming sync: {message}", ex.Message);
+
+                // Either:
+                //  - A network request failed with a failed connection or not OKAY response code.
+                //  - There was a sync processing error.
+                // This loop will retry.
+                // The nested abort controller will cleanup any open network requests and streams.
+                // The WebRemote should only abort pending fetch requests or close active Readable streams.
+                //
                 // On error, wait a little before retrying
                 await DelayRetry();
             }
@@ -289,8 +312,9 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
 
                 if (!signal.Value.IsCancellationRequested)
                 {
-                    // nestedAbortController.abort(new AbortOperation('Closing sync stream network requests before retry.'));
-                    // nestedAbortController = new AbortController();
+                    // Closing sync stream network requests before retry.
+                    nestedCts.Cancel();
+                    nestedCts = new CancellationTokenSource();
                 }
 
                 UpdateSyncStatus(new SyncStatusOptions

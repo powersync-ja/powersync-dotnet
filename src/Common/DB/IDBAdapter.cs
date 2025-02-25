@@ -80,17 +80,6 @@ public class BatchedUpdateNotification : INotification
     public Dictionary<string, TableUpdateOperation[]> GroupedUpdates { get; set; } = [];
 }
 
-
-// export interface DBAdapterListener extends BaseListener {
-//   /**
-//    * Listener for table updates.
-//    * Allows for single table updates in order to maintain API compatibility
-//    * without the need for a major version bump
-//    * The DB adapter can also batch update notifications if supported.
-//    */
-//   tablesUpdated: (updateNotification: BatchedUpdateNotification | UpdateNotification) => void;
-// }
-
 public class DBAdapterEvent
 {
     public INotification? TablesUpdated { get; set; }
