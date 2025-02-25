@@ -429,5 +429,6 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
     public async Task SetTargetCheckpoint(Checkpoint checkpoint)
     {
         // No Op
+        await Task.CompletedTask;
     }
 }

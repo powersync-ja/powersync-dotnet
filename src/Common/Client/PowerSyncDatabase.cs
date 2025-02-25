@@ -43,6 +43,8 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
 
     public IDBAdapter Database;
     private Schema schema;
+
+    private static readonly int DEFAULT_WATCH_THROTTLE_MS = 30;
     private static readonly Regex POWERSYNC_TABLE_MATCH = new Regex(@"(^ps_data__|^ps_data_local__)", RegexOptions.Compiled);
 
     public bool Closed;
@@ -356,4 +358,76 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         await WaitForReady();
         return await Database.Get<T>(query, parameters);
     }
+
+    public void OnChange(WatchOnChangeHandler handler, SQLWatchOptions? options)
+    {
+        var _handler = handler ?? throw new ArgumentNullException(nameof(handler));
+        if (_handler.OnChange == null)
+        {
+            throw new ArgumentException("onChange is required", nameof(handler));
+        }
+
+        var resolvedOptions = options ?? new SQLWatchOptions();
+        var resolvedThrottleMs = resolvedOptions.ThrottleMs ?? DEFAULT_WATCH_THROTTLE_MS;
+    }
+
+    private static void HandleTableChanges(HashSet<string> changedTables, HashSet<string> watchedTables, Action<string[]> onDetectedChanges)
+    {
+        if (changedTables.Count > 0)
+        {
+            var intersection = changedTables.Where(change => watchedTables.Contains(change)).ToArray();
+            if (intersection.Length > 0)
+            {
+                onDetectedChanges(intersection);
+            }
+        }
+        changedTables.Clear();
+    }
+
+    private static void ProcessTableUpdates(INotification updateNotification, HashSet<string> changedTables)
+    {
+        string[] tables = [];
+        if (updateNotification is BatchedUpdateNotification batchedUpdate)
+        {
+            tables = batchedUpdate.Tables;
+        }
+        else if (updateNotification is UpdateNotification singleUpdate)
+        {
+            tables = [singleUpdate.Table];
+
+        }
+
+        foreach (var table in tables)
+        {
+            changedTables.Add(table);
+        }
+    }
+}
+
+public class SQLWatchOptions
+{
+    public CancellationToken? Signal { get; set; }
+    public string[]? Tables { get; set; }
+
+    /// <summary>
+    /// The minimum interval between queries in milliseconds.
+    /// </summary>
+    public int? ThrottleMs { get; set; }
+}
+
+public class WatchHandler
+{
+    public Action<QueryResult> OnResult { get; set; } = null!;
+    public Action<Exception>? OnError { get; set; }
+}
+
+public class WatchOnChangeEvent
+{
+    public string[] ChangedTables { get; set; } = [];
+}
+
+public class WatchOnChangeHandler
+{
+    public Func<WatchOnChangeEvent, Task> OnChange { get; set; } = null!;
+    public Action<Exception>? OnError { get; set; }
 }

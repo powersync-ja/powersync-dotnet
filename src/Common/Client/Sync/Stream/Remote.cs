@@ -92,7 +92,12 @@ public class Remote
         using var requestMessage = await BuildRequest(HttpMethod.Post, options.Path, options.Data, options.Headers);
         using var response = await httpClient.SendAsync(requestMessage, HttpCompletionOption.ResponseHeadersRead, options.CancellationToken);
 
-        if (!response.IsSuccessStatusCode || response.Content == null)
+        if (response.Content == null)
+        {
+            throw new HttpRequestException($"HTTP {response.StatusCode}: No content");
+        }
+        else
+        if (!response.IsSuccessStatusCode)
         {
             var errorText = await response.Content.ReadAsStringAsync();
             throw new HttpRequestException($"HTTP {response.StatusCode}: {errorText}");
