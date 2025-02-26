@@ -104,7 +104,7 @@ public class MDSAdapter : EventStream<DBAdapterEvent>, IDBAdapter
         tablesUpdatedCts = new CancellationTokenSource();
         var _ = Task.Run(() =>
         {
-            foreach (var notification in Listen(tablesUpdatedCts.Token))
+            foreach (var notification in writeConnection!.Listen(tablesUpdatedCts.Token))
             {
                 if (notification.TablesUpdated != null)
                 {

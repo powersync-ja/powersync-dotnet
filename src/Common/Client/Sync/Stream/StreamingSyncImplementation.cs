@@ -418,7 +418,6 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                     // // A connection is active and messages are being received
                     if (!SyncStatus.Connected)
                     {
-                        logger.LogDebug("TO BE CONNECTED NOW");
                         // There is a connection now
                         UpdateSyncStatus(new SyncStatusOptions
                         {
