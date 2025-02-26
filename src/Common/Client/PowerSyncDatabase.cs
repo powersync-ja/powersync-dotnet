@@ -11,6 +11,7 @@ using Common.DB.Schema;
 using Common.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Newtonsoft.Json;
 
 public class BasePowerSyncDatabaseOptions()
 {
@@ -357,23 +358,129 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         return await Database.Get<T>(query, parameters);
     }
 
-    public void OnChange(WatchOnChangeHandler handler, SQLWatchOptions? options)
+    public void Watch(string query, object[]? parameters, WatchHandler handler, SQLWatchOptions? options = null)
+    {
+        var _handler = handler ?? throw new ArgumentNullException(nameof(handler));
+        if (_handler.OnResult == null)
+        {
+            throw new ArgumentException("onResult is required", nameof(handler));
+        }
+
+        Task.Run(async () =>
+        {
+            var resolvedTables = await ResolveTables(query, parameters, options);
+            // Fetch initial data
+            // TODO CL typing for GetAll
+            var result = await GetAll<object>(query, parameters);
+            _handler.OnResult(result);
+
+            OnChange(new WatchOnChangeHandler
+            {
+                OnChange = async (change) =>
+                {
+                    try
+                    {
+                        var result = await GetAll<object>(query, parameters);
+                        _handler.OnResult(result);
+                    }
+                    catch (Exception ex)
+                    {
+                        _handler.OnError?.Invoke(ex);
+                    }
+                },
+                OnError = _handler.OnError
+            }, new SQLWatchOptions
+            {
+                Tables = resolvedTables,
+                Signal = options?.Signal,
+                ThrottleMs = options?.ThrottleMs
+            });
+        });
+
+        // TODO CL cancel?
+    }
+
+    private record ExplainedResult(string opcode, int p2, int p3);
+    private record TableSelectResult(string tbl_name);
+    public async Task<string[]> ResolveTables(string sql, object[]? parameters = null, SQLWatchOptions? options = null)
+    {
+        List<string> resolvedTables = options?.Tables != null ? [.. options.Tables] : [];
+
+        if (options?.Tables == null)
+        {
+            var explained = await GetAll<ExplainedResult>(
+                $"EXPLAIN {sql}", parameters
+            );
+
+            // TODO CL do we need this: && row.p2 is int
+            var rootPages = explained
+                .Where(row => row.opcode == "OpenRead" && row.p3 == 0)
+                .Select(row => row.p2)
+                .ToList();
+
+
+            var tables = await GetAll<TableSelectResult>(
+                "SELECT DISTINCT tbl_name FROM sqlite_master WHERE rootpage IN (SELECT json_each.value FROM json_each(?))",
+                [JsonConvert.SerializeObject(rootPages)]
+            );
+
+            foreach (var table in tables)
+            {
+                resolvedTables.Add(POWERSYNC_TABLE_MATCH.Replace(table.tbl_name, ""));
+            }
+        }
+
+        return [.. resolvedTables];
+    }
+
+    public void OnChange(WatchOnChangeHandler handler, SQLWatchOptions? options = null)
     {
         var _handler = handler ?? throw new ArgumentNullException(nameof(handler));
         if (_handler.OnChange == null)
         {
             throw new ArgumentException("onChange is required", nameof(handler));
         }
-
         var resolvedOptions = options ?? new SQLWatchOptions();
+
+        string[] tables = resolvedOptions.Tables ?? [];
+        HashSet<string> watchedTables = [.. tables.SelectMany(table => new[] { table, $"ps_data__{table}", $"ps_data_local__{table}" })];
+
+        var changedTables = new HashSet<string>();
         var resolvedThrottleMs = resolvedOptions.ThrottleMs ?? DEFAULT_WATCH_THROTTLE_MS;
+
+        void flushTableUpdates()
+        {
+            HandleTableChanges(changedTables, watchedTables, (intersection) =>
+            {
+                if (resolvedOptions?.Signal?.IsCancellationRequested == true) return;
+                _handler.OnChange(new WatchOnChangeEvent { ChangedTables = intersection });
+            });
+        }
+
+        Database.RunListener((update) =>
+        {
+            if (update.TablesUpdated != null)
+            {
+                try
+                {
+                    ProcessTableUpdates(update.TablesUpdated, changedTables);
+                    flushTableUpdates();
+                }
+                catch (Exception ex)
+                {
+                    _handler?.OnError?.Invoke(ex);
+                }
+            }
+        });
+
+        // TODO CL pass CTS along
     }
 
     private static void HandleTableChanges(HashSet<string> changedTables, HashSet<string> watchedTables, Action<string[]> onDetectedChanges)
     {
         if (changedTables.Count > 0)
         {
-            var intersection = changedTables.Where(change => watchedTables.Contains(change)).ToArray();
+            var intersection = changedTables.Where(watchedTables.Contains).ToArray();
             if (intersection.Length > 0)
             {
                 onDetectedChanges(intersection);
@@ -392,7 +499,6 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         else if (updateNotification is UpdateNotification singleUpdate)
         {
             tables = [singleUpdate.Table];
-
         }
 
         foreach (var table in tables)
@@ -415,7 +521,7 @@ public class SQLWatchOptions
 
 public class WatchHandler
 {
-    public Action<QueryResult> OnResult { get; set; } = null!;
+    public Action<object[]> OnResult { get; set; } = null!;
     public Action<Exception>? OnError { get; set; }
 }
 

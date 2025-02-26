@@ -60,15 +60,36 @@ public class SupabaseConnectorTests
         await connector.Login();
 
         Console.WriteLine("Calling connect...");
+        // db.OnChange(new Common.Client.WatchOnChangeHandler
+        // {
+        //     OnChange = async (change) =>
+        //     {
+        //         Console.WriteLine("Change: " + JsonConvert.SerializeObject(change, Formatting.Indented));
+        //     }
+        // }, new Common.Client.SQLWatchOptions
+        // {
+        //     Tables = ["lists"]
+        // });
+        // var x = await db.ResolveTables("select * from lists join todos on lists.id = todos.list_id");
+        // Console.WriteLine("Tables: " + JsonConvert.SerializeObject(x, Formatting.Indented));
 
-        await db.Connect(connector);
-        await Task.Delay(3000);
 
-        var b = await db.GetAll<object>("SELECT * from lists");
+        db.Watch("select * from lists", null, new Common.Client.WatchHandler
+        {
+            OnResult = async (result) =>
+            {
+                Console.WriteLine("\n\nResult from watch:" + JsonConvert.SerializeObject(result, Formatting.Indented));
+            },
+        });
 
-        // proof data has synced
-        string jsona = JsonConvert.SerializeObject(b, Formatting.Indented);
-        Console.WriteLine("Lists: " + jsona);
+        await db.Execute("INSERT INTO lists (id, name, owner_id, created_at) VALUES ('1', 'test', 'test', 'test')");
+        await Task.Delay(1000);
+        await db.Execute("INSERT INTO lists (id, name, owner_id, created_at) VALUES ('2', 'test2', 'test2', 'test2')");
+
+
+        // string jsona = JsonConvert.SerializeObject(b, Formatting.Indented);
+        // Console.WriteLine("Lists: " + jsona);
+
     }
 
     private ILogger createLogger()

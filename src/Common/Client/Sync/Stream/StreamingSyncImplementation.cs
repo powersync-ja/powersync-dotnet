@@ -415,7 +415,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                         return new StreamingSyncIterationResult { Retry = true };
                     }
 
-                    // // A connection is active and messages are being received
+                    // A connection is active and messages are being received
                     if (!SyncStatus.Connected)
                     {
                         // There is a connection now
