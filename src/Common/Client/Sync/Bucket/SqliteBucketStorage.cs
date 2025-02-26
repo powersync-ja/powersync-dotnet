@@ -42,20 +42,23 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
 
         updateCts = new CancellationTokenSource();
         // TODO CL put back
-        // var _ = Task.Run(() =>
-        // {
-        //     foreach (var update in db.Listen(updateCts.Token))
-        //     {
-        //         if (update.TablesUpdated != null)
-        //         {
-        //             var tables = DBAdapterUtils.ExtractTableUpdates(update.TablesUpdated);
-        //             if (tables.Contains(PSInternalTable.CRUD))
-        //             {
-        //                 Emit(new BucketStorageEvent { CrudUpdate = true });
-        //             }
-        //         }
-        //     }
-        // });
+        var _ = Task.Run(() =>
+        {
+            Console.WriteLine("XXXXX - start");
+            foreach (var update in db.Listen(updateCts.Token))
+            {
+                if (update.TablesUpdated != null)
+                {
+                    var tables = DBAdapterUtils.ExtractTableUpdates(update.TablesUpdated);
+                    if (tables.Contains(PSInternalTable.CRUD))
+                    {
+                        Emit(new BucketStorageEvent { CrudUpdate = true });
+                    }
+                }
+            }
+
+            Console.WriteLine("XXXXX - end");
+        });
     }
 
     public async Task Init()

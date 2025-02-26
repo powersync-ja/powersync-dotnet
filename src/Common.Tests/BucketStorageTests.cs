@@ -108,6 +108,7 @@ public class BucketStorageTests : IAsyncLifetime
     {
         await db.DisconnectAndClear();
         await db.Close();
+        bucketStorage.Close();
     }
 
     private record IdResult(string id);

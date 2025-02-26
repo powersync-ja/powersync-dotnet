@@ -318,10 +318,8 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         //     await Disconnect();
         // }
 
-        // if (syncStreamImplementation != null)
-        // {
-        //     await syncStreamImplementation.DisposeAsync();
-        // }
+        syncStreamImplementation?.Close();
+        BucketStorageAdapter?.Close();
 
         Database.Close();
         Closed = true;
