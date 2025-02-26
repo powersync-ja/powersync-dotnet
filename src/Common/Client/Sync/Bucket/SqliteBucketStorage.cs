@@ -41,20 +41,21 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
         tableNames = [];
 
         updateCts = new CancellationTokenSource();
-        var _ = Task.Run(() =>
-        {
-            foreach (var update in db.Listen(updateCts.Token))
-            {
-                if (update.TablesUpdated != null)
-                {
-                    var tables = DBAdapterUtils.ExtractTableUpdates(update.TablesUpdated);
-                    if (tables.Contains(PSInternalTable.CRUD))
-                    {
-                        Emit(new BucketStorageEvent { CrudUpdate = true });
-                    }
-                }
-            }
-        });
+        // TODO CL put back
+        // var _ = Task.Run(() =>
+        // {
+        //     foreach (var update in db.Listen(updateCts.Token))
+        //     {
+        //         if (update.TablesUpdated != null)
+        //         {
+        //             var tables = DBAdapterUtils.ExtractTableUpdates(update.TablesUpdated);
+        //             if (tables.Contains(PSInternalTable.CRUD))
+        //             {
+        //                 Emit(new BucketStorageEvent { CrudUpdate = true });
+        //             }
+        //         }
+        //     }
+        // });
     }
 
     public async Task Init()
@@ -395,8 +396,8 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
 
                 if (!string.IsNullOrEmpty(writeCheckpoint))
                 {
-                    var crudResult = await tx.Execute("SELECT 1 FROM ps_crud LIMIT 1");
-                    if (crudResult.Rows?.Length > 0)
+                    var crudResult = await tx.GetAll<object>("SELECT 1 FROM ps_crud LIMIT 1");
+                    if (crudResult?.Length > 0)
                     {
                         await tx.Execute(
                             "UPDATE ps_buckets SET target_op = CAST(? as INTEGER) WHERE name='$local'",

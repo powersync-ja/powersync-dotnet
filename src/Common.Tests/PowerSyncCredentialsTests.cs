@@ -61,9 +61,9 @@ public class PowerSyncCredentialsTests
         await db.Execute(@"INSERT INTO Users (Name) VALUES ('Bob');");
         await db.Execute(@"UPDATE USERS set Name = 'Wonderland' where Name = 'Alice';");
 
-        var x = await db.Execute("SELECT Name FROM Users limit 1;", []);
+        var x = await db.GetAll<object>("SELECT Name FROM Users limit 1;", []);
 
-        string json = JsonConvert.SerializeObject(x.Rows.Array, Formatting.Indented);
+        string json = JsonConvert.SerializeObject(x, Formatting.Indented);
         Console.WriteLine("Result: " + json);
         // var x = await db.Execute("SELECT powersync_rs_version() as version");
         // Console.WriteLine(x.Rows.Array.First().First());
@@ -103,13 +103,13 @@ public class PowerSyncCredentialsTests
         // });
 
 
-        var x = await db.Execute("SELECT name, sql FROM sqlite_master WHERE type='table' ORDER BY name;");
-        string json = JsonConvert.SerializeObject(x.Rows.Array, Formatting.Indented);
+        var x = await db.GetAll<object>("SELECT name, sql FROM sqlite_master WHERE type='table' ORDER BY name;");
+        string json = JsonConvert.SerializeObject(x, Formatting.Indented);
         // Console.WriteLine("Result: " + json);
         await db.Execute(@"INSERT INTO users (id, name, age) VALUES ('1','Alice', 20);");
 
-        var b = await db.Execute("SELECT * from users");
-        string jsona = JsonConvert.SerializeObject(b.Rows.Array, Formatting.Indented);
+        var b = await db.GetAll<object>("SELECT * from users");
+        string jsona = JsonConvert.SerializeObject(b, Formatting.Indented);
 
         Console.WriteLine("Result xxx: " + jsona);
 

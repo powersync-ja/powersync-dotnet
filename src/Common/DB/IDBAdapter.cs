@@ -4,15 +4,19 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Common.Utils;
 
-public class QueryResult
+
+
+public class NonQueryResult
 {
     // Represents the auto-generated row id if applicable.
     public long? InsertId { get; set; }
 
-    // Number of affected rows if result of an update query.
+    // Number of affected rows.
     public int RowsAffected { get; set; }
+}
 
-    // If status is undefined or 0, this object will contain the query results.
+public class QueryResult
+{
     public class QueryRows
     {
         // Raw array with all dataset.
@@ -39,7 +43,7 @@ public interface IDBGetUtils
 public interface ILockContext : IDBGetUtils
 {
     // Execute a single write statement.
-    Task<QueryResult> Execute(string query, object[]? parameters = null);
+    Task<NonQueryResult> Execute(string query, object[]? parameters = null);
 }
 
 public interface ITransaction : ILockContext

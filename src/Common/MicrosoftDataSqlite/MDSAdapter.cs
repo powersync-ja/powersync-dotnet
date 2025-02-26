@@ -77,7 +77,7 @@ public class MDSAdapter : EventStream<DBAdapterEvent>, IDBAdapter
             {
                 try
                 {
-                    await writeConnection!.Execute(statement);
+                    await writeConnection!.ExecuteNonQuery(statement);
                     tries = 30;
                 }
                 catch (Exception e)
@@ -107,7 +107,7 @@ public class MDSAdapter : EventStream<DBAdapterEvent>, IDBAdapter
         LoadExtension(db);
 
         var connection = new MDSConnection(new MDSConnectionOptions(db));
-        await connection.Execute("SELECT powersync_init()");
+        await connection.ExecuteNonQuery("SELECT powersync_init()");
 
         return connection;
     }
@@ -133,10 +133,10 @@ public class MDSAdapter : EventStream<DBAdapterEvent>, IDBAdapter
         writeConnection?.Close();
     }
 
-    public async Task<QueryResult> Execute(string query, object[]? parameters = null)
+    public async Task<NonQueryResult> Execute(string query, object[]? parameters = null)
     {
         await initialized;
-        return await writeConnection!.Execute(query, parameters);
+        return await writeConnection!.ExecuteNonQuery(query, parameters);
     }
 
     public Task<QueryResult> ExecuteBatch(string query, object[][]? parameters = null)
@@ -273,7 +273,7 @@ public class MDSTransaction(MDSAdapter adapter) : ITransaction
         await adapter.Execute("ROLLBACK");
     }
 
-    public Task<QueryResult> Execute(string query, object[]? parameters = null)
+    public Task<NonQueryResult> Execute(string query, object[]? parameters = null)
     {
         return adapter.Execute(query, parameters);
     }

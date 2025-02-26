@@ -64,10 +64,10 @@ public class SupabaseConnectorTests
         await db.Connect(connector);
         await Task.Delay(5000);
 
-        var b = await db.Execute("SELECT * from lists");
+        var b = await db.GetAll<object>("SELECT * from lists");
 
         // proof data has synced
-        string jsona = JsonConvert.SerializeObject(b.Rows.Array, Formatting.Indented);
+        string jsona = JsonConvert.SerializeObject(b, Formatting.Indented);
         Console.WriteLine("Lists: " + jsona);
     }
 

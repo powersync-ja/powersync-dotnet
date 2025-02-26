@@ -72,56 +72,71 @@ public class MDSConnection : EventStream<DBAdapterEvent>
         Emit(new DBAdapterEvent { TablesUpdated = batchedUpdate });
     }
 
-    public async Task<QueryResult> Execute(string query, object[]? parameters = null)
+    private static void PrepareCommand(SqliteCommand command, string query, object[]? parameters)
+    {
+        if (parameters == null || parameters.Length == 0)
+        {
+            command.CommandText = query;
+            return;
+        }
+
+        var parameterNames = new List<string>();
+
+        // Count placeholders
+        int placeholderCount = query.Count(c => c == '?');
+        if (placeholderCount != parameters.Length)
+        {
+            throw new ArgumentException("Number of provided parameters does not match the number of `?` placeholders in the query.");
+        }
+
+        // Replace `?` sequentially with named parameters
+        for (int i = 0; i < parameters.Length; i++)
+        {
+            string paramName = $"@param{i}";
+            parameterNames.Add(paramName);
+
+            int index = query.IndexOf('?');
+            if (index == -1)
+            {
+                throw new ArgumentException("Mismatch between placeholders and parameters.");
+            }
+
+            query = string.Concat(query.Substring(0, index), paramName, query.Substring(index + 1));
+        }
+
+        command.CommandText = query;
+
+        // Add parameters to the command
+        for (int i = 0; i < parameters.Length; i++)
+        {
+            command.Parameters.AddWithValue(parameterNames[i], parameters[i] ?? DBNull.Value);
+        }
+    }
+
+    public async Task<NonQueryResult> ExecuteNonQuery(string query, object[]? parameters = null)
+    {
+        using var command = Db.CreateCommand();
+        PrepareCommand(command, query, parameters);
+
+        int rowsAffected = await command.ExecuteNonQueryAsync();
+
+        return new NonQueryResult
+        {
+            InsertId = raw.sqlite3_last_insert_rowid(Db.Handle),
+            RowsAffected = rowsAffected
+        };
+    }
+
+
+    public async Task<QueryResult> ExecuteQuery(string query, object[]? parameters = null)
     {
         var result = new QueryResult();
-
         using var command = Db.CreateCommand();
-
-        if (parameters != null && parameters.Length > 0)
-        {
-            var parameterNames = new List<string>();
-
-            // Count placeholders
-            int placeholderCount = query.Count(c => c == '?');
-            if (placeholderCount != parameters.Length)
-            {
-                throw new ArgumentException("Number of provided parameters does not match the number of `?` placeholders in the query.");
-            }
-
-            // Replace `?` sequentially with named parameters
-            for (int i = 0; i < parameters.Length; i++)
-            {
-                string paramName = $"@param{i}";
-                parameterNames.Add(paramName);
-
-                // Replace only the first occurrence of `?`
-                int index = query.IndexOf('?');
-                if (index == -1)
-                {
-                    throw new ArgumentException("Mismatch between placeholders and parameters.");
-                }
-
-
-                query = string.Concat(query.Substring(0, index), paramName, query.Substring(index + 1));
-            }
-
-            command.CommandText = query;
-
-            // Add parameters to the command
-            for (int i = 0; i < parameters.Length; i++)
-            {
-                command.Parameters.AddWithValue(parameterNames[i], parameters[i]);
-            }
-        }
-        else
-        {
-            command.CommandText = query;
-        }
+        PrepareCommand(command, query, parameters);
 
         var rows = new List<Dictionary<string, object>>();
-
         using var reader = await command.ExecuteReaderAsync();
+
         while (await reader.ReadAsync())
         {
             var row = new Dictionary<string, object>();
@@ -133,15 +148,13 @@ public class MDSConnection : EventStream<DBAdapterEvent>
             rows.Add(row);
         }
 
-        result.InsertId = raw.sqlite3_last_insert_rowid(Db.Handle);
-        result.RowsAffected = reader.RecordsAffected;
         result.Rows.Array = rows;
         return result;
     }
 
     public async Task<T[]> GetAll<T>(string sql, object[]? parameters = null)
     {
-        var result = await Execute(sql, parameters);
+        var result = await ExecuteQuery(sql, parameters);
 
         // If there are no rows, return an empty array.
         if (result.Rows.Array.Count == 0)
@@ -169,7 +182,7 @@ public class MDSConnection : EventStream<DBAdapterEvent>
 
     public async Task<T?> GetOptional<T>(string sql, object[]? parameters = null)
     {
-        var result = await Execute(sql, parameters);
+        var result = await ExecuteQuery(sql, parameters);
 
         // If there are no rows, return null
         if (result.Rows.Array.Count == 0)
@@ -203,6 +216,6 @@ public class MDSConnection : EventStream<DBAdapterEvent>
 
     public async Task RefreshSchema()
     {
-        await Execute("PRAGMA table_info('sqlite_master')");
+        await Get<object>("PRAGMA table_info('sqlite_master')");
     }
 }

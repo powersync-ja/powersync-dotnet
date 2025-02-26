@@ -336,7 +336,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         return await BucketStorageAdapter.GetClientId();
     }
 
-    public async Task<QueryResult> Execute(string query, object[]? parameters = null)
+    public async Task<NonQueryResult> Execute(string query, object[]? parameters = null)
     {
         await WaitForReady();
         return await Database.Execute(query, parameters);
