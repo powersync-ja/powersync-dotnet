@@ -128,6 +128,7 @@ public interface IDBAdapter : IEventStream<DBAdapterEvent>, IDBGetUtils, ILockCo
     Task<T> ReadTransaction<T>(Func<ITransaction, Task<T>> fn, DBLockOptions? options = null);
 
     // Executes a write lock with the given function.
+    Task WriteLock(Func<ILockContext, Task> fn, DBLockOptions? options = null);
     Task<T> WriteLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null);
 
     // Executes a write transaction with the given function. 

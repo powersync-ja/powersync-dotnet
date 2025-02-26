@@ -16,7 +16,7 @@ public class MDSConnectionOptions(SqliteConnection database)
     public SqliteConnection Database { get; set; } = database;
 }
 
-public class MDSConnection : EventStream<DBAdapterEvent>
+public class MDSConnection : EventStream<DBAdapterEvent>, ILockContext
 {
 
     public SqliteConnection Db;
@@ -113,7 +113,7 @@ public class MDSConnection : EventStream<DBAdapterEvent>
         }
     }
 
-    public async Task<NonQueryResult> ExecuteNonQuery(string query, object[]? parameters = null)
+    public async Task<NonQueryResult> Execute(string query, object[]? parameters = null)
     {
         using var command = Db.CreateCommand();
         PrepareCommand(command, query, parameters);
@@ -135,6 +135,7 @@ public class MDSConnection : EventStream<DBAdapterEvent>
         PrepareCommand(command, query, parameters);
 
         var rows = new List<Dictionary<string, object>>();
+
         using var reader = await command.ExecuteReaderAsync();
 
         while (await reader.ReadAsync())

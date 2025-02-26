@@ -44,7 +44,6 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
         // TODO CL put back
         var _ = Task.Run(() =>
         {
-            Console.WriteLine("XXXXX - start");
             foreach (var update in db.Listen(updateCts.Token))
             {
                 if (update.TablesUpdated != null)
@@ -56,8 +55,6 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
                     }
                 }
             }
-
-            Console.WriteLine("XXXXX - end");
         });
     }
 

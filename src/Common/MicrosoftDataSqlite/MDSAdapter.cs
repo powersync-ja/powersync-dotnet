@@ -7,6 +7,7 @@ using Microsoft.Data.Sqlite;
 
 using Common.DB;
 using Common.Utils;
+using Nito.AsyncEx;
 
 public class MDSAdapterOptions()
 {
@@ -18,9 +19,10 @@ public class MDSAdapterOptions()
 
 public class MDSAdapter : EventStream<DBAdapterEvent>, IDBAdapter
 {
-    public string Name => throw new NotImplementedException();
+    public string Name => options.Name;
 
     public MDSConnection? writeConnection;
+    public MDSConnection? readConnection;
 
     private readonly Task initialized;
 
@@ -29,11 +31,16 @@ public class MDSAdapter : EventStream<DBAdapterEvent>, IDBAdapter
     protected RequiredSqliteOptions resolvedSqliteOptions;
     private CancellationTokenSource? tablesUpdatedCts;
 
+    private static readonly AsyncLock writeMutex = new();
+    private static readonly AsyncLock readMutex = new();
+
+
     public MDSAdapter(MDSAdapterOptions options)
     {
         this.options = options;
         resolvedSqliteOptions = resolveSqliteOptions(options.SqliteOptions);
         initialized = Init();
+
     }
 
     private RequiredSqliteOptions resolveSqliteOptions(SqliteOptions? options)
@@ -55,6 +62,8 @@ public class MDSAdapter : EventStream<DBAdapterEvent>, IDBAdapter
     private async Task Init()
     {
         writeConnection = await OpenConnection(options.Name);
+        readConnection = await OpenConnection(options.Name);
+
 
         string[] baseStatements =
         [
@@ -71,21 +80,25 @@ public class MDSAdapter : EventStream<DBAdapterEvent>, IDBAdapter
             $"PRAGMA synchronous = {resolvedSqliteOptions.Synchronous}",
         ];
 
+
+        string[] readConnectionStatements =
+        [
+            .. baseStatements,
+            "PRAGMA query_only = true",
+        ];
+
         foreach (var statement in writeConnectionStatements)
         {
             for (int tries = 0; tries < 30; tries++)
             {
-                try
-                {
-                    await writeConnection!.ExecuteNonQuery(statement);
-                    tries = 30;
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e.Message);
-                    throw;
-                }
+                await writeConnection!.Execute(statement);
+                tries = 30;
             }
+        }
+
+        foreach (var statement in readConnectionStatements)
+        {
+            await readConnection!.Execute(statement);
         }
 
         tablesUpdatedCts = new CancellationTokenSource();
@@ -107,7 +120,7 @@ public class MDSAdapter : EventStream<DBAdapterEvent>, IDBAdapter
         LoadExtension(db);
 
         var connection = new MDSConnection(new MDSConnectionOptions(db));
-        await connection.ExecuteNonQuery("SELECT powersync_init()");
+        await connection.Execute("SELECT powersync_init()");
 
         return connection;
     }
@@ -135,73 +148,85 @@ public class MDSAdapter : EventStream<DBAdapterEvent>, IDBAdapter
 
     public async Task<NonQueryResult> Execute(string query, object[]? parameters = null)
     {
-        await initialized;
-        return await writeConnection!.ExecuteNonQuery(query, parameters);
+        return await WriteLock((ctx) => ctx.Execute(query, parameters));
     }
 
     public Task<QueryResult> ExecuteBatch(string query, object[][]? parameters = null)
     {
+        // https://learn.microsoft.com/en-gb/dotnet/standard/data/sqlite/batching
         throw new NotImplementedException();
     }
 
     public async Task<T> Get<T>(string sql, params object[]? parameters)
     {
-        await initialized;
-        return await writeConnection!.Get<T>(sql, parameters);
+        return await ReadLock((ctx) => ctx.Get<T>(sql, parameters));
+        ;
     }
 
     public async Task<T[]> GetAll<T>(string sql, params object[]? parameters)
     {
-        await initialized;
-        return await writeConnection!.GetAll<T>(sql, parameters);
+        return await ReadLock((ctx) => ctx.GetAll<T>(sql, parameters));
     }
 
     public async Task<T?> GetOptional<T>(string sql, params object[]? parameters)
     {
-        await initialized;
-        return await writeConnection!.GetOptional<T>(sql, parameters);
-    }
-
-    public Task<T> ReadLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null)
-    {
-        throw new NotImplementedException();
+        return await ReadLock((ctx) => ctx.GetOptional<T>(sql, parameters));
     }
 
     public async Task<T> ReadTransaction<T>(Func<ITransaction, Task<T>> fn, DBLockOptions? options = null)
     {
-        return await InternalTransaction(new MDSTransaction(this)!, fn);
+        return await InternalTransaction(new MDSTransaction(readConnection!)!, fn);
     }
 
-    public Task<T> WriteLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null)
+    public async Task<T> ReadLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null)
     {
-        //     return new Promise(async (resolve, reject) => {
-        //   try {
-        //     await this.locks
-        //       .acquire(
-        //         LockType.WRITE,
-        //         async () => {
-        //           resolve(await fn(this.writeConnection!));
-        //         },
-        //         { timeout: options?.timeoutMs }
-        //       )
-        //       .then(() => {
-        //         // flush updates once a write lock has been released
-        //         this.writeConnection!.flushUpdates();
-        //       });
-        //   } catch (ex) {
-        //     reject(ex);
-        //   }
-        // });
-        throw new NotImplementedException();
+        await initialized;
+
+        T result;
+        using (await readMutex.LockAsync())
+        {
+            result = await fn(readConnection!);
+        }
+
+        return result;
+    }
+
+    public async Task WriteLock(Func<ILockContext, Task> fn, DBLockOptions? options = null)
+    {
+        await initialized;
+
+        using (await writeMutex.LockAsync())
+        {
+            await fn(writeConnection!);
+        }
+
+        writeConnection!.FlushUpdates();
+
+    }
+
+    public async Task<T> WriteLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null)
+    {
+        await initialized;
+
+        T result;
+        using (await writeMutex.LockAsync())
+        {
+            result = await fn(writeConnection!);
+        }
+
+        writeConnection!.FlushUpdates();
+
+        return result;
     }
 
     public async Task WriteTransaction(Func<ITransaction, Task> fn, DBLockOptions? options = null)
     {
-        await InternalTransaction(new MDSTransaction(this)!, fn);
+        await WriteLock(ctx => InternalTransaction(new MDSTransaction(writeConnection!)!, fn));
     }
+
     public async Task<T> WriteTransaction<T>(Func<ITransaction, Task<T>> fn, DBLockOptions? options = null)
     {
-        return await InternalTransaction(new MDSTransaction(this)!, fn);
+        return await WriteLock((ctx) => InternalTransaction(new MDSTransaction(writeConnection!)!, fn));
     }
 
     protected static Task InternalTransaction(
@@ -224,12 +249,12 @@ public class MDSAdapter : EventStream<DBAdapterEvent>, IDBAdapter
     }
 
     private static async Task RunTransaction(
-        ITransaction ctx,
+        MDSTransaction ctx,
         Func<Task> action)
     {
         try
         {
-            await ctx.Execute("BEGIN");
+            ctx.Begin();
             await action();
             await ctx.Commit();
         }
@@ -249,47 +274,57 @@ public class MDSAdapter : EventStream<DBAdapterEvent>, IDBAdapter
     {
         await initialized;
         await writeConnection!.RefreshSchema();
+        await readConnection!.RefreshSchema();
     }
 }
 
-// TODO CL this could been a lock context
-public class MDSTransaction(MDSAdapter adapter) : ITransaction
+public class MDSTransaction(MDSConnection connection) : ITransaction
 {
-
-    private readonly MDSAdapter adapter = adapter;
+    private readonly MDSConnection connection = connection;
     private bool finalized = false;
+
+    private SqliteTransaction? sqliteTransaction;
+
+    public void Begin()
+    {
+        if (finalized) return;
+
+        sqliteTransaction = connection.Db.BeginTransaction();
+    }
 
     public async Task Commit()
     {
         if (finalized) return;
         finalized = true;
-        await adapter.Execute("COMMIT");
+        await sqliteTransaction!.CommitAsync();
+        await sqliteTransaction.DisposeAsync();
     }
 
     public async Task Rollback()
     {
         if (finalized) return;
         finalized = true;
-        await adapter.Execute("ROLLBACK");
+        await sqliteTransaction!.RollbackAsync();
+        await sqliteTransaction.DisposeAsync();
     }
 
     public Task<NonQueryResult> Execute(string query, object[]? parameters = null)
     {
-        return adapter.Execute(query, parameters);
+        return connection.Execute(query, parameters);
     }
 
     public Task<T> Get<T>(string sql, params object[]? parameters)
     {
-        return adapter.Get<T>(sql, parameters);
+        return connection.Get<T>(sql, parameters);
     }
 
     public Task<T[]> GetAll<T>(string sql, params object[]? parameters)
     {
-        return adapter.GetAll<T>(sql, parameters);
+        return connection.GetAll<T>(sql, parameters);
     }
 
     public Task<T?> GetOptional<T>(string sql, params object[]? parameters)
     {
-        return adapter.GetOptional<T>(sql, parameters);
+        return connection.GetOptional<T>(sql, parameters);
     }
 }

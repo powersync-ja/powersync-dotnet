@@ -62,7 +62,7 @@ public class SupabaseConnectorTests
         Console.WriteLine("Calling connect...");
 
         await db.Connect(connector);
-        await Task.Delay(5000);
+        await Task.Delay(3000);
 
         var b = await db.GetAll<object>("SELECT * from lists");
 
