@@ -90,7 +90,7 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
 
     public string GetMaxOpId()
     {
-        return "MAX_OP_ID"; // Placeholder for MAX_OP_ID constant.
+        return MAX_OP_ID;
     }
 
     public void StartSession() { }
@@ -388,7 +388,7 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
         return new CrudBatch(
         Crud: all,
         HaveMore: true,
-        Complete: async (string? writeCheckpoint) =>
+        CompleteCallback: async (string? writeCheckpoint) =>
         {
             await db.WriteTransaction(async tx =>
             {

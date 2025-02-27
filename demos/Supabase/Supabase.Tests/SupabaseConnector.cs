@@ -1,10 +1,11 @@
+namespace Supabase.Tests;
+
 using Common.Client;
 using Common.Client.Connection;
 using Common.DB.Crud;
 using Supabase.Postgrest.Attributes;
 using Supabase.Postgrest.Models;
 
-namespace Supabase.Tests;
 
 public class SupabaseConnector : IPowerSyncBackendConnector
 {

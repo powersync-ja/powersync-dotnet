@@ -175,7 +175,7 @@ public class MDSAdapter : EventStream<DBAdapterEvent>, IDBAdapter
 
     public async Task<T> ReadTransaction<T>(Func<ITransaction, Task<T>> fn, DBLockOptions? options = null)
     {
-        return await InternalTransaction(new MDSTransaction(readConnection!)!, fn);
+        return await ReadLock((ctx) => InternalTransaction(new MDSTransaction(readConnection!)!, fn));
     }
 
     public async Task<T> ReadLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null)

@@ -36,6 +36,10 @@ public class PowerSyncDBEvent : StreamingSyncImplementationEvent
 
 public interface IPowerSyncDatabase : IEventStream<PowerSyncDBEvent>
 {
+    public Task Connect(IPowerSyncBackendConnector connector, PowerSyncConnectionOptions? options = null);
+    public Task<string> GetClientId();
+
+    public Task<CrudTransaction?> GetNextCrudTransaction();
 
 }
 
@@ -313,7 +317,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         base.Close();
         await WaitForReady();
 
-
+        // TODO CL
         // if (options.Disconnect)
         // {
         //     await Disconnect();
@@ -326,6 +330,83 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         Closed = true;
     }
 
+
+    /// Get the next recorded transaction to upload.
+    ///
+    /// Returns null if there is no data to upload.
+    ///
+    /// Use this from the {@link PowerSyncBackendConnector.uploadData} callback.
+    ///
+    /// Once the data have been successfully uploaded, call {@link CrudTransaction.complete} before
+    /// requesting the next transaction.
+    ///
+    /// Unlike {@link getCrudBatch}, this only returns data from a single transaction at a time.
+    /// All data for the transaction is loaded into memory.
+    public async Task<CrudTransaction?> GetNextCrudTransaction()
+    {
+        // Console.WriteLine("Enter");
+        // return await Database.ReadTransaction(async tx =>
+        {
+            // Console.WriteLine("Enter staret");
+            var first = await Database.GetOptional<CrudEntryJSON>(
+            $"SELECT id, tx_id, data FROM {PSInternalTable.CRUD} ORDER BY id ASC LIMIT 1");
+
+            if (first == null)
+            {
+                return null;
+            }
+
+            long? txId = first.TransactionId ?? null;
+            List<CrudEntry> all;
+
+            if (txId == null)
+            {
+                all = [CrudEntry.FromRow(first)];
+            }
+            else
+            {
+                var result = await Database.GetAll<CrudEntryJSON>(
+                    $"SELECT id, tx_id, data FROM {PSInternalTable.CRUD} WHERE tx_id = ? ORDER BY id ASC",
+                    [txId]);
+
+                all = result.Select(CrudEntry.FromRow).ToList();
+            }
+
+            var last = all.Last();
+
+            return new CrudTransaction(
+                [.. all],
+                async writeCheckpoint => await HandleCrudCheckpoint(last.ClientId, writeCheckpoint),
+                txId
+            );
+            //    });
+        }
+    }
+
+    public async Task HandleCrudCheckpoint(long lastClientId, string? writeCheckpoint = null)
+    {
+        await Database.WriteTransaction(async (tx) =>
+        {
+            await tx.Execute($"DELETE FROM {PSInternalTable.CRUD} WHERE id <= ?", [lastClientId]);
+            if (!string.IsNullOrEmpty(writeCheckpoint))
+            {
+                var check = await tx.GetAll<object>($"SELECT 1 FROM {PSInternalTable.CRUD} LIMIT 1");
+                if (check.Length == 0)
+                {
+
+                    await tx.Execute($"UPDATE {PSInternalTable.BUCKETS} SET target_op = CAST(? as INTEGER) WHERE name='$local'", [
+                      writeCheckpoint
+                    ]);
+                }
+            }
+            else
+            {
+                await tx.Execute(
+                    $"UPDATE {PSInternalTable.BUCKETS} SET target_op = CAST(? as INTEGER) WHERE name = '$local'",
+                    [BucketStorageAdapter.GetMaxOpId()]);
+            }
+        });
+    }
 
     /// Get an unique client id for this database.
     ///

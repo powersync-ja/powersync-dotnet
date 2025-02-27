@@ -17,7 +17,7 @@ public class Checkpoint
     public BucketChecksum[] Buckets { get; set; } = [];
 
     [JsonProperty("write_checkpoint")]
-    public string? WriteCheckpoint { get; set; }
+    public string? WriteCheckpoint { get; set; } = null;
 }
 
 public class BucketState

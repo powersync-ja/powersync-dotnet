@@ -24,7 +24,7 @@ public class CrudEntryJSON
     public string Data { get; set; } = null!;
 
     [JsonProperty("tx_id")]
-    public int? TransactionId { get; set; }
+    public long? TransactionId { get; set; }
 }
 
 public class CrudEntryDataJSON
@@ -57,20 +57,20 @@ public class CrudEntryOutputJSON
     public string Id { get; set; } = null!;
 
     [JsonProperty("tx_id")]
-    public int? TransactionId { get; set; }
+    public long? TransactionId { get; set; }
 
     [JsonProperty("data")]
     public Dictionary<string, object>? Data { get; set; }
 }
 
-public class CrudEntry(int clientId, UpdateType op, string table, string id, int? transactionId = null, Dictionary<string, object>? opData = null)
+public class CrudEntry(int clientId, UpdateType op, string table, string id, long? transactionId = null, Dictionary<string, object>? opData = null)
 {
     public int ClientId { get; private set; } = clientId;
     public string Id { get; private set; } = id;
     public UpdateType Op { get; private set; } = op;
     public Dictionary<string, object>? OpData { get; private set; } = opData;
     public string Table { get; private set; } = table;
-    public int? TransactionId { get; private set; } = transactionId;
+    public long? TransactionId { get; private set; } = transactionId;
 
     public static CrudEntry FromRow(CrudEntryJSON dbRow)
     {

@@ -1,12 +1,10 @@
-using Common.Client.Sync.Bucket;
-using Common.Client.Sync.Stream;
+namespace Node.Tests;
+
 using Common.DB.Schema;
 using Common.MicrosoftDataSqlite;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
-using Supabase.Storage;
 
-namespace Supabase.Tests;
 class TestData
 {
     public static Table todos = new Table(new Dictionary<string, ColumnType>
@@ -40,14 +38,9 @@ class TestData
 }
 
 
-public class SupabaseConnectorTests
+public class NodeConnectorTests
 {
-    // [Fact]
-    // public async void Connector()
-    // {
-    //     Console.WriteLine("Supabase Connector Test");
-    //     new SupabaseConnector();
-    // }
+
 
     [Fact]
     public async void StreamTest()
@@ -56,42 +49,24 @@ public class SupabaseConnectorTests
         await db.Init();
         await db.DisconnectAndClear();
 
-        var connector = new SupabaseConnector();
-        await connector.Login();
+        var connector = new NodeConnector();
+
 
         Console.WriteLine("Calling connect...");
-        // db.OnChange(new Common.Client.WatchOnChangeHandler
-        // {
-        //     OnChange = async (change) =>
-        //     {
-        //         Console.WriteLine("Change: " + JsonConvert.SerializeObject(change, Formatting.Indented));
-        //     }
-        // }, new Common.Client.SQLWatchOptions
-        // {
-        //     Tables = ["lists"]
-        // });
         await db.Connect(connector);
         await Task.Delay(4000);
 
-        var x = await db.GetAll<object>("select * from lists ");
-        // Console.WriteLine("Tables: " + JsonConvert.SerializeObject(x, Formatting.Indented));
-
-
-        // db.Watch("select * from lists", null, new Common.Client.WatchHandler
-        // {
-        //     OnResult = async (result) =>
-        //     {
-        //         Console.WriteLine("\n\nResult from watch:" + JsonConvert.SerializeObject(result, Formatting.Indented));
-        //     },
-        // });
-
-        // await db.Execute("INSERT INTO lists (id, name, owner_id, created_at) VALUES ('1', 'test', 'test', 'test')");
-        // await Task.Delay(1000);
+        var ownerId = connector.UserId;
+        // Console.WriteLine(owner_id);
+        await db.Execute("INSERT INTO lists (id, name, owner_id, created_at) VALUES (uuid(), 'Example 2', ?, datetime())", [ownerId]);
+        await Task.Delay(4000);
         // await db.Execute("INSERT INTO lists (id, name, owner_id, created_at) VALUES ('2', 'test2', 'test2', 'test2')");
 
 
+        var x = await db.GetAll<object>("select * from lists ");
         string jsona = JsonConvert.SerializeObject(x, Formatting.Indented);
-        Console.WriteLine("Lists: " + jsona);
+        Console.WriteLine("Lists from node: " + jsona);
+        // Console.WriteLine("Lists: " + jsona);
 
     }
 
@@ -100,7 +75,7 @@ public class SupabaseConnectorTests
         ILoggerFactory loggerFactory = LoggerFactory.Create(builder =>
         {
             builder.AddConsole(); // Enable console logging
-            builder.SetMinimumLevel(LogLevel.Debug);
+            builder.SetMinimumLevel(LogLevel.Information);
         });
 
         return loggerFactory.CreateLogger("TestLogger");

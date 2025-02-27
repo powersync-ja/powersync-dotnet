@@ -8,7 +8,6 @@ using Newtonsoft.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Common.Utils;
-using System.Globalization;
 
 public class AdditionalConnectionOptions(int? retryDelayMs = null, int? crudUploadThrottleMs = null)
 {
@@ -441,7 +440,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                         }
                         if (bucketsToDelete.Count > 0)
                         {
-                            logger.LogDebug("Removing buckets: " + string.Join(", ", bucketsToDelete));
+                            logger.LogDebug("Removing buckets: {message}", string.Join(", ", bucketsToDelete));
                         }
 
                         bucketSet = newBuckets;
@@ -450,7 +449,8 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                     }
                     else if (line is StreamingSyncCheckpointComplete checkpointComplete)
                     {
-                        logger.LogDebug("Checkpoint complete: " + targetCheckpoint);
+                        logger.LogDebug("Checkpoint complete: {message}", targetCheckpoint);
+
                         var result = await Options.Adapter.SyncLocalDatabase(targetCheckpoint!);
 
                         if (!result.CheckpointValid)
@@ -469,7 +469,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                         else
                         {
                             appliedCheckpoint = targetCheckpoint;
-                            logger.LogDebug("Validated checkpoint: " + appliedCheckpoint);
+                            logger.LogDebug("Validated checkpoint: {message}", appliedCheckpoint);
 
                             UpdateSyncStatus(new SyncStatusOptions
                             {
@@ -508,11 +508,12 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                             newBuckets.Remove(bucket);
                         }
 
+                        var newWriteCheckpoint = !string.IsNullOrEmpty(diff.WriteCheckpoint) ? diff.WriteCheckpoint : null;
                         var newCheckpoint = new Checkpoint
                         {
                             LastOpId = diff.LastOpId,
                             Buckets = [.. newBuckets.Values],
-                            WriteCheckpoint = diff.WriteCheckpoint
+                            WriteCheckpoint = newWriteCheckpoint
                         };
 
                         targetCheckpoint = newCheckpoint;
@@ -522,7 +523,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                         var bucketsToDelete = diff.RemovedBuckets.ToArray();
                         if (bucketsToDelete.Length > 0)
                         {
-                            logger.LogDebug("Remove buckets: " + string.Join(", ", bucketsToDelete));
+                            logger.LogDebug("Remove buckets: {message}", string.Join(", ", bucketsToDelete));
                         }
 
                         // Perform async operations
@@ -637,7 +638,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
 
         await locks.ObtainLock(new LockOptions<Task>
         {
-            Type = LockType.SYNC,
+            Type = LockType.CRUD,
             Callback = async () =>
             {
                 CrudEntry? checkedCrudItem = null;
