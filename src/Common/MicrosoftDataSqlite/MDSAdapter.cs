@@ -229,11 +229,11 @@ public class MDSAdapter : EventStream<DBAdapterEvent>, IDBAdapter
         return await WriteLock((ctx) => InternalTransaction(new MDSTransaction(writeConnection!)!, fn));
     }
 
-    protected static Task InternalTransaction(
+    protected static async Task InternalTransaction(
         MDSTransaction ctx,
         Func<ITransaction, Task> fn)
     {
-        return RunTransaction(ctx, () => fn(ctx));
+        await RunTransaction(ctx, () => fn(ctx));
     }
 
     protected static async Task<T> InternalTransaction<T>(
@@ -245,6 +245,7 @@ public class MDSAdapter : EventStream<DBAdapterEvent>, IDBAdapter
         {
             result = await fn(ctx);
         });
+
         return result;
     }
 
@@ -254,11 +255,11 @@ public class MDSAdapter : EventStream<DBAdapterEvent>, IDBAdapter
     {
         try
         {
-            ctx.Begin();
+            await ctx.Begin();
             await action();
             await ctx.Commit();
         }
-        catch
+        catch (Exception)
         {
             // In rare cases, a rollback may fail. Safe to ignore.
             try { await ctx.Rollback(); }
@@ -283,29 +284,24 @@ public class MDSTransaction(MDSConnection connection) : ITransaction
     private readonly MDSConnection connection = connection;
     private bool finalized = false;
 
-    private SqliteTransaction? sqliteTransaction;
-
-    public void Begin()
+    public async Task Begin()
     {
         if (finalized) return;
-
-        sqliteTransaction = connection.Db.BeginTransaction();
+        await connection.Execute("BEGIN");
     }
 
     public async Task Commit()
     {
         if (finalized) return;
         finalized = true;
-        await sqliteTransaction!.CommitAsync();
-        await sqliteTransaction.DisposeAsync();
+        await connection.Execute("COMMIT");
     }
 
     public async Task Rollback()
     {
         if (finalized) return;
         finalized = true;
-        await sqliteTransaction!.RollbackAsync();
-        await sqliteTransaction.DisposeAsync();
+        await connection.Execute("ROLLBACK");
     }
 
     public Task<NonQueryResult> Execute(string query, object[]? parameters = null)

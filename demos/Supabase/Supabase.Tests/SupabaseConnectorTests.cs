@@ -74,6 +74,8 @@ public class SupabaseConnectorTests
         await Task.Delay(4000);
 
         var x = await db.GetAll<object>("select * from lists ");
+             string jsona = JsonConvert.SerializeObject(x, Formatting.Indented);
+        Console.WriteLine("Lists: " + jsona);
         // Console.WriteLine("Tables: " + JsonConvert.SerializeObject(x, Formatting.Indented));
 
 
@@ -90,8 +92,7 @@ public class SupabaseConnectorTests
         // await db.Execute("INSERT INTO lists (id, name, owner_id, created_at) VALUES ('2', 'test2', 'test2', 'test2')");
 
 
-        string jsona = JsonConvert.SerializeObject(x, Formatting.Indented);
-        Console.WriteLine("Lists: " + jsona);
+   
 
     }
 

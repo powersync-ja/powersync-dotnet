@@ -344,11 +344,9 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
     /// All data for the transaction is loaded into memory.
     public async Task<CrudTransaction?> GetNextCrudTransaction()
     {
-        // Console.WriteLine("Enter");
-        // return await Database.ReadTransaction(async tx =>
+        return await Database.ReadTransaction(async tx =>
         {
-            // Console.WriteLine("Enter staret");
-            var first = await Database.GetOptional<CrudEntryJSON>(
+            var first = await tx.GetOptional<CrudEntryJSON>(
             $"SELECT id, tx_id, data FROM {PSInternalTable.CRUD} ORDER BY id ASC LIMIT 1");
 
             if (first == null)
@@ -365,7 +363,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
             }
             else
             {
-                var result = await Database.GetAll<CrudEntryJSON>(
+                var result = await tx.GetAll<CrudEntryJSON>(
                     $"SELECT id, tx_id, data FROM {PSInternalTable.CRUD} WHERE tx_id = ? ORDER BY id ASC",
                     [txId]);
 
@@ -373,14 +371,12 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
             }
 
             var last = all.Last();
-
             return new CrudTransaction(
                 [.. all],
                 async writeCheckpoint => await HandleCrudCheckpoint(last.ClientId, writeCheckpoint),
                 txId
             );
-            //    });
-        }
+        });
     }
 
     public async Task HandleCrudCheckpoint(long lastClientId, string? writeCheckpoint = null)
