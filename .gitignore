@@ -49,3 +49,7 @@ TestResults/
 *.VSIXProjectLaunch
 .project
 .vsconfig
+
+*.db
+*.db-shm
+*.db-wal
