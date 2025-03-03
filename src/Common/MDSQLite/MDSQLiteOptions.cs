@@ -1,4 +1,4 @@
-namespace Common.MicrosoftDataSqlite;
+namespace Common.MDSQLite;
 
 public sealed class TemporaryStorageOption
 {

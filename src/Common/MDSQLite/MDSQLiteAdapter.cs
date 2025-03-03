@@ -1,4 +1,4 @@
-namespace Common.MicrosoftDataSqlite;
+namespace Common.MDSQLite;
 
 using System;
 using System.Threading.Tasks;
@@ -9,7 +9,7 @@ using Common.DB;
 using Common.Utils;
 using Nito.AsyncEx;
 
-public class MDSAdapterOptions()
+public class MDSQLiteAdapterOptions()
 {
     public string Name { get; set; } = null!;
 
@@ -17,16 +17,16 @@ public class MDSAdapterOptions()
 
 }
 
-public class MDSAdapter : EventStream<DBAdapterEvent>, IDBAdapter
+public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
 {
     public string Name => options.Name;
 
-    public MDSConnection? writeConnection;
-    public MDSConnection? readConnection;
+    public MDSQLiteConnection? writeConnection;
+    public MDSQLiteConnection? readConnection;
 
     private readonly Task initialized;
 
-    protected MDSAdapterOptions options;
+    protected MDSQLiteAdapterOptions options;
 
     protected RequiredMDSQLiteOptions resolvedMDSQLiteOptions;
     private CancellationTokenSource? tablesUpdatedCts;
@@ -34,8 +34,7 @@ public class MDSAdapter : EventStream<DBAdapterEvent>, IDBAdapter
     private static readonly AsyncLock writeMutex = new();
     private static readonly AsyncLock readMutex = new();
 
-
-    public MDSAdapter(MDSAdapterOptions options)
+    public MDSQLiteAdapter(MDSQLiteAdapterOptions options)
     {
         this.options = options;
         resolvedMDSQLiteOptions = resolveMDSQLiteOptions(options.SqliteOptions);
@@ -114,12 +113,12 @@ public class MDSAdapter : EventStream<DBAdapterEvent>, IDBAdapter
         });
     }
 
-    protected async Task<MDSConnection> OpenConnection(string dbFilename)
+    protected async Task<MDSQLiteConnection> OpenConnection(string dbFilename)
     {
         var db = OpenDatabase(dbFilename);
         LoadExtension(db);
 
-        var connection = new MDSConnection(new MDSConnectionOptions(db));
+        var connection = new MDSQLiteConnection(new MDSQLiteConnectionOptions(db));
         await connection.Execute("SELECT powersync_init()");
 
         return connection;
@@ -175,7 +174,7 @@ public class MDSAdapter : EventStream<DBAdapterEvent>, IDBAdapter
 
     public async Task<T> ReadTransaction<T>(Func<ITransaction, Task<T>> fn, DBLockOptions? options = null)
     {
-        return await ReadLock((ctx) => InternalTransaction(new MDSTransaction(readConnection!)!, fn));
+        return await ReadLock((ctx) => InternalTransaction(new MDSQLiteTransaction(readConnection!)!, fn));
     }
 
     public async Task<T> ReadLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null)
@@ -221,23 +220,23 @@ public class MDSAdapter : EventStream<DBAdapterEvent>, IDBAdapter
 
     public async Task WriteTransaction(Func<ITransaction, Task> fn, DBLockOptions? options = null)
     {
-        await WriteLock(ctx => InternalTransaction(new MDSTransaction(writeConnection!)!, fn));
+        await WriteLock(ctx => InternalTransaction(new MDSQLiteTransaction(writeConnection!)!, fn));
     }
 
     public async Task<T> WriteTransaction<T>(Func<ITransaction, Task<T>> fn, DBLockOptions? options = null)
     {
-        return await WriteLock((ctx) => InternalTransaction(new MDSTransaction(writeConnection!)!, fn));
+        return await WriteLock((ctx) => InternalTransaction(new MDSQLiteTransaction(writeConnection!)!, fn));
     }
 
     protected static async Task InternalTransaction(
-        MDSTransaction ctx,
+        MDSQLiteTransaction ctx,
         Func<ITransaction, Task> fn)
     {
         await RunTransaction(ctx, () => fn(ctx));
     }
 
     protected static async Task<T> InternalTransaction<T>(
-        MDSTransaction ctx,
+        MDSQLiteTransaction ctx,
         Func<ITransaction, Task<T>> fn)
     {
         T result = default!;
@@ -250,7 +249,7 @@ public class MDSAdapter : EventStream<DBAdapterEvent>, IDBAdapter
     }
 
     private static async Task RunTransaction(
-        MDSTransaction ctx,
+        MDSQLiteTransaction ctx,
         Func<Task> action)
     {
         try
@@ -279,9 +278,9 @@ public class MDSAdapter : EventStream<DBAdapterEvent>, IDBAdapter
     }
 }
 
-public class MDSTransaction(MDSConnection connection) : ITransaction
+public class MDSQLiteTransaction(MDSQLiteConnection connection) : ITransaction
 {
-    private readonly MDSConnection connection = connection;
+    private readonly MDSQLiteConnection connection = connection;
     private bool finalized = false;
 
     public async Task Begin()

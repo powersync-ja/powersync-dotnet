@@ -1,7 +1,8 @@
+namespace Common.MDSQLite;
+
 using Common.Client;
 using Common.DB;
 
-namespace Common.MicrosoftDataSqlite;
 
 public class MDSQLiteOpenFactoryOptions : SQLOpenOptions
 {
@@ -19,7 +20,7 @@ public class MDSqliteDBOpenFactory : ISQLOpenFactory
 
     public IDBAdapter OpenDatabase()
     {
-        return new MDSAdapter(new MDSAdapterOptions
+        return new MDSQLiteAdapter(new MDSQLiteAdapterOptions
         {
             Name = options.DbFilename,
             SqliteOptions = options.SqliteOptions

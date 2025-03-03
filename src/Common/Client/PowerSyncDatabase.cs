@@ -8,7 +8,8 @@ using Common.Client.Sync.Stream;
 using Common.DB;
 using Common.DB.Crud;
 using Common.DB.Schema;
-using Common.MicrosoftDataSqlite;
+using Common.MDSQLite;
+using Common.MDSQLite;
 using Common.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -98,7 +99,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
             // TODO default to MDSQLite factory for now
             // Can be broken out, rename this class to Abstract
             // `this.openDBAdapter(options)`
-            Database = new MDSAdapter(new MDSAdapterOptions
+            Database = new MDSQLiteAdapter(new MDSQLiteAdapterOptions
             {
                 Name = openOptions.DbFilename,
                 SqliteOptions = null

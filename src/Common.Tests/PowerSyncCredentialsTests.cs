@@ -3,9 +3,7 @@ namespace Common.Tests;
 using Common.Client;
 using Common.Client.Connection;
 using Common.DB.Schema;
-using Common.MicrosoftDataSqlite;
 using Newtonsoft.Json;
-using SQLite;
 
 public class PowerSyncCredentialsTests
 {

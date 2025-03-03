@@ -1,4 +1,4 @@
-﻿namespace Node.Tests;
+﻿namespace CLI;
 
 using System;
 using System.Collections.Generic;

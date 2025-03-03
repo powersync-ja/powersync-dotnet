@@ -7,7 +7,6 @@ using Microsoft.Data.Sqlite;
 using Common.Client;
 using Common.Client.Sync.Bucket;
 using Common.DB.Schema;
-using Common.MicrosoftDataSqlite;
 using Microsoft.Extensions.Logging;
 
 class TestData

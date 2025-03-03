@@ -1,6 +1,7 @@
+namespace CLI;
+
 using Common.DB.Schema;
 
-namespace CLI;
 class AppSchema
 {
     public static Table Todos = new Table(new Dictionary<string, ColumnType>

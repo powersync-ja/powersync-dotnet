@@ -1,4 +1,4 @@
-namespace Common.MicrosoftDataSqlite;
+namespace Common.MDSQLite;
 
 using System.Threading.Tasks;
 
@@ -11,17 +11,17 @@ using Newtonsoft.Json;
 using SQLitePCL;
 using Common.Utils;
 
-public class MDSConnectionOptions(SqliteConnection database)
+public class MDSQLiteConnectionOptions(SqliteConnection database)
 {
     public SqliteConnection Database { get; set; } = database;
 }
 
-public class MDSConnection : EventStream<DBAdapterEvent>, ILockContext
+public class MDSQLiteConnection : EventStream<DBAdapterEvent>, ILockContext
 {
 
     public SqliteConnection Db;
     private List<UpdateNotification> updateBuffer;
-    public MDSConnection(MDSConnectionOptions options)
+    public MDSQLiteConnection(MDSQLiteConnectionOptions options)
     {
         Db = options.Database;
         updateBuffer = [];
