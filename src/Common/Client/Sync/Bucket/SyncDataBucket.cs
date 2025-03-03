@@ -69,6 +69,6 @@ public class SyncDataBucket(
             Data = dataObjects
         };
 
-        return JsonConvert.SerializeObject(jsonObject, Formatting.Indented);
+        return JsonConvert.SerializeObject(jsonObject);
     }
 }

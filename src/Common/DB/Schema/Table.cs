@@ -61,7 +61,7 @@ public class Table
             indexes = ConvertedIndexes.Select(e => JsonConvert.DeserializeObject<object>(e.ToJSON(this))).ToList()
         };
 
-        return JsonConvert.SerializeObject(jsonObject, Formatting.Indented);
+        return JsonConvert.SerializeObject(jsonObject);
     }
 }
 

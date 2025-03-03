@@ -80,6 +80,6 @@ public class SyncStatus(SyncStatusOptions options)
 
     public string ToJSON()
     {
-        return JsonConvert.SerializeObject(this, Formatting.Indented);
+        return JsonConvert.SerializeObject(this);
     }
 }

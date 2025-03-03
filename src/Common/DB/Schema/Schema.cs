@@ -21,7 +21,7 @@ public class Schema(Dictionary<string, Table> tables)
         };
 
 
-        return JsonConvert.SerializeObject(jsonObject, Formatting.Indented);
+        return JsonConvert.SerializeObject(jsonObject);
     }
 }
 
