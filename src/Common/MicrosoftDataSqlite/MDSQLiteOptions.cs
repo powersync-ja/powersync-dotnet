@@ -32,7 +32,7 @@ public sealed class SqliteJournalMode
     public static implicit operator string(SqliteJournalMode mode) => mode.Value;
 }
 
-// SQLite file commit mode.
+/// SQLite file commit mode.
 public sealed class SqliteSynchronous
 {
     public static readonly SqliteSynchronous NORMAL = new("NORMAL");
@@ -52,7 +52,7 @@ public class SqliteExtension
     public string? EntryPoint { get; set; }
 }
 
-public class SqliteOptions
+public class MDSQLiteOptions
 {
     /// <summary>
     /// SQLite journal mode. Defaults to WAL.
@@ -98,9 +98,9 @@ public class SqliteOptions
 }
 
 
-public class RequiredSqliteOptions : SqliteOptions
+public class RequiredMDSQLiteOptions : MDSQLiteOptions
 {
-    public static RequiredSqliteOptions DEFAULT_SQLITE_OPTIONS = new()
+    public static RequiredMDSQLiteOptions DEFAULT_SQLITE_OPTIONS = new()
     {
         JournalMode = SqliteJournalMode.WAL,
         Synchronous = SqliteSynchronous.NORMAL,

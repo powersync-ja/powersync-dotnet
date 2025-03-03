@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using CLI;
+using Common.Client;
 using Common.MicrosoftDataSqlite;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
@@ -15,10 +16,13 @@ class Demo
     private record ListResult(string id, string name, string owner_id, string created_at);
     static async Task Main()
     {
-
-        var db = CommonPowerSyncDatabase.Create(AppSchema.PowerSyncSchema, "CLI.db", createLogger());
+        var db = new PowerSyncDatabase(new PowerSyncDatabaseOptions
+        {
+            Database = new SQLOpenOptions { DbFilename = "cli-example.db" },
+            Schema = AppSchema.PowerSyncSchema,
+        });
         await db.Init();
-        // await db.DisconnectAndClear();
+
         var connector = new NodeConnector();
 
         var table = new Table()
@@ -26,10 +30,6 @@ class Demo
             .AddColumn("name")
             .AddColumn("owner_id")
             .AddColumn("created_at");
-        await db.Connect(connector);
-        await Task.Delay(2000);
-
-        var query = "select * from lists";
 
         Console.WriteLine("Press ESC to exit.");
         Console.WriteLine("Press Enter to add a new row.");
@@ -37,25 +37,22 @@ class Demo
 
         bool running = true;
 
-        db.Watch(query, null, new Common.Client.WatchHandler
+        db.Watch("select * from lists", null, new WatchHandler<ListResult>
         {
-            OnResult = async (results) =>
+            OnResult = (results) =>
             {
-                // Convert Object[] to JSON string// typing should be resolved somewhere else..
-                var jsonString = JsonConvert.SerializeObject(results);
-                var typedResults = JsonConvert.DeserializeObject<List<ListResult>>(jsonString);
-
-                // Console.WriteLine(JsonConvert.SerializeObject(typedResults, Formatting.Indented));
-
                 table.Rows.Clear();
-                foreach (var line in typedResults!)
+                foreach (var line in results)
                 {
                     table.AddRow(line.id, line.name, line.owner_id, line.created_at);
                 }
+            },
+            OnError = (error) =>
+            {
+                Console.WriteLine("Error: " + error.Message);
             }
         });
 
-        // Task to listen for key press (Stop when ESC is pressed)
         var _ = Task.Run(async () =>
          {
              while (running)
@@ -65,7 +62,7 @@ class Demo
                      var key = Console.ReadKey(intercept: true);
                      if (key.Key == ConsoleKey.Escape)
                      {
-                         running = false; // Stop the loop
+                         running = false;
                      }
                      else if (key.Key == ConsoleKey.Enter)
                      {
@@ -76,9 +73,12 @@ class Demo
                          await db.Execute("delete from lists where id = (select id from lists order by created_at desc limit 1)");
                      }
                  }
-                 Thread.Sleep(100); // Avoid high CPU usage
+                 Thread.Sleep(100);
              }
          });
+
+        await db.Connect(connector);
+        await db.WaitForFirstSync();
 
         // Start live updating table
         await AnsiConsole.Live(table)
@@ -91,11 +91,6 @@ class Demo
                     ctx.Refresh();
                 }
             });
-
-
-
-
-
 
         Console.WriteLine("\nExited live table. Press any key to exit.");
     }

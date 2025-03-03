@@ -8,6 +8,7 @@ using Common.Client.Sync.Stream;
 using Common.DB;
 using Common.DB.Crud;
 using Common.DB.Schema;
+using Common.MicrosoftDataSqlite;
 using Common.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -22,10 +23,24 @@ public class BasePowerSyncDatabaseOptions()
 
 }
 
+public abstract class DatabaseSource { }
+
+public class DBAdapterSource(IDBAdapter Adapter) : DatabaseSource
+{
+    public IDBAdapter Adapter { get; init; } = Adapter;
+}
+
+public class OpenFactorySource(ISQLOpenFactory Factory) : DatabaseSource
+{
+    public ISQLOpenFactory Factory { get; init; } = Factory;
+}
+
+
 public class PowerSyncDatabaseOptions() : BasePowerSyncDatabaseOptions()
 {
     /// Source for a SQLite database connection.
-    public IDBAdapter Database { get; set; } = null!;
+    public DatabaseSource Database { get; set; } = null!;
+
 }
 
 public class PowerSyncDBEvent : StreamingSyncImplementationEvent
@@ -70,7 +85,29 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
 
     public PowerSyncDatabase(PowerSyncDatabaseOptions options)
     {
-        Database = options.Database;
+        if (options.Database is DBAdapterSource adapterSource)
+        {
+            Database = adapterSource.Adapter;
+        }
+        else if (options.Database is OpenFactorySource factorySource)
+        {
+            Database = factorySource.Factory.OpenDatabase();
+        }
+        else if (options.Database is SQLOpenOptions openOptions)
+        {
+            // TODO default to MDSQLite factory for now
+            // Can be broken out, rename this class to Abstract
+            // `this.openDBAdapter(options)`
+            Database = new MDSAdapter(new MDSAdapterOptions
+            {
+                Name = openOptions.DbFilename,
+                SqliteOptions = null
+            });
+        }
+        else
+        {
+            throw new ArgumentException("The provided `Database` option is invalid.");
+        }
         Logger = options.Logger ?? NullLogger.Instance;
         CurrentStatus = new SyncStatus(new SyncStatusOptions());
         BucketStorageAdapter = generateBucketStorageAdapter();
@@ -108,7 +145,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
             return;
         }
 
-        var tcs = new TaskCompletionSource();
+        var tcs = new TaskCompletionSource<bool>();
         var cts = new CancellationTokenSource();
 
         var _ = Task.Run(() =>
@@ -118,7 +155,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
                 if (update.StatusChanged?.HasSynced == true)
                 {
                     cts.Cancel();
-                    tcs.SetResult();
+                    tcs.SetResult(true);
                 }
             }
         });
@@ -435,7 +472,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         return await Database.Get<T>(query, parameters);
     }
 
-    public void Watch(string query, object[]? parameters, WatchHandler handler, SQLWatchOptions? options = null)
+    public void Watch<T>(string query, object[]? parameters, WatchHandler<T> handler, SQLWatchOptions? options = null)
     {
         var _handler = handler ?? throw new ArgumentNullException(nameof(handler));
         if (_handler.OnResult == null)
@@ -445,36 +482,39 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
 
         Task.Run(async () =>
         {
-            var resolvedTables = await ResolveTables(query, parameters, options);
-            // Fetch initial data
-            // TODO CL typing for GetAll
-            var result = await GetAll<object>(query, parameters);
-            _handler.OnResult(result);
-
-            OnChange(new WatchOnChangeHandler
+            try
             {
-                OnChange = async (change) =>
+                var resolvedTables = await ResolveTables(query, parameters, options);
+                var result = await GetAll<T>(query, parameters);
+                _handler.OnResult(result);
+
+                OnChange(new WatchOnChangeHandler
                 {
-                    try
+                    OnChange = async (change) =>
                     {
-                        var result = await GetAll<object>(query, parameters);
-                        _handler.OnResult(result);
-                    }
-                    catch (Exception ex)
-                    {
-                        _handler.OnError?.Invoke(ex);
-                    }
-                },
-                OnError = _handler.OnError
-            }, new SQLWatchOptions
+                        try
+                        {
+                            var result = await GetAll<T>(query, parameters);
+                            _handler.OnResult(result);
+                        }
+                        catch (Exception ex)
+                        {
+                            _handler.OnError?.Invoke(ex);
+                        }
+                    },
+                    OnError = _handler.OnError
+                }, new SQLWatchOptions
+                {
+                    Tables = resolvedTables,
+                    Signal = options?.Signal,
+                    ThrottleMs = options?.ThrottleMs
+                });
+            }
+            catch (Exception ex)
             {
-                Tables = resolvedTables,
-                Signal = options?.Signal,
-                ThrottleMs = options?.ThrottleMs
-            });
+                _handler.OnError?.Invoke(ex);
+            }
         });
-
-        // TODO CL cancel?
     }
 
     private record ExplainedResult(string opcode, int p2, int p3);
@@ -489,7 +529,6 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
                 $"EXPLAIN {sql}", parameters
             );
 
-            // TODO CL do we need this: && row.p2 is int
             var rootPages = explained
                 .Where(row => row.opcode == "OpenRead" && row.p3 == 0)
                 .Select(row => row.p2)
@@ -534,7 +573,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
             });
         }
 
-        Database.RunListener((update) =>
+        var cts = Database.RunListener((update) =>
         {
             if (update.TablesUpdated != null)
             {
@@ -550,7 +589,13 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
             }
         });
 
-        // TODO CL pass CTS along
+        if (options?.Signal.HasValue == true)
+        {
+            options.Signal.Value.Register(() =>
+            {
+                cts.Cancel();
+            });
+        }
     }
 
     private static void HandleTableChanges(HashSet<string> changedTables, HashSet<string> watchedTables, Action<string[]> onDetectedChanges)
@@ -596,9 +641,9 @@ public class SQLWatchOptions
     public int? ThrottleMs { get; set; }
 }
 
-public class WatchHandler
+public class WatchHandler<T>
 {
-    public Action<object[]> OnResult { get; set; } = null!;
+    public Action<T[]> OnResult { get; set; } = null!;
     public Action<Exception>? OnError { get; set; }
 }
 

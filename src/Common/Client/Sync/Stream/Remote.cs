@@ -63,7 +63,7 @@ public class Remote
         // Remove the build metadata part (anything after the '+')
         int plusIndex = fullInformationalVersion.IndexOf('+');
         string version = plusIndex >= 0
-            ? fullInformationalVersion[..plusIndex]
+            ? fullInformationalVersion.Substring(0, plusIndex)
             : fullInformationalVersion;
 
         return $"powersync-dotnet/{version}";

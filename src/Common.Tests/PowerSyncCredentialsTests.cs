@@ -1,6 +1,6 @@
 namespace Common.Tests;
 
-
+using Common.Client;
 using Common.Client.Connection;
 using Common.DB.Schema;
 using Common.MicrosoftDataSqlite;
@@ -47,7 +47,11 @@ public class PowerSyncCredentialsTests
     public async void LoadVersion()
     {
         // var db = new MDSAdapter();
-        var db = CommonPowerSyncDatabase.Create(AppSchema, "x.db");
+        var db = new PowerSyncDatabase(new PowerSyncDatabaseOptions
+        {
+            Database = new SQLOpenOptions { DbFilename = "x.db" },
+            Schema = AppSchema,
+        });
         Console.WriteLine("Pre adapter" + db.SdkVersion);
         await db.WaitForReady();
         Console.WriteLine("Post adapter" + db.SdkVersion);
@@ -86,10 +90,16 @@ public class PowerSyncCredentialsTests
         // await Task.Delay(5000);
     }
 
-    [Fact(Skip = "Skipping this test temporarily")]
+    private record User(string Name, int Age);
+
+    [Fact]
     public async void SchemaTest()
     {
-        var db = CommonPowerSyncDatabase.Create(AppSchema, "xxxa.db");
+        var db = new PowerSyncDatabase(new PowerSyncDatabaseOptions
+        {
+            Database = new SQLOpenOptions { DbFilename = "xxxx.db" },
+            Schema = AppSchema,
+        });
         await db.DisconnectAndClear();
         // const schema = new Schema({
         //   users: new Table({
@@ -103,8 +113,8 @@ public class PowerSyncCredentialsTests
         // });
 
 
-        var x = await db.GetAll<object>("SELECT name, sql FROM sqlite_master WHERE type='table' ORDER BY name;");
-        string json = JsonConvert.SerializeObject(x, Formatting.Indented);
+        // var x = await db.GetAll<object>("SELECT name, sql FROM sqlite_master WHERE type='table' ORDER BY name;");
+        // string json = JsonConvert.SerializeObject(x, Formatting.Indented);
         // Console.WriteLine("Result: " + json);
         await db.Execute(@"INSERT INTO users (id, name, age) VALUES ('1','Alice', 20);");
 
@@ -112,6 +122,7 @@ public class PowerSyncCredentialsTests
         string jsona = JsonConvert.SerializeObject(b, Formatting.Indented);
 
         Console.WriteLine("Result xxx: " + jsona);
+        // Console.WriteLine("Result xxx: " + (User)b[0]);
 
         // var c = await db.Execute("PRAGMA table_info(users);");
         // string jsonb = JsonConvert.SerializeObject(c.Rows.Array, Formatting.Indented);

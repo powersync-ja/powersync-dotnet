@@ -12,15 +12,15 @@ public class EventStreamTests
         var cts = new CancellationTokenSource();
         var receivedMessages = new List<SyncStatus>();
 
-        var completedTask = new TaskCompletionSource();
-        var listenerReadySource = new TaskCompletionSource();
+        var completedTask = new TaskCompletionSource<bool>();
+        var listenerReadySource = new TaskCompletionSource<bool>();
 
 
         var listenTask = Task.Run(async () =>
         {
             var stream = eventStream.ListenAsync(cts.Token);
 
-            listenerReadySource.TrySetResult();
+            listenerReadySource.TrySetResult(true);
 
             await foreach (var status in stream)
             {
@@ -31,7 +31,7 @@ public class EventStreamTests
                     cts.Cancel();
                 }
             }
-            completedTask.SetResult();
+            completedTask.SetResult(true);
         });
 
         await listenerReadySource.Task;
@@ -66,14 +66,14 @@ public class EventStreamTests
         var cts = new CancellationTokenSource();
         var receivedMessages = new List<SyncStatus>();
 
-        var completedTask = new TaskCompletionSource();
-        var listenerReadySource = new TaskCompletionSource();
+        var completedTask = new TaskCompletionSource<bool>();
+        var listenerReadySource = new TaskCompletionSource<bool>();
 
         var listenTask = Task.Run(() =>
         {
             var stream = eventStream.Listen(cts.Token);
 
-            listenerReadySource.SetResult();
+            listenerReadySource.SetResult(true);
 
             foreach (var status in stream)
             {
@@ -83,7 +83,7 @@ public class EventStreamTests
                     cts.Cancel();
                 }
             }
-            completedTask.SetResult();
+            completedTask.SetResult(true);
         });
 
         await listenerReadySource.Task;

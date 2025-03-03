@@ -13,7 +13,7 @@ public class MDSAdapterOptions()
 {
     public string Name { get; set; } = null!;
 
-    public SqliteOptions? SqliteOptions;
+    public MDSQLiteOptions? SqliteOptions;
 
 }
 
@@ -28,7 +28,7 @@ public class MDSAdapter : EventStream<DBAdapterEvent>, IDBAdapter
 
     protected MDSAdapterOptions options;
 
-    protected RequiredSqliteOptions resolvedSqliteOptions;
+    protected RequiredMDSQLiteOptions resolvedMDSQLiteOptions;
     private CancellationTokenSource? tablesUpdatedCts;
 
     private static readonly AsyncLock writeMutex = new();
@@ -38,15 +38,15 @@ public class MDSAdapter : EventStream<DBAdapterEvent>, IDBAdapter
     public MDSAdapter(MDSAdapterOptions options)
     {
         this.options = options;
-        resolvedSqliteOptions = resolveSqliteOptions(options.SqliteOptions);
+        resolvedMDSQLiteOptions = resolveMDSQLiteOptions(options.SqliteOptions);
         initialized = Init();
 
     }
 
-    private RequiredSqliteOptions resolveSqliteOptions(SqliteOptions? options)
+    private RequiredMDSQLiteOptions resolveMDSQLiteOptions(MDSQLiteOptions? options)
     {
-        var defaults = RequiredSqliteOptions.DEFAULT_SQLITE_OPTIONS;
-        return new RequiredSqliteOptions
+        var defaults = RequiredMDSQLiteOptions.DEFAULT_SQLITE_OPTIONS;
+        return new RequiredMDSQLiteOptions
         {
             JournalMode = options?.JournalMode ?? defaults.JournalMode,
             Synchronous = options?.Synchronous ?? defaults.Synchronous,
@@ -67,17 +67,17 @@ public class MDSAdapter : EventStream<DBAdapterEvent>, IDBAdapter
 
         string[] baseStatements =
         [
-            $"PRAGMA busy_timeout = {resolvedSqliteOptions.LockTimeoutMs}",
-            $"PRAGMA cache_size = -{resolvedSqliteOptions.CacheSizeKb}",
-            $"PRAGMA temp_store = {resolvedSqliteOptions.TemporaryStorage}"
+            $"PRAGMA busy_timeout = {resolvedMDSQLiteOptions.LockTimeoutMs}",
+            $"PRAGMA cache_size = -{resolvedMDSQLiteOptions.CacheSizeKb}",
+            $"PRAGMA temp_store = {resolvedMDSQLiteOptions.TemporaryStorage}"
         ];
 
         string[] writeConnectionStatements =
         [
             .. baseStatements,
-            $"PRAGMA journal_mode = {resolvedSqliteOptions.JournalMode}",
-            $"PRAGMA journal_size_limit = {resolvedSqliteOptions.JournalSizeLimit}",
-            $"PRAGMA synchronous = {resolvedSqliteOptions.Synchronous}",
+            $"PRAGMA journal_mode = {resolvedMDSQLiteOptions.JournalMode}",
+            $"PRAGMA journal_size_limit = {resolvedMDSQLiteOptions.JournalSizeLimit}",
+            $"PRAGMA synchronous = {resolvedMDSQLiteOptions.Synchronous}",
         ];
 
 

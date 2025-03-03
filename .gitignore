@@ -53,3 +53,8 @@ TestResults/
 *.db
 *.db-shm
 *.db-wal
+
+#Core binaries - add rules after ps extension downloading is supported
+# *.dylib
+# *.dll
+# *.so

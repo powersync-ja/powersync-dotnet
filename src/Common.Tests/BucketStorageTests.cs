@@ -98,7 +98,11 @@ public class BucketStorageTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        db = CommonPowerSyncDatabase.Create(TestData.appSchema, "powersync.db");
+        db = new PowerSyncDatabase(new PowerSyncDatabaseOptions
+        {
+            Database = new SQLOpenOptions { DbFilename = "powersync.db" },
+            Schema = TestData.appSchema,
+        });
         await db.Init();
         bucketStorage = new SqliteBucketStorage(db.Database, createLogger());
 
@@ -495,7 +499,11 @@ public class BucketStorageTests : IAsyncLifetime
     public async Task UpdateWithNewTypes()
     {
         var dbName = "test-bucket-storage-new-types.db";
-        var powersync = CommonPowerSyncDatabase.Create(new Schema([]), dbName);
+        var powersync = new PowerSyncDatabase(new PowerSyncDatabaseOptions
+        {
+            Database = new SQLOpenOptions { DbFilename = dbName },
+            Schema = new Schema([]),
+        });
         await powersync.Init();
         bucketStorage = new SqliteBucketStorage(powersync.Database);
 
@@ -516,7 +524,11 @@ public class BucketStorageTests : IAsyncLifetime
 
         await powersync.Close();
 
-        powersync = CommonPowerSyncDatabase.Create(TestData.appSchema, dbName);
+        powersync = new PowerSyncDatabase(new PowerSyncDatabaseOptions
+        {
+            Database = new SQLOpenOptions { DbFilename = dbName },
+            Schema = TestData.appSchema,
+        });
         await powersync.Init();
 
         await ExpectAsset1_3(powersync);
@@ -531,7 +543,12 @@ public class BucketStorageTests : IAsyncLifetime
         var dbName = "test-bucket-storage-remove-types.db";
 
         // Create database with initial schema
-        var powersync = CommonPowerSyncDatabase.Create(TestData.appSchema, dbName);
+        var powersync = new PowerSyncDatabase(new PowerSyncDatabaseOptions
+        {
+            Database = new SQLOpenOptions { DbFilename = dbName },
+            Schema = TestData.appSchema,
+        });
+
         await powersync.Init();
         bucketStorage = new SqliteBucketStorage(powersync.Database);
 
@@ -555,7 +572,11 @@ public class BucketStorageTests : IAsyncLifetime
         await powersync.Close();
 
         // Now open another instance with an empty schema
-        powersync = CommonPowerSyncDatabase.Create(new Schema([]), dbName);
+        powersync = new PowerSyncDatabase(new PowerSyncDatabaseOptions
+        {
+            Database = new SQLOpenOptions { DbFilename = dbName },
+            Schema = new Schema([]),
+        });
         await powersync.Init();
 
         await Assert.ThrowsAsync<SqliteException>(async () =>
@@ -564,7 +585,11 @@ public class BucketStorageTests : IAsyncLifetime
         await powersync.Close();
 
         // Reopen database with the original schema
-        powersync = CommonPowerSyncDatabase.Create(TestData.appSchema, dbName);
+        powersync = new PowerSyncDatabase(new PowerSyncDatabaseOptions
+        {
+            Database = new SQLOpenOptions { DbFilename = dbName },
+            Schema = TestData.appSchema,
+        });
         await powersync.Init();
 
         await ExpectAsset1_3(powersync);

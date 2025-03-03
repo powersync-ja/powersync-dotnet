@@ -172,7 +172,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
 
         streamingSyncTask = StreamingSync(CancellationTokenSource.Token, options);
 
-        var tcs = new TaskCompletionSource();
+        var tcs = new TaskCompletionSource<bool>();
         var cts = new CancellationTokenSource();
 
         var _ = Task.Run(() =>
@@ -188,7 +188,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                             logger.LogWarning("Initial connect attempt did not successfully connect to server");
                         }
 
-                        tcs.SetResult();
+                        tcs.SetResult(true);
                         cts.Cancel();
                     }
                 }
