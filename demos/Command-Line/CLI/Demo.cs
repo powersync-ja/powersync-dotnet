@@ -1,6 +1,5 @@
 ﻿using CLI;
 using Common.Client;
-using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
 class Demo
@@ -27,6 +26,7 @@ class Demo
         Console.WriteLine("Press ESC to exit.");
         Console.WriteLine("Press Enter to add a new row.");
         Console.WriteLine("Press Backspace to delete the last row.");
+        Console.WriteLine("");
 
         bool running = true;
 
@@ -73,14 +73,31 @@ class Demo
         await db.Connect(connector);
         await db.WaitForFirstSync();
 
+        var panel = new Panel(table)
+        {
+            Header = new PanelHeader("")
+        };
+        var connected = false;
+
+        db.RunListener((update) =>
+        {
+            if (update.StatusChanged != null)
+            {
+                connected = update.StatusChanged.Connected;
+            }
+        });
+
+
         // Start live updating table
-        await AnsiConsole.Live(table)
+        await AnsiConsole.Live(panel)
             .StartAsync(async ctx =>
             {
                 while (running)
                 {
+                    panel.Header = new PanelHeader($"|    Connected: {connected}    |");
                     await Task.Delay(1000);
                     ctx.Refresh();
+
                 }
             });
 
