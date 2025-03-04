@@ -7,8 +7,9 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.IO;
-using Common.Client;
-using Common.Client.Connection;
+using PowerSync.Common.Client;
+using PowerSync.Common.Client.Connection;
+using PowerSync.Common.DB.Crud;
 
 
 public class NodeConnector : IPowerSyncBackendConnector
@@ -70,7 +71,7 @@ public class NodeConnector : IPowerSyncBackendConnector
 
     public async Task UploadData(IPowerSyncDatabase database)
     {
-        Common.DB.Crud.CrudTransaction? transaction;
+        CrudTransaction? transaction;
         try
         {
             transaction = await database.GetNextCrudTransaction();

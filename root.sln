@@ -5,7 +5,7 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "PowerSync", "PowerSync", "{B1D87BA9-8812-4EFA-BBBE-1FF1EEEB5433}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Common", "PowerSync\Common\Common.csproj", "{EA0A66FF-9E8A-4465-84EC-B2CFFC7E4393}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PowerSync.Common", "PowerSync\PowerSync.Common\PowerSync.Common.csproj", "{EA0A66FF-9E8A-4465-84EC-B2CFFC7E4393}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "demos", "demos", "{6A2C8920-FA72-44E3-AB08-4FC8B2655A30}"
 EndProject
@@ -17,7 +17,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{7404B997
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "PowerSync", "PowerSync", "{C784FBE4-CC1E-4A0A-AE8E-6B818DD3724D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Common.Tests", "Tests\PowerSync\Common.Tests\Common.Tests.csproj", "{11102D8A-1B2C-4299-8289-88909F132A56}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PowerSync.Common.Tests", "Tests\PowerSync\PowerSync.Common.Tests\PowerSync.Common.Tests.csproj", "{11102D8A-1B2C-4299-8289-88909F132A56}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

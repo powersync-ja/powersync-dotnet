@@ -1,6 +1,6 @@
 namespace CLI;
 
-using Common.DB.Schema;
+using PowerSync.Common.DB.Schema;
 
 class AppSchema
 {

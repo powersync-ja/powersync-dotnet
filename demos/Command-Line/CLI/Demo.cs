@@ -1,5 +1,5 @@
 ﻿using CLI;
-using Common.Client;
+using PowerSync.Common.Client;
 using Spectre.Console;
 
 class Demo
