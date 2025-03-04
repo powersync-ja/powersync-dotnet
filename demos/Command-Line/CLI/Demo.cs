@@ -71,12 +71,6 @@ class Demo
          });
 
         await db.Connect(connector);
-        await db.Connect(connector, new()
-        {
-            Params = new Dictionary<string, object>() {
-                { "owner_id", "276fca51-041e-4061-b7e3-3e2e699b40b4" }
-            }
-        });
         await db.WaitForFirstSync();
 
         // Start live updating table
@@ -91,16 +85,5 @@ class Demo
             });
 
         Console.WriteLine("\nExited live table. Press any key to exit.");
-    }
-
-    private static ILogger createLogger()
-    {
-        ILoggerFactory loggerFactory = LoggerFactory.Create(builder =>
-        {
-            builder.AddConsole(); // Enable console logging
-            builder.SetMinimumLevel(LogLevel.Information);
-        });
-
-        return loggerFactory.CreateLogger("TestLogger");
     }
 }

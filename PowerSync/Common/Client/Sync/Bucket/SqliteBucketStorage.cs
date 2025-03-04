@@ -41,7 +41,7 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
         tableNames = [];
 
         updateCts = new CancellationTokenSource();
-        // TODO CL put back
+
         var _ = Task.Run(() =>
         {
             foreach (var update in db.Listen(updateCts.Token))

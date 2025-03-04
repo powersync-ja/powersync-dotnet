@@ -39,7 +39,6 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
         this.options = options;
         resolvedMDSQLiteOptions = resolveMDSQLiteOptions(options.SqliteOptions);
         initialized = Init();
-
     }
 
     private RequiredMDSQLiteOptions resolveMDSQLiteOptions(MDSQLiteOptions? options)

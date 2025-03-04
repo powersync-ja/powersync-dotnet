@@ -11,11 +11,17 @@ public sealed class TemporaryStorageOption
     public static implicit operator string(TemporaryStorageOption option) => option.Value;
 }
 
-// SQLite journal mode. Set on the primary connection.
-// This library is written with WAL mode in mind - other modes may cause
-// unexpected locking behavior.
+/// <summary>
+/// SQLite journal mode. Set on the primary connection.
+/// This library is written with WAL mode in mind - other modes may cause
+/// unexpected locking behavior.
+/// </summary>
 public sealed class SqliteJournalMode
 {
+    /// <summary>
+    /// Use a write-ahead log instead of a rollback journal.
+    /// This provides good performance and concurrency.
+    /// </summary>
     public static readonly SqliteJournalMode WAL = new("WAL");
     public static readonly SqliteJournalMode DELETE = new("DELETE");
     public static readonly SqliteJournalMode TRUNCATE = new("TRUNCATE");
@@ -32,7 +38,9 @@ public sealed class SqliteJournalMode
     public static implicit operator string(SqliteJournalMode mode) => mode.Value;
 }
 
+/// <summary>
 /// SQLite file commit mode.
+/// </summary>
 public sealed class SqliteSynchronous
 {
     public static readonly SqliteSynchronous NORMAL = new("NORMAL");

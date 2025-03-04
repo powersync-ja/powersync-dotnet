@@ -108,33 +108,61 @@ public class DBAdapterUtils
     }
 }
 
-// TODO remove IDBGetUtils - inheriting from ILockContext
-public interface IDBAdapter : IEventStream<DBAdapterEvent>, IDBGetUtils, ILockContext
+public interface IDBAdapter : IEventStream<DBAdapterEvent>, ILockContext
 {
-
-    // Closes the adapter.
+    /// <summary>
+    /// Closes the adapter. 
+    /// </summary>
     new void Close();
 
-    // Execute a batch of write statements.
+    /// <summary>
+    /// Execute a batch of write statements.
+    /// </summary>
     Task<QueryResult> ExecuteBatch(string query, object[][]? parameters = null);
 
-    // The name of the adapter.
+    /// <summary>
+    /// The name of the adapter.
+    /// </summary>
     string Name { get; }
 
-    // Executes a read lock with the given function.
+    /// <summary>
+    /// Executes a read lock with the given function.
+    /// </summary>
     Task<T> ReadLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null);
 
-    // Executes a read transaction with the given function.
+    /// <summary>
+    /// Executes a read transaction with the given function.
+    /// </summary>
     Task<T> ReadTransaction<T>(Func<ITransaction, Task<T>> fn, DBLockOptions? options = null);
 
-    // Executes a write lock with the given function.
+    /// <summary>
+    /// Executes a write lock with the given function.
+    /// </summary>
     Task WriteLock(Func<ILockContext, Task> fn, DBLockOptions? options = null);
+    /// <summary>
+    /// Executes a write lock with the given function.
+    /// </summary>
+    ///
+    /// <remarks>
+    /// This is an overload of <see cref="WriteLock"/> that allows the function to return a result.
+    /// </remarks>
     Task<T> WriteLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null);
 
-    // Executes a write transaction with the given function. 
+    /// <summary>
+    /// Executes a write transaction with the given function. 
+    /// </summary>
     Task WriteTransaction(Func<ITransaction, Task> fn, DBLockOptions? options = null);
+    /// <summary>
+    /// Executes a write transaction with the given function. 
+    /// </summary>
+    /// 
+    /// <remarks>
+    /// This is an overload of <see cref="WriteTransaction"/> that allows the function to return a result.
+    /// </remarks>
     Task<T> WriteTransaction<T>(Func<ITransaction, Task<T>> fn, DBLockOptions? options = null);
 
-    // This method refreshes the schema information across all connections. This is for advanced use cases, and should generally not be needed.
+    /// <summary>
+    /// This method refreshes the schema information across all connections. This is for advanced use cases, and should generally not be needed.
+    /// </summary>
     Task RefreshSchema();
 }

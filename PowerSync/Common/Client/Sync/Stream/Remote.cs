@@ -35,8 +35,7 @@ public class Remote
 
     public Remote(IPowerSyncBackendConnector connector)
     {
-        // TODO CL This can be passed in as a parameter
-        this.httpClient = new HttpClient();
+        httpClient = new HttpClient();
         this.connector = connector;
     }
 

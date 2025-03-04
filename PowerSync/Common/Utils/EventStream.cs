@@ -10,6 +10,9 @@ public interface IEventStream<T>
 
     Task EmitAsync(T item);
 
+    CancellationTokenSource RunListenerAsync(
+    Func<T, Task> callback);
+
     IAsyncEnumerable<T> ListenAsync(CancellationToken cancellationToken);
 
     CancellationTokenSource RunListener(Action<T> callback);
@@ -22,7 +25,7 @@ public interface IEventStream<T>
 public class EventStream<T> : IEventStream<T>
 {
 
-    // Closest implementation to a ConcurrentList<T> in .Net
+    // Closest implementation to a ConcurrentSet<T> in .Net
     private readonly ConcurrentDictionary<Channel<T>, byte> subscribers = new();
 
     public int SubscriberCount()
@@ -46,13 +49,6 @@ public class EventStream<T> : IEventStream<T>
         }
     }
 
-    // crudUpdateCts = RunListenerAsync(
-    //     async status =>
-    //     {
-    //         ProcessUpdate(update);
-    //         await Task.Delay(500);
-    //     },
-    // );
     public CancellationTokenSource RunListenerAsync(
     Func<T, Task> callback)
     {
@@ -77,13 +73,6 @@ public class EventStream<T> : IEventStream<T>
         return ReadFromChannelAsync(channel, cancellationToken);
     }
 
-    // crudUpdateCts = RunListener(
-    //     update =>
-    //     {
-    //         Console.WriteLine($"Received update: {update}");
-    //         ProcessUpdate(update);
-    //     }
-    // );
     public CancellationTokenSource RunListener(Action<T> callback)
     {
         var cts = new CancellationTokenSource();

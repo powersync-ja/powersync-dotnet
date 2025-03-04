@@ -22,6 +22,17 @@ Demo applications are located in the [`demos/`](./demos/) directory. Also see ou
 
 - [demos/Command-Line/CLI](./demos/Command-Line/CLI/README.md): A CLI to-do list example app using a Node-js backend.
 
+# Supported Frameworks
+
+This monorepo currently targets the following .NET versions:
+-	**.NET 8** ([primary target](https://dotnet.microsoft.com/en-us/download/dotnet/8.0), recommended for all new projects)
+- **.NET 6** (supported for compatibility with older projects)
+-	**.NET Standard 2.0** (for compatibility with older libraries and frameworks)
+
+We are also actively working towards adding support for **.NET Framework 4.8** to enable compatibility with legacy applications.
+
+When running commands such as `dotnet run` or `dotnet test`, you may need to specify the target framework explicitly using the `--framework` flag.
+
 # Development
 
 Install dependencies
@@ -43,3 +54,4 @@ Run a specific test
 ```bash
 dotnet test -v n --framework net8.0 --filter "test-file-pattern"  
 ```
+

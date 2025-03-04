@@ -38,7 +38,6 @@ public class RequiredAdditionalConnectionOptions : AdditionalConnectionOptions
     public new int CrudUploadThrottleMs { get; set; }
 }
 
-// TODO CL make these required
 public class StreamingSyncImplementationOptions : AdditionalConnectionOptions
 {
     public IBucketStorageAdapter Adapter { get; init; } = null!;
@@ -141,7 +140,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
             {
                 return;
             }
-            // Offloads the work to the ThreadPool, ensuring it runs on a background thread
+
             Task.Run(async () => await InternalUploadAllCrud());
         };
     }
@@ -246,15 +245,6 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                 TriggerCrudUpload();
             }
         });
-
-
-        // crudUpdateCts = Options.Adapter.RunListener(
-        //     update =>
-        //         {
-        //             TriggerCrudUpload();
-        //         }
-        // );
-
 
         // Create a new cancellation token source for nested operations.
         // This is needed to close any previous connections.
@@ -632,7 +622,6 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
         return response.Data.WriteCheckpoint;
     }
 
-    // TODO CL Locking
     protected async Task InternalUploadAllCrud()
     {
 

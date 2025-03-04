@@ -101,7 +101,9 @@ public interface IBucketStorageAdapter : IEventStream<BucketStorageEvent>
     Task<bool> HasCompletedSync();
     Task<bool> UpdateLocalTarget(Func<Task<string>> callback);
 
-    // Exposed for tests only
+    /// <summary>
+    /// Exposed for tests only.
+    /// </summary>
     Task AutoCompact();
     Task ForceCompact();
 

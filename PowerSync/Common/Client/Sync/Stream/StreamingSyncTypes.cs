@@ -82,9 +82,7 @@ public class BucketRequest
     public string After { get; set; } = "";
 }
 
-public abstract class StreamingSyncLine
-{
-}
+public abstract class StreamingSyncLine { }
 
 public class StreamingSyncCheckpoint : StreamingSyncLine
 {

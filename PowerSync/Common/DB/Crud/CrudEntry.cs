@@ -110,9 +110,4 @@ public class CrudEntry(int clientId, UpdateType op, string table, string id, lon
     {
         return JsonConvert.SerializeObject(this).GetHashCode();
     }
-
-    private object[] ToComparisonArray()
-    {
-        return [TransactionId ?? 0, ClientId, Op, Table, Id, OpData ?? []];
-    }
 }

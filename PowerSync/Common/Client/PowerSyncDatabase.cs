@@ -9,7 +9,6 @@ using Common.DB;
 using Common.DB.Crud;
 using Common.DB.Schema;
 using Common.MDSQLite;
-using Common.MDSQLite;
 using Common.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -17,7 +16,9 @@ using Newtonsoft.Json;
 
 public class BasePowerSyncDatabaseOptions()
 {
+    /// <summary>
     /// Schema used for the local database.
+    /// </summary>
     public Schema Schema { get; set; } = null!;
 
     public ILogger? Logger { get; set; } = null!;
@@ -39,7 +40,9 @@ public class OpenFactorySource(ISQLOpenFactory Factory) : DatabaseSource
 
 public class PowerSyncDatabaseOptions() : BasePowerSyncDatabaseOptions()
 {
+    /// <summary> 
     /// Source for a SQLite database connection.
+    /// </summary>
     public DatabaseSource Database { get; set; } = null!;
 
 }
@@ -55,8 +58,9 @@ public interface IPowerSyncDatabase : IEventStream<PowerSyncDBEvent>
     public Task Connect(IPowerSyncBackendConnector connector, PowerSyncConnectionOptions? options = null);
     public Task<string> GetClientId();
 
-    public Task<CrudTransaction?> GetNextCrudTransaction();
+    public Task<CrudBatch?> GetCrudBatch(int limit);
 
+    public Task<CrudTransaction?> GetNextCrudTransaction();
 }
 
 public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDatabase
@@ -231,8 +235,10 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         }
     }
 
+    /// <summary> 
     /// Replace the schema with a new version. This is for advanced use cases - typically the schema should just be specified once in the constructor.
-    /// Cannot be used while connected - this should only be called before {@link AbstractPowerSyncDatabase.connect}.
+    /// Cannot be used while connected - this should only be called before <see cref="Connect"/>.
+    /// </summary>
     public async Task UpdateSchema(Schema schema)
     {
         if (syncStreamImplementation != null)
@@ -255,8 +261,10 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         Emit(new PowerSyncDBEvent { SchemaChanged = schema });
     }
 
+    /// <summary>
     /// Wait for initialization to complete.
     /// While initializing is automatic, this helps to catch and report initialization errors.
+    /// </summary>
     public async Task Init()
     {
         await WaitForReady();
@@ -271,7 +279,6 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
             CrudUploadThrottleMs = options?.CrudUploadThrottleMs ?? defaults.CrudUploadThrottleMs,
         };
     }
-
 
     public async Task Connect(IPowerSyncBackendConnector connector, PowerSyncConnectionOptions? options = null)
     {
@@ -368,18 +375,62 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         Closed = true;
     }
 
-
-    /// Get the next recorded transaction to upload.
+    /// <summary>
+    /// Get a batch of crud data to upload.
+    /// <para />
+    /// Returns null if there is no data to upload.
+    /// <para />
+    /// Use this from the <see cref="IPowerSyncBackendConnector.UploadData"/> callback.
     ///
+    /// Once the data have been successfully uploaded, call <see cref="CrudBatch.Complete"/> before
+    /// requesting the next batch.
+    /// <para />
+    /// Use <paramref name="limit"/> to specify the maximum number of updates to return in a single
+    /// batch.
+    /// <para />
+    /// This method does include transaction ids in the result, but does not group
+    /// data by transaction. One batch may contain data from multiple transactions,
+    /// and a single transaction may be split over multiple batches.
+    /// </summary>
+    public async Task<CrudBatch?> GetCrudBatch(int limit = 100)
+    {
+        var crudResult = await GetAll<CrudEntryJSON>($"SELECT id, tx_id, data FROM {PSInternalTable.CRUD} ORDER BY id ASC LIMIT ?", [limit + 1]);
+
+        var all = crudResult.Select(CrudEntry.FromRow).ToList();
+
+        var haveMore = false;
+        if (all.Count > limit)
+        {
+            all.RemoveAt(all.Count - 1);
+            haveMore = true;
+        }
+        if (all.Count == 0)
+        {
+            return null;
+        }
+
+        var last = all[all.Count - 1];
+
+        return new CrudBatch(
+            [.. all],
+            haveMore,
+            async writeCheckpoint => await HandleCrudCheckpoint(last.ClientId, writeCheckpoint)
+     );
+    }
+
+    /// <summary>
+    /// Get the next recorded transaction to upload.
+    /// <para />
     /// Returns null if there is no data to upload.
     ///
-    /// Use this from the {@link PowerSyncBackendConnector.uploadData} callback.
-    ///
-    /// Once the data have been successfully uploaded, call {@link CrudTransaction.complete} before
+    /// Use this from the <see cref="IPowerSyncBackendConnector.UploadData"/> callback.
+    /// <para />
+    /// Once the data have been successfully uploaded, call <see cref="CrudTransaction.Complete"/> before
     /// requesting the next transaction.
-    ///
-    /// Unlike {@link getCrudBatch}, this only returns data from a single transaction at a time.
+    /// <para />
+    /// Unlike <see cref="GetCrudBatch"/>, this only returns data from a single transaction at a time.
     /// All data for the transaction is loaded into memory.
+    /// </summary>
     public async Task<CrudTransaction?> GetNextCrudTransaction()
     {
         return await Database.ReadTransaction(async tx =>
@@ -442,9 +493,11 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         });
     }
 
+    /// <summary>
     /// Get an unique client id for this database.
     ///
     /// The id is not reset when the database is cleared, only when the database is deleted.
+    /// </summary>
     public async Task<string> GetClientId()
     {
         return await BucketStorageAdapter.GetClientId();
@@ -473,21 +526,22 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         return await Database.Get<T>(query, parameters);
     }
 
+
+    /// <summary>
+    /// Executes a read query every time the source tables are modified.
+    /// <para />
+    /// Use <see cref="SQLWatchOptions.ThrottleMs"/> to specify the minimum interval between queries.
+    /// Source tables are automatically detected using <c>EXPLAIN QUERY PLAN</c>.
+    /// </summary>
     public void Watch<T>(string query, object[]? parameters, WatchHandler<T> handler, SQLWatchOptions? options = null)
     {
-        var _handler = handler ?? throw new ArgumentNullException(nameof(handler));
-        if (_handler.OnResult == null)
-        {
-            throw new ArgumentException("onResult is required", nameof(handler));
-        }
-
         Task.Run(async () =>
         {
             try
             {
                 var resolvedTables = await ResolveTables(query, parameters, options);
                 var result = await GetAll<T>(query, parameters);
-                _handler.OnResult(result);
+                handler.OnResult(result);
 
                 OnChange(new WatchOnChangeHandler
                 {
@@ -496,14 +550,14 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
                         try
                         {
                             var result = await GetAll<T>(query, parameters);
-                            _handler.OnResult(result);
+                            handler.OnResult(result);
                         }
                         catch (Exception ex)
                         {
-                            _handler.OnError?.Invoke(ex);
+                            handler.OnError?.Invoke(ex);
                         }
                     },
-                    OnError = _handler.OnError
+                    OnError = handler.OnError
                 }, new SQLWatchOptions
                 {
                     Tables = resolvedTables,
@@ -513,7 +567,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
             }
             catch (Exception ex)
             {
-                _handler.OnError?.Invoke(ex);
+                handler.OnError?.Invoke(ex);
             }
         });
     }
@@ -550,13 +604,14 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         return [.. resolvedTables];
     }
 
+    /// <summary>
+    /// Invokes the provided callback whenever any of the specified tables are modified.
+    /// <para />
+    /// This is preferred over <see cref="Watch"/> when multiple queries need to be performed
+    /// together in response to data changes.
+    /// </summary>
     public void OnChange(WatchOnChangeHandler handler, SQLWatchOptions? options = null)
     {
-        var _handler = handler ?? throw new ArgumentNullException(nameof(handler));
-        if (_handler.OnChange == null)
-        {
-            throw new ArgumentException("onChange is required", nameof(handler));
-        }
         var resolvedOptions = options ?? new SQLWatchOptions();
 
         string[] tables = resolvedOptions.Tables ?? [];
@@ -570,7 +625,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
             HandleTableChanges(changedTables, watchedTables, (intersection) =>
             {
                 if (resolvedOptions?.Signal?.IsCancellationRequested == true) return;
-                _handler.OnChange(new WatchOnChangeEvent { ChangedTables = intersection });
+                handler.OnChange(new WatchOnChangeEvent { ChangedTables = intersection });
             });
         }
 
@@ -585,7 +640,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
                 }
                 catch (Exception ex)
                 {
-                    _handler?.OnError?.Invoke(ex);
+                    handler?.OnError?.Invoke(ex);
                 }
             }
         });

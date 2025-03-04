@@ -5,6 +5,7 @@ using Common.Client.Connection;
 using Common.DB.Schema;
 using Newtonsoft.Json;
 
+// Some of this can be moved over to general tests/loading version?
 public class PowerSyncCredentialsTests
 {
     private Schema AppSchema;
