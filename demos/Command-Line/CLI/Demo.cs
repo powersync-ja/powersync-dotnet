@@ -71,13 +71,18 @@ class Demo
          });
 
         await db.Connect(connector);
+        await db.Connect(connector, new()
+        {
+            Params = new Dictionary<string, object>() {
+                { "owner_id", "276fca51-041e-4061-b7e3-3e2e699b40b4" }
+            }
+        });
         await db.WaitForFirstSync();
 
         // Start live updating table
         await AnsiConsole.Live(table)
             .StartAsync(async ctx =>
             {
-                int i = 0;
                 while (running)
                 {
                     await Task.Delay(1000);

@@ -20,6 +20,6 @@
 
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\src\Common\Common.csproj" />
+    <ProjectReference Include="..\..\..\PowerSync\Common\Common.csproj" />
   </ItemGroup>
 </Project>

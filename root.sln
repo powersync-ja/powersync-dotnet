@@ -3,11 +3,11 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{B1D87BA9-8812-4EFA-BBBE-1FF1EEEB5433}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "PowerSync", "PowerSync", "{B1D87BA9-8812-4EFA-BBBE-1FF1EEEB5433}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Common", "src\Common\Common.csproj", "{EA0A66FF-9E8A-4465-84EC-B2CFFC7E4393}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Common", "PowerSync\Common\Common.csproj", "{EA0A66FF-9E8A-4465-84EC-B2CFFC7E4393}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Common.Tests", "src\Common.Tests\Common.Tests.csproj", "{B4FD0CE4-4265-4906-A203-3B15300FF44C}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Common.Tests", "PowerSync\Common.Tests\Common.Tests.csproj", "{B4FD0CE4-4265-4906-A203-3B15300FF44C}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "demos", "demos", "{6A2C8920-FA72-44E3-AB08-4FC8B2655A30}"
 EndProject
