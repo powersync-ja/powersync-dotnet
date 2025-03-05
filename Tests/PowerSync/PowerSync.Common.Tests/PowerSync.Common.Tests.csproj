@@ -5,6 +5,7 @@
     <LangVersion>12</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <RuntimeIdentifier>osx-arm64</RuntimeIdentifier> <!-- or win-x64, linux-x64 -->
 
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>

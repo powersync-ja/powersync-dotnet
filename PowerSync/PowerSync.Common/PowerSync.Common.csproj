@@ -18,4 +18,10 @@
     <PackageReference Include="System.Threading.Channels" Version="8.0.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="runtimes\**\*.*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>
