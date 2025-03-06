@@ -35,6 +35,11 @@ When running commands such as `dotnet run` or `dotnet test`, you may need to spe
 
 # Development
 
+Download PowerSync extension
+```bash
+dotnet run --project Tools/Setup    
+```
+
 Install dependencies
 
 ```bash
