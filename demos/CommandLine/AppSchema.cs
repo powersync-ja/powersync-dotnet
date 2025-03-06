@@ -1,4 +1,4 @@
-namespace CLI;
+namespace CommandLine;
 
 using PowerSync.Common.DB.Schema;
 

@@ -20,7 +20,7 @@ Demo applications are located in the [`demos/`](./demos/) directory. Also see ou
 
 ### Command-Line
 
-- [demos/Command-Line/CLI](./demos/Command-Line/CLI/README.md): A CLI to-do list example app using a Node-js backend.
+- [demos/CommandLine](./demos/CommandLine/README.md): A CLI to-do list example app using a Node-js backend.
 
 # Supported Frameworks
 
@@ -36,6 +36,7 @@ When running commands such as `dotnet run` or `dotnet test`, you may need to spe
 # Development
 
 Download PowerSync extension
+
 ```bash
 dotnet run --project Tools/Setup    
 ```

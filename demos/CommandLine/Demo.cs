@@ -1,4 +1,5 @@
-﻿using CLI;
+﻿namespace CommandLine;
+
 using PowerSync.Common.Client;
 using Spectre.Console;
 

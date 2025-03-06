@@ -17,7 +17,7 @@ Install dependencies
 dotnet restore
 ```
 
-To run the CLI
+To run the Command-Line interface
 
 ```bash
 dotnet run Demo
