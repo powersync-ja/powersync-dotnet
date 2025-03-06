@@ -11,13 +11,21 @@ This essentially uses anonymous authentication. A random user ID is generated an
 
 ## Getting Started
 
-Install dependencies
+In the repo root, run the following to download the PowerSync extension:
+
+```bash
+dotnet run --project Tools/Setup    
+```
+
+Then switch into the demo's directory:
+
+Install dependencies:
 
 ```bash
 dotnet restore
 ```
 
-To run the Command-Line interface
+To run the Command-Line interface:
 
 ```bash
 dotnet run Demo
