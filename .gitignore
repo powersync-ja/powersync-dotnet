@@ -38,6 +38,9 @@ obj/
 *.lastbuildstate
 *.idb
 
+.DS_STORE
+
+
 # NuGet packages
 *.nupkg
 *.snupkg
