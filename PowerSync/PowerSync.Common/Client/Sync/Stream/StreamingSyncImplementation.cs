@@ -297,7 +297,12 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                 // This loop will retry.
                 // The nested abort controller will cleanup any open network requests and streams.
                 // The WebRemote should only abort pending fetch requests or close active Readable streams.
-                //
+
+                UpdateSyncStatus(new SyncStatusOptions
+                {
+                    Connected = false,
+                });
+
                 // On error, wait a little before retrying
                 await DelayRetry();
             }
