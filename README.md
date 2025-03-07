@@ -24,12 +24,32 @@ Demo applications are located in the [`demos/`](./demos/) directory. Also see ou
 
 # Supported Frameworks
 
-This monorepo currently targets the following .NET versions:
--	**.NET 8** ([primary target](https://dotnet.microsoft.com/en-us/download/dotnet/8.0), recommended for all new projects)
-- **.NET 6** (supported for compatibility with older projects)
--	**.NET Standard 2.0** (for compatibility with older libraries and frameworks)
+This PowerSync SDK currently targets the following .NET versions:
+- **.NET 9** - [Latest version](https://dotnet.microsoft.com/en-us/download/dotnet/9.0)
+-	**.NET 8** - [Current LTS Version, used for development of this project](https://dotnet.microsoft.com/en-us/download/dotnet/8.0)
+- **.NET 6** - supported for compatibility with older projects)
+-	**.NET Standard 2.0** - for compatibility with older libraries and frameworks, tested/verified older versions will be listed below.
 
-We are also actively working towards adding support for **.NET Framework 4.8** to enable compatibility with legacy applications.
+- .NET Framework 4.8:
+    
+    To get a .NET Framework 4.8 working with this SDK add the following to your `.csproj` file:
+
+    ```xml
+    <PropertyGroup>
+      ...
+      <!-- Ensures the correct SQLite DLL is available -->
+      <RuntimeIdentifiers>win-x86;win-x64</RuntimeIdentifiers>
+      <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    </PropertyGroup>
+
+    <ItemGroup>
+      ...
+      <!-- Ensures the HTTP client resolves in the SDK -->
+      <PackageReference Include="System.Net.Http" Version="4.3.4" /> 
+    </ItemGroup>
+    ```
+    
+------- 
 
 When running commands such as `dotnet run` or `dotnet test`, you may need to specify the target framework explicitly using the `--framework` flag.
 
