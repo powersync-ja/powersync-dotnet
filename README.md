@@ -8,6 +8,12 @@ _[PowerSync](https://www.powersync.com) is a sync engine for building local-firs
 
 `powersync-dotnet` is the monorepo for PowerSync .NET SDKs.
 
+## ⚠️ Project Status & Release Note
+
+This package is part of a monorepo that is not yet officially released or published. It is currently in a pre-alpha state, intended strictly for closed testing. Expect breaking changes and instability as development continues.
+
+Do not rely on this package for production use.
+
 ## Monorepo Structure: Packages
 
 - [PowerSync/Common](./PowerSync/Common/README.md)
