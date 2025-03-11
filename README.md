@@ -87,3 +87,29 @@ Run a specific test
 dotnet test -v n --framework net8.0 --filter "test-file-pattern"  
 ```
 
+## Using the PowerSync.Common package in your project (temporary)
+A NuGet package will be available soon, until then you clone this repo and follow these steps:
+
+Add the dependency to your project's .csproj:
+```.xml
+  <ItemGroup>
+    <ProjectReference Include="..\..\powersync-dotnet\PowerSync\Powersync.Common\PowerSync.Common.csproj" />
+  </ItemGroup>
+```
+
+Which assumes the following directory structure:
+```
+code/
+  powersync-dotnet (X)
+  ├── PowerSync/PowerSync.Common
+  │   ├── PowerSync.Common.csproj
+  │   ├── Class1.cs
+  │   └── Utils.cs
+  └── root.sln
+
+  your-project
+  ├── demo
+  │   ├── Program.csproj
+  │   └── Program.cs
+  ├── root.sln
+```
