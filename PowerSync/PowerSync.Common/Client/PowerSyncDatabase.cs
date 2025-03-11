@@ -436,7 +436,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
     /// </summary>
     public async Task<CrudTransaction?> GetNextCrudTransaction()
     {
-        return await Database.ReadTransaction(async tx =>
+        return await ReadTransaction(async tx =>
         {
             var first = await tx.GetOptional<CrudEntryJSON>(
             $"SELECT id, tx_id, data FROM {PSInternalTable.CRUD} ORDER BY id ASC LIMIT 1");
@@ -528,6 +528,43 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         await WaitForReady();
         return await Database.Get<T>(query, parameters);
     }
+
+    public async Task<T> ReadLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null)
+    {
+        await WaitForReady();
+        return await Database.ReadLock(fn, options);
+    }
+
+    public async Task WriteLock(Func<ILockContext, Task> fn, DBLockOptions? options = null)
+    {
+        await WaitForReady();
+        await Database.WriteLock(fn, options);
+    }
+
+    public async Task<T> WriteLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null)
+    {
+        await WaitForReady();
+        return await Database.WriteLock(fn, options);
+    }
+
+    public async Task<T> ReadTransaction<T>(Func<ITransaction, Task<T>> fn, DBLockOptions? options = null)
+    {
+        await WaitForReady();
+        return await Database.ReadTransaction(fn, options);
+    }
+
+    public async Task WriteTransaction(Func<ITransaction, Task> fn, DBLockOptions? options = null)
+    {
+        await WaitForReady();
+        await Database.WriteTransaction(fn, options);
+    }
+
+    public async Task<T> WriteTransaction<T>(Func<ITransaction, Task<T>> fn, DBLockOptions? options = null)
+    {
+        await WaitForReady();
+        return await Database.WriteTransaction(fn, options);
+    }
+
 
 
     /// <summary>
