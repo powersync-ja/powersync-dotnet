@@ -87,18 +87,7 @@ public class CrudEntry(int clientId, UpdateType op, string table, string id, lon
         );
     }
 
-    public CrudEntryOutputJSON ToJSON()
-    {
-        return new CrudEntryOutputJSON
-        {
-            OpId = ClientId,
-            Op = Op,
-            Type = Table,
-            Id = Id,
-            TransactionId = TransactionId,
-            Data = OpData
-        };
-    }
+
 
     public override bool Equals(object? obj)
     {

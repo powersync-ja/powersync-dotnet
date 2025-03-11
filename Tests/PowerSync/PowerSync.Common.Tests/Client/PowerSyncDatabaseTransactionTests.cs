@@ -7,13 +7,12 @@ public class PowerSyncDatabaseTransactionTests : IAsyncLifetime
 {
     private PowerSyncDatabase db = default!;
 
-
     public async Task InitializeAsync()
     {
         db = new PowerSyncDatabase(new PowerSyncDatabaseOptions
         {
             Database = new SQLOpenOptions { DbFilename = "powersyncDataBaseTransactions.db" },
-            Schema = TestData.appSchema,
+            Schema = TestSchema.appSchema,
         });
         await db.Init();
     }
@@ -136,7 +135,7 @@ public class PowerSyncDatabaseTransactionTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task ReadLockShouldBeReadOnlyTest()
+    public async Task ReadLockReadOnlyTest()
     {
         string id = Guid.NewGuid().ToString();
         bool exceptionThrown = false;
@@ -164,7 +163,7 @@ public class PowerSyncDatabaseTransactionTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task ReadLocksShouldQueueIfExceedNumberOfConnectionsTest()
+    public async Task ReadLocksQueueIfExceedNumberOfConnectionsTest()
     {
         string id = Guid.NewGuid().ToString();
 
@@ -189,7 +188,7 @@ public class PowerSyncDatabaseTransactionTests : IAsyncLifetime
     }
 
     [Fact(Timeout = 2000)]
-    public async Task ShouldBeAbleToReadWhileAWriteIsRunningTest()
+    public async Task ReadWhileWriteIsRunningTest()
     {
         var tcs = new TaskCompletionSource();
 
@@ -214,7 +213,7 @@ public class PowerSyncDatabaseTransactionTests : IAsyncLifetime
     }
 
     [Fact(Timeout = 2000)]
-    public async Task ShouldQueueSimultaneousExecutionsTest()
+    public async Task QueueSimultaneousExecutionsTest()
     {
         var order = new List<int>();
         var operationCount = 5;
@@ -237,7 +236,7 @@ public class PowerSyncDatabaseTransactionTests : IAsyncLifetime
     }
 
     [Fact(Timeout = 2000)]
-    public async Task ShouldCallUpdateHookOnChangesTest()
+    public async Task CallUpdateHookOnChangesTest()
     {
         var cts = new CancellationTokenSource();
         var result = new TaskCompletionSource();
@@ -261,7 +260,7 @@ public class PowerSyncDatabaseTransactionTests : IAsyncLifetime
     }
 
     [Fact(Timeout = 2000)]
-    public async Task ShouldReflectWriteTransactionUpdatesOnReadConnectionsTest()
+    public async Task ReflectWriteTransactionUpdatesOnReadConnectionsTest()
     {
         var watched = new TaskCompletionSource();
 
@@ -291,9 +290,9 @@ public class PowerSyncDatabaseTransactionTests : IAsyncLifetime
     }
 
     [Fact(Timeout = 2000)]
-    public async Task ShouldReflectWriteLockUpdatesOnReadConnectionsTest()
+    public async Task ReflectWriteLockUpdatesOnReadConnectionsTest()
     {
-        var numberOfUsers = 10_000;
+        var numberOfAssets = 10_000;
 
         var watched = new TaskCompletionSource();
 
@@ -302,7 +301,7 @@ public class PowerSyncDatabaseTransactionTests : IAsyncLifetime
         {
             OnResult = (x) =>
             {
-                if (x.First().count == numberOfUsers)
+                if (x.First().count == numberOfAssets)
                 {
                     watched.SetResult();
                     cts.Cancel();
@@ -316,7 +315,7 @@ public class PowerSyncDatabaseTransactionTests : IAsyncLifetime
         await db.WriteLock(async tx =>
         {
             await tx.Execute("BEGIN");
-            for (var i = 0; i < numberOfUsers; i++)
+            for (var i = 0; i < numberOfAssets; i++)
             {
                 await tx.Execute("INSERT INTO assets (id) VALUES(?)", ["0" + i + "-writelock"]);
             }
@@ -327,7 +326,7 @@ public class PowerSyncDatabaseTransactionTests : IAsyncLifetime
     }
 
     [Fact(Timeout = 5000)]
-    public async Task Insert10000Records_ShouldCompleteWithinTimeLimitTest()
+    public async Task Insert10000Records_CompleteWithinTimeLimitTest()
     {
         var random = new Random();
         var stopwatch = Stopwatch.StartNew();
@@ -368,7 +367,7 @@ public class PowerSyncDatabaseTransactionTests : IAsyncLifetime
 
         // Try and read while the write transaction is still open
         var result = await db.GetAll<object>("SELECT * FROM assets");
-        Assert.Single(result); // The transaction is not commited yet, we should only read 1 user
+        Assert.Single(result); // The transaction is not commited yet, we should only read 1 asset
 
         // Let the transaction complete
         tcs.SetResult(true);

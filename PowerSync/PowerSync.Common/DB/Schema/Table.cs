@@ -25,7 +25,8 @@ public class Table
 {
     protected TableOptions Options { get; set; }
 
-    public Dictionary<string, ColumnType> OriginalColumns;
+    public Dictionary<string, ColumnType> Columns;
+    public Dictionary<string, List<string>> Indexes;
 
     private readonly List<Column> ConvertedColumns;
     private readonly List<Index> ConvertedIndexes;
@@ -47,7 +48,8 @@ public class Table
 
         Options = options ?? new TableOptions();
 
-        OriginalColumns = columns;
+        Columns = columns;
+        Indexes = Options?.Indexes ?? [];
     }
 
     public string ToJSON(string Name = "")
