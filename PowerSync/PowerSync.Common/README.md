@@ -24,12 +24,12 @@ static async Task Main() {
 
 ```
 
-
 ### Watched queries
-Watched queries will automatically update when a dependant table is updated.
+Watched queries will automatically update when a dependant table is updated. 
+Awaiting `Watch()` ensures the watcher is fully initialized and ready to monitor database changes.
 
 ```csharp
-db.Watch("select * from lists", null, new WatchHandler<ListResult>
+await db.Watch("select * from lists", null, new WatchHandler<ListResult>
 {
     OnResult = (results) =>
     {

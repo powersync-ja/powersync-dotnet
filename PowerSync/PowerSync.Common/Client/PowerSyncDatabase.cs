@@ -451,6 +451,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
 
             if (txId == null)
             {
+
                 all = [CrudEntry.FromRow(first)];
             }
             else
@@ -573,8 +574,9 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
     /// Use <see cref="SQLWatchOptions.ThrottleMs"/> to specify the minimum interval between queries.
     /// Source tables are automatically detected using <c>EXPLAIN QUERY PLAN</c>.
     /// </summary>
-    public void Watch<T>(string query, object[]? parameters, WatchHandler<T> handler, SQLWatchOptions? options = null)
+    public Task Watch<T>(string query, object[]? parameters, WatchHandler<T> handler, SQLWatchOptions? options = null)
     {
+        var tcs = new TaskCompletionSource();
         Task.Run(async () =>
         {
             try
@@ -604,12 +606,14 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
                     Signal = options?.Signal,
                     ThrottleMs = options?.ThrottleMs
                 });
+                tcs.SetResult();
             }
             catch (Exception ex)
             {
                 handler.OnError?.Invoke(ex);
             }
         });
+        return tcs.Task;
     }
 
     private record ExplainedResult(string opcode, int p2, int p3);

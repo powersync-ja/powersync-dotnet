@@ -265,7 +265,7 @@ public class PowerSyncDatabaseTransactionTests : IAsyncLifetime
         var watched = new TaskCompletionSource();
 
         var cts = new CancellationTokenSource();
-        db.Watch("SELECT COUNT(*) as count FROM assets", null, new WatchHandler<CountResult>
+        await db.Watch("SELECT COUNT(*) as count FROM assets", null, new WatchHandler<CountResult>
         {
             OnResult = (x) =>
             {
@@ -277,7 +277,6 @@ public class PowerSyncDatabaseTransactionTests : IAsyncLifetime
             }
         }, new SQLWatchOptions
         {
-
             Signal = cts.Token
         });
 
@@ -297,7 +296,7 @@ public class PowerSyncDatabaseTransactionTests : IAsyncLifetime
         var watched = new TaskCompletionSource();
 
         var cts = new CancellationTokenSource();
-        db.Watch("SELECT COUNT(*) as count FROM assets", null, new WatchHandler<CountResult>
+        await db.Watch("SELECT COUNT(*) as count FROM assets", null, new WatchHandler<CountResult>
         {
             OnResult = (x) =>
             {
