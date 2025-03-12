@@ -1,7 +1,6 @@
-using PowerSync.Common.DB.Schema;
-
 namespace PowerSync.Common.Tests;
 
+using PowerSync.Common.DB.Schema;
 
 public class TestSchema
 {

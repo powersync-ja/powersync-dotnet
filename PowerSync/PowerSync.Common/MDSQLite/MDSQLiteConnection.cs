@@ -213,6 +213,8 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvent>, ILockContext
     {
         base.Close();
         Db.Close();
+        // https://stackoverflow.com/questions/8511901/system-data-sqlite-close-not-releasing-database-file
+        SqliteConnection.ClearPool(Db);
     }
 
     public async Task RefreshSchema()

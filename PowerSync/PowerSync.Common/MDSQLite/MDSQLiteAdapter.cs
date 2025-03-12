@@ -32,8 +32,8 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
     protected RequiredMDSQLiteOptions resolvedMDSQLiteOptions;
     private CancellationTokenSource? tablesUpdatedCts;
 
-    private static readonly AsyncLock writeMutex = new();
-    private static readonly AsyncLock readMutex = new();
+    private readonly AsyncLock writeMutex = new();
+    private readonly AsyncLock readMutex = new();
 
     public MDSQLiteAdapter(MDSQLiteAdapterOptions options)
     {
@@ -143,6 +143,7 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
         tablesUpdatedCts?.Cancel();
         base.Close();
         writeConnection?.Close();
+        readConnection?.Close();
     }
 
     public async Task<NonQueryResult> Execute(string query, object[]? parameters = null)
