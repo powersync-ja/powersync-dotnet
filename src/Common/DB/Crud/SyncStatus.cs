@@ -2,13 +2,11 @@ namespace Common.DB.Crud;
 
 using System.Text.Json;
 
-
 public class SyncDataFlowStatus
 {
     public bool Downloading { get; set; } = false;
     public bool Uploading { get; set; } = false;    
 }
-
 
  public class SyncStatusOptions
 {

@@ -127,7 +127,6 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvent>, ILockContext
         };
     }
 
-
     public async Task<QueryResult> ExecuteQuery(string query, object[]? parameters = null)
     {
         var result = new QueryResult();

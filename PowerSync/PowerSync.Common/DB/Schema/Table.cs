@@ -5,7 +5,6 @@ using Newtonsoft.Json;
 // TODO CL Need to port this to C#
 // export const InvalidSQLCharacters = /["'%,.#\s[\]]/;
 
-
 public class TableOptions(
     Dictionary<string, List<string>>? indexes = null,
     bool? localOnly = null,
@@ -66,4 +65,3 @@ public class Table
         return JsonConvert.SerializeObject(jsonObject);
     }
 }
-

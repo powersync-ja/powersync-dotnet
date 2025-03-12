@@ -25,7 +25,6 @@ public class TestSchema
             { "email", ColumnType.TEXT }
         });
 
-
     public static Schema appSchema = new Schema(new Dictionary<string, Table>
         {
             { "assets", assets },

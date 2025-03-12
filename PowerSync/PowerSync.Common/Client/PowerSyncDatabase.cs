@@ -40,7 +40,6 @@ public class OpenFactorySource(ISQLOpenFactory Factory) : DatabaseSource
     public ISQLOpenFactory Factory { get; init; } = Factory;
 }
 
-
 public class PowerSyncDatabaseOptions() : BasePowerSyncDatabaseOptions()
 {
     /// <summary> 
@@ -566,8 +565,6 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         return await Database.WriteTransaction(fn, options);
     }
 
-
-
     /// <summary>
     /// Executes a read query every time the source tables are modified.
     /// <para />
@@ -632,7 +629,6 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
                 .Where(row => row.opcode == "OpenRead" && row.p3 == 0)
                 .Select(row => row.p2)
                 .ToList();
-
 
             var tables = await GetAll<TableSelectResult>(
                 "SELECT DISTINCT tbl_name FROM sqlite_master WHERE rootpage IN (SELECT json_each.value FROM json_each(?))",

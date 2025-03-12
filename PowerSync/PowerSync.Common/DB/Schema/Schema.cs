@@ -20,8 +20,6 @@ public class Schema(Dictionary<string, Table> tables)
             }).ToList()
         };
 
-
         return JsonConvert.SerializeObject(jsonObject);
     }
 }
-

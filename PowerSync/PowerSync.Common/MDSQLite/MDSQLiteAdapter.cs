@@ -63,7 +63,6 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
         writeConnection = await OpenConnection(options.Name);
         readConnection = await OpenConnection(options.Name);
 
-
         string[] baseStatements =
         [
             $"PRAGMA busy_timeout = {resolvedMDSQLiteOptions.LockTimeoutMs}",
@@ -78,7 +77,6 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
             $"PRAGMA journal_size_limit = {resolvedMDSQLiteOptions.JournalSizeLimit}",
             $"PRAGMA synchronous = {resolvedMDSQLiteOptions.Synchronous}",
         ];
-
 
         string[] readConnectionStatements =
         [

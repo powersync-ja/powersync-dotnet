@@ -118,7 +118,6 @@ public class PowerSyncDatabaseTransactionTests : IAsyncLifetime
         Assert.Equal("O5", result.First().id);
     }
 
-
     [Fact]
     public async Task WriteTransactionNestedQueryTest()
     {

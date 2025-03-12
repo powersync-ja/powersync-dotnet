@@ -135,7 +135,6 @@ public class StreamingSyncKeepalive : StreamingSyncLine
     public int? TokenExpiresIn { get; set; }
 }
 
-
 public class CrudRequest
 {
     [JsonProperty("data")]

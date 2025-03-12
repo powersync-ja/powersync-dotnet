@@ -217,7 +217,6 @@ public class CRUDTests : IAsyncLifetime
         Assert.True(tx.Crud.First().Equals(expectedCrudEntry));
     }
 
-
     private record QuantityResult(long quantity);
 
     [Fact]

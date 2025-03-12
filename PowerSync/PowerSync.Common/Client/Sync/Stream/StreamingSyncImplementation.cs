@@ -90,7 +90,6 @@ public class PowerSyncConnectionOptions(
     public int? CrudUploadThrottleMs { get; set; } = crudUploadThrottleMs;
 }
 
-
 public class StreamingSyncImplementation : EventStream<StreamingSyncImplementationEvent>
 {
     public static RequiredPowerSyncConnectionOptions DEFAULT_STREAM_CONNECTION_OPTIONS = new()
@@ -126,7 +125,6 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                 Downloading = false
             }
         });
-
 
         locks = new StreamingSyncLocks();
         logger = options.Logger ?? NullLogger.Instance;
@@ -167,7 +165,6 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
             await Disconnect();
         }
         CancellationTokenSource = new CancellationTokenSource();
-
 
         streamingSyncTask = StreamingSync(CancellationTokenSource.Token, options);
 

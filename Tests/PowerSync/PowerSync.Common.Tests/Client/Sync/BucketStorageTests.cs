@@ -65,7 +65,6 @@ public class BucketStorageTests : IAsyncLifetime
     private PowerSyncDatabase db = default!;
     private IBucketStorageAdapter bucketStorage = default!;
 
-
     public async Task InitializeAsync()
     {
         db = new PowerSyncDatabase(new PowerSyncDatabaseOptions

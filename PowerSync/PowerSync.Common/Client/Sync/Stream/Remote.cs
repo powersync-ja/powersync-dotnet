@@ -87,7 +87,6 @@ public class Remote
         return JsonConvert.DeserializeObject<T>(responseData)!;
     }
 
-
     public async IAsyncEnumerable<StreamingSyncLine?> PostStream(SyncStreamOptions options)
     {
         using var requestMessage = await BuildRequest(HttpMethod.Post, options.Path, options.Data, options.Headers);
