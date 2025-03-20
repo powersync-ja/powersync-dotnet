@@ -1,0 +1,24 @@
+name: Test Packages
+
+on:
+  push:
+
+jobs:
+  build:
+    name: Build and Test .NET Project
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0' 
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Run tests
+        run: dotnet test -v n

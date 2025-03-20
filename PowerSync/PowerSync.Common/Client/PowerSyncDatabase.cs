@@ -573,7 +573,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
     /// </summary>
     public Task Watch<T>(string query, object[]? parameters, WatchHandler<T> handler, SQLWatchOptions? options = null)
     {
-        var tcs = new TaskCompletionSource();
+        var tcs = new TaskCompletionSource<bool>();
         Task.Run(async () =>
         {
             try
@@ -603,7 +603,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
                     Signal = options?.Signal,
                     ThrottleMs = options?.ThrottleMs
                 });
-                tcs.SetResult();
+                tcs.SetResult(true);
             }
             catch (Exception ex)
             {

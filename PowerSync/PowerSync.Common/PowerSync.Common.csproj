@@ -5,8 +5,17 @@
     <LangVersion>12</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <Title>PowerSync.Common</Title>
+    <Authors>PowerSync</Authors>
+    <owners>powersync</owners>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/powersync-ja/powersync-dotnet</PackageProjectUrl>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <PackageReleaseNotes>https://github.com/powersync-ja/powersync-dotnet/CHANGELOG.md</PackageReleaseNotes>
+    <PackageTags>powersync local-first local-storage state-management offline sql db persistence sqlite sync </PackageTags>
+    <PackageIcon>icon.png</PackageIcon>
     <VersionPrefix>0.0.1</VersionPrefix>
-    <VersionSuffix>alpha</VersionSuffix>
+    <VersionSuffix>pre-alpha</VersionSuffix>
   </PropertyGroup>
 
   <ItemGroup>
@@ -18,10 +27,20 @@
     <PackageReference Include="System.Threading.Channels" Version="8.0.0" />
   </ItemGroup>
 
+  <!-- For monorepo, test if we can remove this in monorepo -->
   <ItemGroup>
     <Content Include="runtimes\**\*.*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
 
+  <!-- For releasing runtimes  -->
+  <ItemGroup>
+    <None Include="runtimes\**\*.*" Pack="true" PackagePath="runtimes\" />
+  </ItemGroup>
+
+
+  <ItemGroup>
+    <None Include="..\..\icon.png" Pack="true" PackagePath=""/>
+  </ItemGroup>
 </Project>

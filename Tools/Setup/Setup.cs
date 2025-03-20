@@ -1,8 +1,8 @@
 ﻿using System;
 using System.IO;
 using System.Net.Http;
-using System.Runtime.InteropServices;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 
 public class Setup
 {
@@ -11,102 +11,41 @@ public class Setup
         const string baseUrl = "https://github.com/powersync-ja/powersync-sqlite-core/releases/download/v0.3.8";
         string powersyncCorePath = Path.Combine(AppContext.BaseDirectory, "../../../../..", "PowerSync/PowerSync.Common/");
 
-        string rid = GetRuntimeIdentifier();
-        string nativeDir = Path.Combine(powersyncCorePath, "runtimes", rid, "native");
-
-        Directory.CreateDirectory(nativeDir);
-
-        string sqliteCoreFilename = GetLibraryForPlatform();
-        string sqliteCorePath = Path.Combine(nativeDir, sqliteCoreFilename);
-
-        try
+        var runtimeIdentifiers = new Dictionary<string, (string originalFile, string newFile)>
         {
-            await DownloadFile($"{baseUrl}/{sqliteCoreFilename}", sqliteCorePath);
+            { "osx-x64", ("libpowersync_x64.dylib", "libpowersync.dylib") },
+            { "osx-arm64", ("libpowersync_aarch64.dylib", "libpowersync.dylib") },
+            { "linux-x64", ("libpowersync_x64.so", "libpowersync.so") },
+            { "linux-arm64", ("libpowersync_aarch64.so", "libpowersync.so") },
+            { "win-x64", ("powersync_x64.dll", "powersync.dll") }
+        };
 
-            string newFileName = GetFileNameForPlatform();
-            string newFilePath = Path.Combine(nativeDir, newFileName);
+        foreach (var (rid, (originalFile, newFile)) in runtimeIdentifiers)
+        {
+            string nativeDir = Path.Combine(powersyncCorePath, "runtimes", rid, "native");
+            Directory.CreateDirectory(nativeDir);
 
-            if (File.Exists(sqliteCorePath))
+            string sqliteCorePath = Path.Combine(nativeDir, originalFile);
+            string newFilePath = Path.Combine(nativeDir, newFile);
+
+            try
             {
-                File.Move(sqliteCorePath, newFilePath, overwrite: true);
-                Console.WriteLine($"File renamed successfully from {sqliteCoreFilename} to {newFileName}");
+                await DownloadFile($"{baseUrl}/{originalFile}", sqliteCorePath);
+
+                if (File.Exists(sqliteCorePath))
+                {
+                    File.Move(sqliteCorePath, newFilePath, overwrite: true);
+                    Console.WriteLine($"File renamed successfully from {originalFile} to {newFile} in {nativeDir}");
+                }
+                else
+                {
+                    throw new IOException($"File {originalFile} does not exist.");
+                }
             }
-            else
+            catch (Exception ex)
             {
-                throw new IOException($"File {sqliteCoreFilename} does not exist.");
+                Console.Error.WriteLine($"Error processing {rid}: {ex.Message}");
             }
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"Error: {ex.Message}");
-            Environment.Exit(1);
-        }
-    }
-
-    static string GetRuntimeIdentifier()
-    {
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-        {
-            if (RuntimeInformation.ProcessArchitecture == Architecture.Arm64)
-                return "osx-arm64";
-            else
-                return "osx-x64";
-        }
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-        {
-            if (RuntimeInformation.ProcessArchitecture == Architecture.Arm64)
-                return "linux-arm64";
-            else
-                return "linux-x64";
-        }
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            return "win-x64";
-        }
-        throw new PlatformNotSupportedException("Unsupported platform.");
-    }
-
-    static string GetFileNameForPlatform()
-    {
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-        {
-            return "libpowersync.dylib";
-        }
-        else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-        {
-            return "libpowersync.so";
-        }
-        else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            return "powersync.dll";
-        }
-        else
-        {
-            throw new PlatformNotSupportedException("Unsupported platform.");
-        }
-    }
-
-    static string GetLibraryForPlatform()
-    {
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-        {
-            return RuntimeInformation.ProcessArchitecture == Architecture.Arm64
-                ? "libpowersync_aarch64.dylib"
-                : "libpowersync_x64.dylib";
-        }
-        else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-        {
-            return RuntimeInformation.ProcessArchitecture == Architecture.Arm64
-                ? "libpowersync_aarch64.so"
-                : "libpowersync_x64.so";
-        }
-        else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            return "powersync_x64.dll";
-        }
-        else
-        {
-            throw new PlatformNotSupportedException("Unsupported platform.");
         }
     }
 
