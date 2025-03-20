@@ -2,9 +2,6 @@ namespace PowerSync.Common.DB.Schema;
 
 using Newtonsoft.Json;
 
-// TODO CL Need to port this to C#
-// export const InvalidSQLCharacters = /["'%,.#\s[\]]/;
-
 public class TableOptions(
     Dictionary<string, List<string>>? indexes = null,
     bool? localOnly = null,

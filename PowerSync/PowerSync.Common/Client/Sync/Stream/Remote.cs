@@ -50,7 +50,6 @@ public class Remote
 
         credentials = await connector.FetchCredentials();
 
-        // TODO CL trailing forward slash check
         return credentials;
     }
 
@@ -155,7 +154,6 @@ public class Remote
 
         if (string.IsNullOrEmpty(credentials.Token))
         {
-            // TODO CL error status code 401
             var error = new HttpRequestException("Not signed in");
             throw error;
         }

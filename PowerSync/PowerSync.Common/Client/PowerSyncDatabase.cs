@@ -120,9 +120,6 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         }
         else if (options.Database is SQLOpenOptions openOptions)
         {
-            // TODO default to MDSQLite factory for now
-            // Can be broken out, rename this class to Abstract
-            // `this.openDBAdapter(options)`
             Database = new MDSQLiteAdapter(new MDSQLiteAdapterOptions
             {
                 Name = openOptions.DbFilename,
@@ -364,7 +361,6 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         await Disconnect();
         await WaitForReady();
 
-        // TODO CL bool clearLocal = options?.ClearLocal ?? false;
         bool clearLocal = true;
 
         await Database.WriteTransaction(async tx =>
@@ -381,12 +377,6 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
     {
         base.Close();
         await WaitForReady();
-
-        // TODO CL
-        // if (options.Disconnect)
-        // {
-        //     await Disconnect();
-        // }
 
         syncStreamImplementation?.Close();
         BucketStorageAdapter?.Close();
