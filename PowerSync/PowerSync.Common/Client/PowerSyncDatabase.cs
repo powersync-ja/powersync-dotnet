@@ -28,14 +28,14 @@ public class BasePowerSyncDatabaseOptions()
 
 }
 
-public abstract class DatabaseSource { }
+public interface IDatabaseSource { }
 
-public class DBAdapterSource(IDBAdapter Adapter) : DatabaseSource
+public class DBAdapterSource(IDBAdapter Adapter) : IDatabaseSource
 {
     public IDBAdapter Adapter { get; init; } = Adapter;
 }
 
-public class OpenFactorySource(ISQLOpenFactory Factory) : DatabaseSource
+public class OpenFactorySource(ISQLOpenFactory Factory) : IDatabaseSource
 {
     public ISQLOpenFactory Factory { get; init; } = Factory;
 }
@@ -45,8 +45,7 @@ public class PowerSyncDatabaseOptions() : BasePowerSyncDatabaseOptions()
     /// <summary> 
     /// Source for a SQLite database connection.
     /// </summary>
-    public DatabaseSource Database { get; set; } = null!;
-
+    public IDatabaseSource Database { get; set; } = null!;
 }
 
 public class PowerSyncDBEvent : StreamingSyncImplementationEvent
@@ -63,6 +62,25 @@ public interface IPowerSyncDatabase : IEventStream<PowerSyncDBEvent>
     public Task<CrudBatch?> GetCrudBatch(int limit);
 
     public Task<CrudTransaction?> GetNextCrudTransaction();
+
+    Task<NonQueryResult> Execute(string query, object[]? parameters = null);
+
+    Task<T[]> GetAll<T>(string sql, params object[]? parameters);
+
+    Task<T?> GetOptional<T>(string sql, params object[]? parameters);
+
+    Task<T> Get<T>(string sql, params object[]? parameters);
+
+    Task<T> ReadLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null);
+
+    Task<T> ReadTransaction<T>(Func<ITransaction, Task<T>> fn, DBLockOptions? options = null);
+
+    Task WriteLock(Func<ILockContext, Task> fn, DBLockOptions? options = null);
+    Task<T> WriteLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null);
+
+    Task WriteTransaction(Func<ITransaction, Task> fn, DBLockOptions? options = null);
+    Task<T> WriteTransaction<T>(Func<ITransaction, Task<T>> fn, DBLockOptions? options = null);
+
 }
 
 public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDatabase
