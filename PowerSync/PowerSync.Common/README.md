@@ -2,6 +2,20 @@
 
 This package contains a .NET implementation of a PowerSync database connector and streaming sync bucket implementation.
 
+## ⚠️ Project Status & Release Note
+
+This package is currently in an alpha state, intended strictly for testing. Expect breaking changes and instability as development continues.
+
+Do not rely on this package for production use.
+
+## Installation
+
+This package is published on [NuGet](https://www.nuget.org/packages/PowerSync.Common).
+
+```bash
+dotnet add package PowerSync.Common --prerelease
+```
+
 ## Usage 
 
 ### Simple Query

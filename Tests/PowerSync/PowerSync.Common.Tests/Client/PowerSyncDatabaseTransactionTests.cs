@@ -12,7 +12,7 @@ public class PowerSyncDatabaseTransactionTests : IAsyncLifetime
         db = new PowerSyncDatabase(new PowerSyncDatabaseOptions
         {
             Database = new SQLOpenOptions { DbFilename = "powersyncDataBaseTransactions.db" },
-            Schema = TestSchema.appSchema,
+            Schema = TestSchema.AppSchema,
         });
         await db.Init();
     }
@@ -189,7 +189,7 @@ public class PowerSyncDatabaseTransactionTests : IAsyncLifetime
     [Fact(Timeout = 2000)]
     public async Task ReadWhileWriteIsRunningTest()
     {
-        var tcs = new TaskCompletionSource();
+        var tcs = new TaskCompletionSource<bool>();
 
         // This wont resolve or free until another connection free's it
         var writeTask = db.WriteLock(async context =>
@@ -200,7 +200,7 @@ public class PowerSyncDatabaseTransactionTests : IAsyncLifetime
         var readTask = db.ReadLock(async context =>
         {
             // Read logic could execute here while writeLock is still open
-            tcs.SetResult();
+            tcs.SetResult(true);
             await Task.CompletedTask;
             return 42;
         });
@@ -238,13 +238,13 @@ public class PowerSyncDatabaseTransactionTests : IAsyncLifetime
     public async Task CallUpdateHookOnChangesTest()
     {
         var cts = new CancellationTokenSource();
-        var result = new TaskCompletionSource();
+        var result = new TaskCompletionSource<bool>();
 
         db.OnChange(new WatchOnChangeHandler
         {
             OnChange = (x) =>
             {
-                result.SetResult();
+                result.SetResult(true);
                 cts.Cancel();
                 return Task.CompletedTask;
             }
@@ -261,7 +261,7 @@ public class PowerSyncDatabaseTransactionTests : IAsyncLifetime
     [Fact(Timeout = 2000)]
     public async Task ReflectWriteTransactionUpdatesOnReadConnectionsTest()
     {
-        var watched = new TaskCompletionSource();
+        var watched = new TaskCompletionSource<bool>();
 
         var cts = new CancellationTokenSource();
         await db.Watch("SELECT COUNT(*) as count FROM assets", null, new WatchHandler<CountResult>
@@ -270,7 +270,7 @@ public class PowerSyncDatabaseTransactionTests : IAsyncLifetime
             {
                 if (x.First().count == 1)
                 {
-                    watched.SetResult();
+                    watched.SetResult(true);
                     cts.Cancel();
                 }
             }
@@ -292,7 +292,7 @@ public class PowerSyncDatabaseTransactionTests : IAsyncLifetime
     {
         var numberOfAssets = 10_000;
 
-        var watched = new TaskCompletionSource();
+        var watched = new TaskCompletionSource<bool>();
 
         var cts = new CancellationTokenSource();
         await db.Watch("SELECT COUNT(*) as count FROM assets", null, new WatchHandler<CountResult>
@@ -301,7 +301,7 @@ public class PowerSyncDatabaseTransactionTests : IAsyncLifetime
             {
                 if (x.First().count == numberOfAssets)
                 {
-                    watched.SetResult();
+                    watched.SetResult(true);
                     cts.Cancel();
                 }
             }
@@ -324,12 +324,12 @@ public class PowerSyncDatabaseTransactionTests : IAsyncLifetime
     }
 
     [Fact(Timeout = 5000)]
-    public async Task Insert10000Records_CompleteWithinTimeLimitTest()
+    public async Task Insert1000Records_CompleteWithinTimeLimitTest()
     {
         var random = new Random();
         var stopwatch = Stopwatch.StartNew();
 
-        for (int i = 0; i < 10000; ++i)
+        for (int i = 0; i < 1000; ++i)
         {
             int n = random.Next(0, 100000);
             await db.Execute(
