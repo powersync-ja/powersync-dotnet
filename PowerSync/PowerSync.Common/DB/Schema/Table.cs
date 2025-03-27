@@ -20,7 +20,7 @@ public class TableOptions(
 
 public class Table
 {
-    private static readonly Regex InvalidSQLCharacters = new Regex(@"[""'%,.#\s\[\]]", RegexOptions.Compiled);
+    public static readonly Regex InvalidSQLCharacters = new Regex(@"[""'%,.#\s\[\]]", RegexOptions.Compiled);
 
 
     protected TableOptions Options { get; init; } = null!;

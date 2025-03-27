@@ -9,8 +9,16 @@ public class Schema(Dictionary<string, Table> tables)
 
     public void Validate()
     {
-        foreach (var table in Tables.Values)
+        foreach (var kvp in Tables)
         {
+            var tableName = kvp.Key;
+            var table = kvp.Value;
+
+            if (Table.InvalidSQLCharacters.IsMatch(tableName))
+            {
+                throw new Exception($"Invalid characters in table name: {tableName}");
+            }
+
             table.Validate();
         }
     }
