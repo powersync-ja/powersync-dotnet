@@ -28,7 +28,7 @@ jobs:
         id: extract_version
         shell: bash
         run: |
-          VERSION=$(awk '/^## [0-9]+\.[0-9]+\.[0-9]+/ {print $2; exit}' PowerSync/PowerSync.Common/CHANGELOG.md)
+          VERSION=$(awk '/^## [0-9]+\.[0-9]+\.[0-9]+-dev(\.[0-9]+)?$/ {print $2; exit}' PowerSync/PowerSync.Common/CHANGELOG.md)
           echo "Detected Version: $VERSION"
           echo "VERSION=$VERSION" >> $GITHUB_ENV 
 
