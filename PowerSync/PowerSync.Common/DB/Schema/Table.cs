@@ -81,8 +81,10 @@ public class Table
             columnNames.Add(columnName);
         }
 
-        foreach (var (indexName, indexColumns) in Indexes)
+        foreach (var kvp in Indexes)
         {
+            var indexName = kvp.Key;
+            var indexColumns = kvp.Value;
 
             if (InvalidSQLCharacters.IsMatch(indexName))
             {
