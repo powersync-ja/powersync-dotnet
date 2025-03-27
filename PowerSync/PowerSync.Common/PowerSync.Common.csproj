@@ -5,17 +5,20 @@
     <LangVersion>12</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <PackageId>PowerSync.Common</PackageId>
     <Title>PowerSync.Common</Title>
+    <Description>PowerSync.Common is a package that enables local-first and real-time reactive apps with embedded SQLite for .NET clients</Description>
     <Authors>PowerSync</Authors>
     <owners>powersync</owners>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
-    <PackageProjectUrl>https://github.com/powersync-ja/powersync-dotnet</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/powersync-ja/powersync-dotnet</RepositoryUrl>
+    <PackageProjectUrl>https://powersync.com</PackageProjectUrl>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
-    <PackageReleaseNotes>https://github.com/powersync-ja/powersync-dotnet/CHANGELOG.md</PackageReleaseNotes>
+    <PackageReleaseNotes>https://github.com/powersync-ja/powersync-dotnet/PowerSync/PowerSync.Common/CHANGELOG.md</PackageReleaseNotes>
     <PackageTags>powersync local-first local-storage state-management offline sql db persistence sqlite sync </PackageTags>
     <PackageIcon>icon.png</PackageIcon>
-    <VersionPrefix>0.0.1</VersionPrefix>
-    <VersionSuffix>pre-alpha</VersionSuffix>
+    <NoWarn>NU5100</NoWarn>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
   <ItemGroup>
@@ -42,5 +45,6 @@
 
   <ItemGroup>
     <None Include="..\..\icon.png" Pack="true" PackagePath=""/>
+    <None Include="README.md" Pack="true" PackagePath=""/>
   </ItemGroup>
 </Project>

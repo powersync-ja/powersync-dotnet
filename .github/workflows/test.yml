@@ -5,7 +5,7 @@ on:
 
 jobs:
   build:
-    name: Build and Test .NET Project
+    name: Test Packages
     runs-on: windows-latest
 
     steps:
@@ -17,8 +17,11 @@ jobs:
         with:
           dotnet-version: '8.0' 
 
+      - name: Download PowerSync extension
+        run: dotnet run --project Tools/Setup    
+
       - name: Restore dependencies
         run: dotnet restore
-
+      
       - name: Run tests
-        run: dotnet test -v n
+        run: dotnet test -v n --framework net8.0
