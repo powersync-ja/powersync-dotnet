@@ -70,7 +70,7 @@ public class BucketStorageTests : IAsyncLifetime
         db = new PowerSyncDatabase(new PowerSyncDatabaseOptions
         {
             Database = new SQLOpenOptions { DbFilename = "powersync.db" },
-            Schema = TestSchema.appSchema,
+            Schema = TestSchema.AppSchema,
         });
         await db.Init();
         bucketStorage = new SqliteBucketStorage(db.Database, createLogger());
@@ -496,7 +496,7 @@ public class BucketStorageTests : IAsyncLifetime
         powersync = new PowerSyncDatabase(new PowerSyncDatabaseOptions
         {
             Database = new SQLOpenOptions { DbFilename = dbName },
-            Schema = TestSchema.appSchema,
+            Schema = TestSchema.AppSchema,
         });
         await powersync.Init();
 
@@ -515,7 +515,7 @@ public class BucketStorageTests : IAsyncLifetime
         var powersync = new PowerSyncDatabase(new PowerSyncDatabaseOptions
         {
             Database = new SQLOpenOptions { DbFilename = dbName },
-            Schema = TestSchema.appSchema,
+            Schema = TestSchema.AppSchema,
         });
 
         await powersync.Init();
@@ -557,7 +557,7 @@ public class BucketStorageTests : IAsyncLifetime
         powersync = new PowerSyncDatabase(new PowerSyncDatabaseOptions
         {
             Database = new SQLOpenOptions { DbFilename = dbName },
-            Schema = TestSchema.appSchema,
+            Schema = TestSchema.AppSchema,
         });
         await powersync.Init();
 

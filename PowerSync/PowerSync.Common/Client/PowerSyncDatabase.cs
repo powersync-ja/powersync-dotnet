@@ -265,7 +265,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
 
         try
         {
-            // schema.Validate();
+            schema.Validate();
         }
         catch (Exception ex)
         {
@@ -356,12 +356,19 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         syncStreamStatusCts?.Cancel();
     }
 
-    public async Task DisconnectAndClear()
+    /// <summary>
+    /// Disconnect and clear the database.
+    /// Use this when logging out.
+    /// The database can still be queried after this is called, but the tables
+    /// would be empty.
+    /// 
+    /// To preserve data in local-only tables, set clearLocal to false.
+    /// </summary>
+    public async Task DisconnectAndClear(bool clearLocal = true)
     {
         await Disconnect();
         await WaitForReady();
 
-        bool clearLocal = true;
 
         await Database.WriteTransaction(async tx =>
         {
@@ -373,11 +380,23 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         Emit(new PowerSyncDBEvent { StatusChanged = CurrentStatus });
     }
 
+    /// <summary>
+    /// Close the database, releasing resources.
+    ///
+    /// Also disconnects any active connection.
+    /// 
+    /// Once close is called, this connection cannot be used again - a new one
+    /// must be constructed.
+    /// </summary>
     public new async Task Close()
     {
-        base.Close();
         await WaitForReady();
 
+        if (Closed) return;
+
+
+        await Disconnect();
+        base.Close();
         syncStreamImplementation?.Close();
         BucketStorageAdapter?.Close();
 

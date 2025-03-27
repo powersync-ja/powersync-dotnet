@@ -12,7 +12,7 @@ public class PowerSyncDatabaseTransactionTests : IAsyncLifetime
         db = new PowerSyncDatabase(new PowerSyncDatabaseOptions
         {
             Database = new SQLOpenOptions { DbFilename = "powersyncDataBaseTransactions.db" },
-            Schema = TestSchema.appSchema,
+            Schema = TestSchema.AppSchema,
         });
         await db.Init();
     }

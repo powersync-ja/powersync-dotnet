@@ -4,7 +4,7 @@ using PowerSync.Common.DB.Schema;
 
 public class TestSchema
 {
-    public static Table assets = new Table(new Dictionary<string, ColumnType>
+    public static readonly Table Assets = new Table(new Dictionary<string, ColumnType>
         {
             { "created_at", ColumnType.TEXT },
             { "make", ColumnType.TEXT },
@@ -19,15 +19,15 @@ public class TestSchema
             Indexes = new Dictionary<string, List<string>> { { "makemodel", new List<string> { "make", "model" } } }
         });
 
-    public static Table customers = new Table(new Dictionary<string, ColumnType>
+    public static readonly Table Customers = new Table(new Dictionary<string, ColumnType>
         {
             { "name", ColumnType.TEXT },
             { "email", ColumnType.TEXT }
         });
 
-    public static Schema appSchema = new Schema(new Dictionary<string, Table>
+    public static readonly Schema AppSchema = new Schema(new Dictionary<string, Table>
         {
-            { "assets", assets },
-            { "customers", customers }
+            { "assets", Assets },
+            { "customers", Customers }
         });
 }
