@@ -131,7 +131,6 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
 
         CancellationTokenSource = null;
 
-        // TODO CL throttling
         TriggerCrudUpload = () =>
         {
             if (!SyncStatus.Connected || SyncStatus.DataFlowStatus.Uploading)

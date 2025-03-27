@@ -142,7 +142,6 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvent>, ILockContext
             var row = new Dictionary<string, object>();
             for (int i = 0; i < reader.FieldCount; i++)
             {
-                // TODO: What should we do with null values?
                 row[reader.GetName(i)] = reader.IsDBNull(i) ? null : reader.GetValue(i);
             }
             rows.Add(row);
@@ -164,8 +163,6 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvent>, ILockContext
 
         var items = new List<T>();
 
-        // TODO: Improve mapping errors for when the result fields don't match the target type.
-        // TODO: This conversion may be a performance bottleneck, it's the easiest mechamisn for getting result typing.
         foreach (var row in result.Rows.Array)
         {
             if (row != null)
@@ -197,8 +194,6 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvent>, ILockContext
             return default;
         }
 
-        // TODO: Improve mapping errors for when the result fields don't match the target type.
-        // TODO: This conversion may be a performance bottleneck, it's the easiest mechamisn for getting result typing.
         string json = JsonConvert.SerializeObject(firstRow);
         return JsonConvert.DeserializeObject<T>(json);
     }
