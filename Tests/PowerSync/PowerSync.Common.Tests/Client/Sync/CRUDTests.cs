@@ -20,7 +20,7 @@ public class CRUDTests : IAsyncLifetime
         db = new PowerSyncDatabase(new PowerSyncDatabaseOptions
         {
             Database = new SQLOpenOptions { DbFilename = dbName },
-            Schema = TestSchema.appSchema,
+            Schema = TestSchema.AppSchema,
         });
         await db.Init();
     }
