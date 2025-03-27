@@ -388,17 +388,14 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
     /// Once close is called, this connection cannot be used again - a new one
     /// must be constructed.
     /// </summary>
-    public async Task Close(bool disconnect = true)
+    public new async Task Close()
     {
         await WaitForReady();
 
         if (Closed) return;
 
-        if (disconnect)
-        {
-            await Disconnect();
-        }
 
+        await Disconnect();
         base.Close();
         syncStreamImplementation?.Close();
         BucketStorageAdapter?.Close();
