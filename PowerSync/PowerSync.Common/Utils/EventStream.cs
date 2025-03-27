@@ -53,15 +53,19 @@ public class EventStream<T> : IEventStream<T>
     Func<T, Task> callback)
     {
         var cts = new CancellationTokenSource();
+        var started = new TaskCompletionSource<bool>();
 
         _ = Task.Run(async () =>
         {
+            started.SetResult(true);
             await foreach (var value in ListenAsync(cts.Token))
             {
                 await callback(value);
             }
 
         }, cts.Token);
+
+        started.Task.GetAwaiter().GetResult();
 
         return cts;
     }
@@ -76,14 +80,18 @@ public class EventStream<T> : IEventStream<T>
     public CancellationTokenSource RunListener(Action<T> callback)
     {
         var cts = new CancellationTokenSource();
+        var started = new TaskCompletionSource<bool>();
 
         _ = Task.Run(() =>
         {
+            started.SetResult(true);
             foreach (var value in Listen(cts.Token))
             {
                 callback(value);
             }
         }, cts.Token);
+
+        started.Task.GetAwaiter().GetResult();
 
         return cts;
     }
