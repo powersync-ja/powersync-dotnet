@@ -24,9 +24,15 @@ By default, this demo uses the NodeConnector for connecting to the PowerSync ser
 
 2. Replace the necessary fields in the `.env` file with your Supabase and PowerSync credentials:
    ```
-   SUPABASE_URL=your_supabase_url
-   SUPABASE_ANON_KEY=your_supabase_anon_key
-   POWERSYNC_URL=your_powersync_url
+    SUPABASE_URL=your-supabase-url
+    SUPABASE_ANON_KEY=your_anon_key_here
+    POWERSYNC_URL=your-powersync-url
+    BACKEND_URL=your-backend-url
+    SUPABASE_USERNAME=your-supabase-username
+    SUPABASE_PASSWORD=your-supabase-password
+    # Set to true if you want to use Supabase as the backend
+    # Set to false if you want to use the Powersync backend
+    USE_SUPABASE=true
    ```
 
 3. Update your connector configuration to use SupabaseConnector instead of NodeConnector

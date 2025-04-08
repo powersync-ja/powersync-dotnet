@@ -17,7 +17,7 @@ public class Config
         DotEnv.Load();
         Console.WriteLine($"Current directory: {Directory.GetCurrentDirectory()}");
 
-        // Retrieve the environment variables
+        // Retrieve the environment variables (Not all of these are required)
         SupabaseUrl = Environment.GetEnvironmentVariable("SUPABASE_URL")
                       ?? throw new InvalidOperationException("SUPABASE_URL environment variable is not set.");
         SupabaseAnonKey = Environment.GetEnvironmentVariable("SUPABASE_ANON_KEY")
