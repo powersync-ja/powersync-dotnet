@@ -10,7 +10,7 @@ using System.IO;
 using PowerSync.Common.Client;
 using PowerSync.Common.Client.Connection;
 using PowerSync.Common.DB.Crud;
-
+using CommandLine.Utils;
 
 public class NodeConnector : IPowerSyncBackendConnector
 {
@@ -22,15 +22,15 @@ public class NodeConnector : IPowerSyncBackendConnector
     public string UserId { get; private set; }
     private string? clientId;
 
-    public NodeConnector()
+    public NodeConnector(Config config)
     {
         _httpClient = new HttpClient();
 
         // Load or generate User ID
         UserId = LoadOrGenerateUserId();
 
-        BackendUrl = "http://localhost:6060";
-        PowerSyncUrl = "http://localhost:8080";
+        BackendUrl = config.BackendUrl;
+        PowerSyncUrl = config.PowerSyncUrl;
 
         clientId = null;
     }

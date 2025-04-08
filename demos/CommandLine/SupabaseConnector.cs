@@ -15,7 +15,7 @@ using Supabase.Postgrest.Interfaces;
 public class SupabaseConnector : IPowerSyncBackendConnector
 {
     private readonly Supabase.Client _supabase;
-    private readonly SupabaseConfig _config;
+    private readonly Config _config;
     private Session? _currentSession;
 
     public Session? CurrentSession
@@ -36,7 +36,7 @@ public class SupabaseConnector : IPowerSyncBackendConnector
 
     public bool Ready { get; private set; }
 
-    public SupabaseConnector(SupabaseConfig config)
+    public SupabaseConnector(Config config)
     {
         _config = config;
         _supabase = new Supabase.Client(config.SupabaseUrl, config.SupabaseAnonKey, new SupabaseOptions

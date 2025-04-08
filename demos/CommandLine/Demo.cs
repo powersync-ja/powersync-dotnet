@@ -2,11 +2,11 @@
 
 using CommandLine.Utils;
 using PowerSync.Common.Client;
+using PowerSync.Common.Client.Connection;
 using Spectre.Console;
 
 class Demo
 {
-
     private record ListResult(string id, string name, string owner_id, string created_at);
     static async Task Main()
     {
@@ -17,11 +17,30 @@ class Demo
         });
         await db.Init();
 
-        //var connector = new NodeConnector();
-        var config = new SupabaseConfig();
-        var connector = new SupabaseConnector(config);
+        var config = new Config();
 
-        await connector.Login("dean@journeyapps.com", "Dean1998");
+        IPowerSyncBackendConnector connector;
+
+        string connectorUserId = "";
+
+        if (config.UseSupabase)
+        {
+            var supabaseConnector = new SupabaseConnector(config);
+
+            await supabaseConnector.Login(config.SupabaseUsername, config.SupabasePassword);
+
+            connectorUserId = supabaseConnector.UserId;
+
+            connector = supabaseConnector;
+        }
+        else
+        {
+            var nodeConnector = new NodeConnector(config);
+
+            connectorUserId = nodeConnector.UserId;
+
+            connector = nodeConnector;
+        }
 
         var table = new Table()
             .AddColumn("id")
@@ -55,7 +74,7 @@ class Demo
         // await db.Execute("insert into lists (id, name, owner_id, created_at) values (uuid(), 'New User33', ?, datetime())", [connector.UserId]);
 
         await db.Execute(
-          "UPDATE lists SET name = ?, created_at = datetime() WHERE owner_id = ? and id = ?", ["update CHCHCHCHCH" , connector.UserId, "0bf55412-d35b-4814-ade9-daea4865df96"]
+          "UPDATE lists SET name = ?, created_at = datetime() WHERE owner_id = ? and id = ?", ["update CHCHCHCHCH", connectorUserId, "0bf55412-d35b-4814-ade9-daea4865df96"]
         );
 
         var _ = Task.Run(async () =>
@@ -71,7 +90,7 @@ class Demo
                      }
                      else if (key.Key == ConsoleKey.Enter)
                      {
-                         await db.Execute("insert into lists (id, name, owner_id, created_at) values (uuid(), 'New User', ?, datetime())", [connector.UserId]);
+                         await db.Execute("insert into lists (id, name, owner_id, created_at) values (uuid(), 'New User', ?, datetime())", [connectorUserId]);
                      }
                      else if (key.Key == ConsoleKey.Backspace)
                      {
