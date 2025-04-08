@@ -108,12 +108,16 @@ public class SupabaseConnector : IPowerSyncBackendConnector
 
                         if (op.Table.ToLower().Trim() == "lists")
                         {
+                            // Create an update query for the 'Todo' table where the 'Id' matches 'op.Id'
                             IPostgrestTable<List> updateQuery = _supabase
                             .From<List>()
                             .Where(x => x.Id == op.Id);
 
+                            // Loop through each key-value pair in the operation data (op.OpData) to apply updates dynamically
                             foreach (var kvp in op.OpData)
                             {
+                                // Apply the "SET" operation for each key-value pair. 
+                                // The key represents the JSON property name and the value is the new value to be set
                                 updateQuery = SupabasePatchHelper.ApplySet(updateQuery, kvp.Key, kvp.Value);
                             }
 
@@ -121,12 +125,16 @@ public class SupabaseConnector : IPowerSyncBackendConnector
                         }
                         else if (op.Table.ToLower().Trim() == "todos")
                         {
+                            // Create an update query for the 'Todo' table where the 'Id' matches 'op.Id'
                             IPostgrestTable<Todo> updateQuery = _supabase
-                            .From<Todo>()
-                            .Where(x => x.Id == op.Id);
+                                .From<Todo>()
+                                .Where(x => x.Id == op.Id);
 
+                            // Loop through each key-value pair in the operation data (op.OpData) to apply updates dynamically
                             foreach (var kvp in op.OpData)
                             {
+                                // Apply the "SET" operation for each key-value pair. 
+                                // The key represents the JSON property name and the value is the new value to be set
                                 updateQuery = SupabasePatchHelper.ApplySet(updateQuery, kvp.Key, kvp.Value);
                             }
 
