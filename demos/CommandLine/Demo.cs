@@ -1,5 +1,6 @@
 ﻿namespace CommandLine;
 
+using CommandLine.Utils;
 using PowerSync.Common.Client;
 using Spectre.Console;
 
@@ -16,7 +17,11 @@ class Demo
         });
         await db.Init();
 
-        var connector = new NodeConnector();
+        //var connector = new NodeConnector();
+        var config = new SupabaseConfig();
+        var connector = new SupabaseConnector(config);
+
+        await connector.Login("dean@journeyapps.com", "Dean1998");
 
         var table = new Table()
             .AddColumn("id")
@@ -46,6 +51,12 @@ class Demo
                 Console.WriteLine("Error: " + error.Message);
             }
         });
+
+        // await db.Execute("insert into lists (id, name, owner_id, created_at) values (uuid(), 'New User33', ?, datetime())", [connector.UserId]);
+
+        await db.Execute(
+          "UPDATE lists SET name = ?, created_at = datetime() WHERE owner_id = ? and id = ?", ["update CHCHCHCHCH" , connector.UserId, "0bf55412-d35b-4814-ade9-daea4865df96"]
+        );
 
         var _ = Task.Run(async () =>
          {
