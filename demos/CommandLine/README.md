@@ -11,7 +11,7 @@ This essentially uses anonymous authentication. A random user ID is generated an
 
 ## Connection Options
 
-By default, this demo uses the NodeConnector for connecting to the PowerSync server. However, you can swap this out with the SupabaseConnector if needed:
+By default, this demo uses the NodeConnector for connecting to the PowerSync server. However, you can swap this out with the SupabaseConnector if needed
 
 1. Copy the `.env.template` file to a new `.env` file:
    ```bash
@@ -32,10 +32,8 @@ By default, this demo uses the NodeConnector for connecting to the PowerSync ser
     SUPABASE_PASSWORD=your-supabase-password
     # Set to true if you want to use Supabase as the backend
     # Set to false if you want to use the Powersync backend
-    USE_SUPABASE=true
+    USE_SUPABASE=false
    ```
-
-3. Update your connector configuration to use SupabaseConnector instead of NodeConnector
 
 ## Getting Started
 
