@@ -1,7 +1,7 @@
 namespace CommandLine;
 
 using CommandLine.Helpers;
-using CommandLine.Models;
+using CommandLine.Models.Supabase;
 using CommandLine.Utils;
 using Newtonsoft.Json;
 using PowerSync.Common.Client;

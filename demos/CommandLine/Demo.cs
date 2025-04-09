@@ -27,6 +27,7 @@ class Demo
         {
             var supabaseConnector = new SupabaseConnector(config);
 
+            // Ensure this user already exists
             await supabaseConnector.Login(config.SupabaseUsername, config.SupabasePassword);
 
             connectorUserId = supabaseConnector.UserId;
@@ -71,12 +72,6 @@ class Demo
             }
         });
 
-        // await db.Execute("insert into lists (id, name, owner_id, created_at) values (uuid(), 'New User33', ?, datetime())", [connector.UserId]);
-
-        await db.Execute(
-          "UPDATE lists SET name = ?, created_at = datetime() WHERE owner_id = ? and id = ?", ["update CHCHCHCHCH", connectorUserId, "0bf55412-d35b-4814-ade9-daea4865df96"]
-        );
-
         var _ = Task.Run(async () =>
          {
              while (running)
@@ -117,7 +112,6 @@ class Demo
                 connected = update.StatusChanged.Connected;
             }
         });
-
 
         // Start live updating table
         await AnsiConsole.Live(panel)

@@ -9,6 +9,10 @@ Changes made to the backend's source DB or to the self-hosted web UI will be syn
 
 This essentially uses anonymous authentication. A random user ID is generated and stored in local storage. The backend returns a valid token which is not linked to a specific user. All data is synced to all users.
 
+> **Note for Supabase users:**  
+> If you are using `USE_SUPABASE=true`, this demo expects a valid, **already existing Supabase user**.  
+> You must provide their credentials via the `.env` file using `SUPABASE_USERNAME` and `SUPABASE_PASSWORD`.
+
 ## Connection Options
 
 By default, this demo uses the NodeConnector for connecting to the PowerSync server. However, you can swap this out with the SupabaseConnector if needed
