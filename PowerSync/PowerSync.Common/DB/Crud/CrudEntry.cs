@@ -30,7 +30,7 @@ public class CrudEntryJSON
 public class CrudEntryDataJSON
 {
     [JsonProperty("data")]
-    public Dictionary<string, object> Data { get; set; } = new();
+    public Dictionary<string, object>? Data { get; set; }
 
     [JsonProperty("op")]
     public UpdateType Op { get; set; }
@@ -85,19 +85,6 @@ public class CrudEntry(int clientId, UpdateType op, string table, string id, lon
             dbRow.TransactionId,
             data.Data
         );
-    }
-
-    public CrudEntryOutputJSON ToJSON()
-    {
-        return new CrudEntryOutputJSON
-        {
-            OpId = ClientId,
-            Op = Op,
-            Type = Table,
-            Id = Id,
-            TransactionId = TransactionId,
-            Data = OpData
-        };
     }
 
     public override bool Equals(object? obj)

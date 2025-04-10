@@ -17,7 +17,6 @@ public class EventStreamTests
         var completedTask = new TaskCompletionSource<bool>();
         var listenerReadySource = new TaskCompletionSource<bool>();
 
-
         var listenTask = Task.Run(async () =>
         {
             var stream = eventStream.ListenAsync(cts.Token);
@@ -51,7 +50,6 @@ public class EventStreamTests
 
         eventStream.Emit(status1);
         eventStream.Emit(status2);
-
 
         await completedTask.Task;
 

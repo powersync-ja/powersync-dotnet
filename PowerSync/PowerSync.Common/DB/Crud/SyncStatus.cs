@@ -24,7 +24,6 @@ public class SyncStatusOptions
         HasSynced = options.HasSynced;
     }
 
-
     [JsonProperty("connected")]
     public bool? Connected { get; set; }
 
@@ -65,7 +64,6 @@ public class SyncStatus(SyncStatusOptions options)
     /// Upload/download status.
     /// </summary>
     public SyncDataFlowStatus DataFlowStatus => Options.DataFlow ?? new SyncDataFlowStatus();
-
 
     public bool IsEqual(SyncStatus status)
     {

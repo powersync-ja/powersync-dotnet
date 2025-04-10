@@ -32,8 +32,8 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
     protected RequiredMDSQLiteOptions resolvedMDSQLiteOptions;
     private CancellationTokenSource? tablesUpdatedCts;
 
-    private static readonly AsyncLock writeMutex = new();
-    private static readonly AsyncLock readMutex = new();
+    private readonly AsyncLock writeMutex = new();
+    private readonly AsyncLock readMutex = new();
 
     public MDSQLiteAdapter(MDSQLiteAdapterOptions options)
     {
@@ -63,7 +63,6 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
         writeConnection = await OpenConnection(options.Name);
         readConnection = await OpenConnection(options.Name);
 
-
         string[] baseStatements =
         [
             $"PRAGMA busy_timeout = {resolvedMDSQLiteOptions.LockTimeoutMs}",
@@ -78,7 +77,6 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
             $"PRAGMA journal_size_limit = {resolvedMDSQLiteOptions.JournalSizeLimit}",
             $"PRAGMA synchronous = {resolvedMDSQLiteOptions.Synchronous}",
         ];
-
 
         string[] readConnectionStatements =
         [
@@ -143,6 +141,7 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
         tablesUpdatedCts?.Cancel();
         base.Close();
         writeConnection?.Close();
+        readConnection?.Close();
     }
 
     public async Task<NonQueryResult> Execute(string query, object[]? parameters = null)

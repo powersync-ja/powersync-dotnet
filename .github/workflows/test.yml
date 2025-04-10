@@ -1,0 +1,27 @@
+name: Test Packages
+
+on:
+  push:
+
+jobs:
+  build:
+    name: Test Packages
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0' 
+
+      - name: Download PowerSync extension
+        run: dotnet run --project Tools/Setup    
+
+      - name: Restore dependencies
+        run: dotnet restore
+      
+      - name: Run tests
+        run: dotnet test -v n --framework net8.0

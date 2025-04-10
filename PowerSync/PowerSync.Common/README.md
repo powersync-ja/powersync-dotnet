@@ -2,6 +2,20 @@
 
 This package contains a .NET implementation of a PowerSync database connector and streaming sync bucket implementation.
 
+## ⚠️ Project Status & Release Note
+
+This package is currently in an alpha state, intended strictly for testing. Expect breaking changes and instability as development continues.
+
+Do not rely on this package for production use.
+
+## Installation
+
+This package is published on [NuGet](https://www.nuget.org/packages/PowerSync.Common).
+
+```bash
+dotnet add package PowerSync.Common --prerelease
+```
+
 ## Usage 
 
 ### Simple Query
@@ -24,12 +38,12 @@ static async Task Main() {
 
 ```
 
-
 ### Watched queries
-Watched queries will automatically update when a dependant table is updated.
+Watched queries will automatically update when a dependant table is updated. 
+Awaiting `Watch()` ensures the watcher is fully initialized and ready to monitor database changes.
 
 ```csharp
-db.Watch("select * from lists", null, new WatchHandler<ListResult>
+await db.Watch("select * from lists", null, new WatchHandler<ListResult>
 {
     OnResult = (results) =>
     {

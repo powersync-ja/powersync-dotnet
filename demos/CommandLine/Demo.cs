@@ -31,7 +31,7 @@ class Demo
 
         bool running = true;
 
-        db.Watch("select * from lists", null, new WatchHandler<ListResult>
+        await db.Watch("select * from lists", null, new WatchHandler<ListResult>
         {
             OnResult = (results) =>
             {

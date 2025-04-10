@@ -53,7 +53,6 @@ public sealed class SqliteSynchronous
     public static implicit operator string(SqliteSynchronous mode) => mode.Value;
 }
 
-
 public class SqliteExtension
 {
     public string Path { get; set; } = string.Empty;
@@ -104,7 +103,6 @@ public class MDSQLiteOptions
     /// </summary>
     public SqliteExtension[]? Extensions { get; set; }
 }
-
 
 public class RequiredMDSQLiteOptions : MDSQLiteOptions
 {

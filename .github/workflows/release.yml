@@ -1,0 +1,40 @@
+# The version is pulled from the CHANGELOG.md file of the package.
+name: Release
+
+on: workflow_dispatch
+
+jobs:
+  release:
+    name: Release
+    runs-on: windows-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0' 
+
+      - name: Download PowerSync extension
+        run: dotnet run --project Tools/Setup    
+
+      - name: Restore dependencies
+        run: dotnet restore
+      
+      - name: Extract Version from CHANGELOG.md
+        id: extract_version
+        shell: bash
+        run: |
+          VERSION=$(awk '/^## [0-9]+\.[0-9]+\.[0-9]+/ {print $2; exit}' PowerSync/PowerSync.Common/CHANGELOG.md)
+          echo "Detected Version: $VERSION"
+          echo "VERSION=$VERSION" >> $GITHUB_ENV 
+
+      - name: Run Pack
+        run: dotnet pack -c Release -o ${{ github.workspace }}/output
+
+      - name: Run Push
+        run: dotnet nuget push ${{ github.workspace }}\output\*.nupkg --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }}
+       

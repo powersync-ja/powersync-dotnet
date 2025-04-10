@@ -2,7 +2,7 @@ namespace PowerSync.Common.Client;
 
 using PowerSync.Common.DB;
 
-public class SQLOpenOptions : DatabaseSource
+public class SQLOpenOptions : IDatabaseSource
 {
     /// <summary>
     /// Filename for the database.

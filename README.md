@@ -8,13 +8,9 @@ _[PowerSync](https://www.powersync.com) is a sync engine for building local-firs
 
 `powersync-dotnet` is the monorepo for PowerSync .NET SDKs.
 
-## ⚠️ Project Status & Release Note
-
-This package is part of a monorepo that is not yet officially released or published. It is currently in a pre-alpha state, intended strictly for closed testing. Expect breaking changes and instability as development continues.
-
-Do not rely on this package for production use.
-
 ## Monorepo Structure: Packages
+
+Packages are published to [NuGet](https://www.nuget.org/profiles/PowerSync).
 
 - [PowerSync/Common](./PowerSync/Common/README.md)
 
@@ -54,6 +50,18 @@ This PowerSync SDK currently targets the following .NET versions:
       <PackageReference Include="System.Net.Http" Version="4.3.4" /> 
     </ItemGroup>
     ```
+
+    and create a `IsExternalInit.cs` file in your project with the following contents:
+    
+    ```cs
+    using System.ComponentModel;
+
+    namespace System.Runtime.CompilerServices
+    {
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        internal class IsExternalInit { }
+    }
+    ``` 
     
 ------- 
 
@@ -87,3 +95,7 @@ Run a specific test
 dotnet test -v n --framework net8.0 --filter "test-file-pattern"  
 ```
 
+## Using the PowerSync.Common package in your project
+```bash
+dotnet add package PowerSync.Common --prerelease
+```

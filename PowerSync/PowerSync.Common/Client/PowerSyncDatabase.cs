@@ -28,26 +28,24 @@ public class BasePowerSyncDatabaseOptions()
 
 }
 
-public abstract class DatabaseSource { }
+public interface IDatabaseSource { }
 
-public class DBAdapterSource(IDBAdapter Adapter) : DatabaseSource
+public class DBAdapterSource(IDBAdapter Adapter) : IDatabaseSource
 {
     public IDBAdapter Adapter { get; init; } = Adapter;
 }
 
-public class OpenFactorySource(ISQLOpenFactory Factory) : DatabaseSource
+public class OpenFactorySource(ISQLOpenFactory Factory) : IDatabaseSource
 {
     public ISQLOpenFactory Factory { get; init; } = Factory;
 }
-
 
 public class PowerSyncDatabaseOptions() : BasePowerSyncDatabaseOptions()
 {
     /// <summary> 
     /// Source for a SQLite database connection.
     /// </summary>
-    public DatabaseSource Database { get; set; } = null!;
-
+    public IDatabaseSource Database { get; set; } = null!;
 }
 
 public class PowerSyncDBEvent : StreamingSyncImplementationEvent
@@ -64,6 +62,25 @@ public interface IPowerSyncDatabase : IEventStream<PowerSyncDBEvent>
     public Task<CrudBatch?> GetCrudBatch(int limit);
 
     public Task<CrudTransaction?> GetNextCrudTransaction();
+
+    Task<NonQueryResult> Execute(string query, object[]? parameters = null);
+
+    Task<T[]> GetAll<T>(string sql, params object[]? parameters);
+
+    Task<T?> GetOptional<T>(string sql, params object[]? parameters);
+
+    Task<T> Get<T>(string sql, params object[]? parameters);
+
+    Task<T> ReadLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null);
+
+    Task<T> ReadTransaction<T>(Func<ITransaction, Task<T>> fn, DBLockOptions? options = null);
+
+    Task WriteLock(Func<ILockContext, Task> fn, DBLockOptions? options = null);
+    Task<T> WriteLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null);
+
+    Task WriteTransaction(Func<ITransaction, Task> fn, DBLockOptions? options = null);
+    Task<T> WriteTransaction<T>(Func<ITransaction, Task<T>> fn, DBLockOptions? options = null);
+
 }
 
 public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDatabase
@@ -103,9 +120,6 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         }
         else if (options.Database is SQLOpenOptions openOptions)
         {
-            // TODO default to MDSQLite factory for now
-            // Can be broken out, rename this class to Abstract
-            // `this.openDBAdapter(options)`
             Database = new MDSQLiteAdapter(new MDSQLiteAdapterOptions
             {
                 Name = openOptions.DbFilename,
@@ -251,7 +265,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
 
         try
         {
-            // schema.Validate();
+            schema.Validate();
         }
         catch (Exception ex)
         {
@@ -342,13 +356,19 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         syncStreamStatusCts?.Cancel();
     }
 
-    public async Task DisconnectAndClear()
+    /// <summary>
+    /// Disconnect and clear the database.
+    /// Use this when logging out.
+    /// The database can still be queried after this is called, but the tables
+    /// would be empty.
+    /// 
+    /// To preserve data in local-only tables, set clearLocal to false.
+    /// </summary>
+    public async Task DisconnectAndClear(bool clearLocal = true)
     {
         await Disconnect();
         await WaitForReady();
 
-        // TODO CL bool clearLocal = options?.ClearLocal ?? false;
-        bool clearLocal = true;
 
         await Database.WriteTransaction(async tx =>
         {
@@ -360,17 +380,23 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         Emit(new PowerSyncDBEvent { StatusChanged = CurrentStatus });
     }
 
+    /// <summary>
+    /// Close the database, releasing resources.
+    ///
+    /// Also disconnects any active connection.
+    /// 
+    /// Once close is called, this connection cannot be used again - a new one
+    /// must be constructed.
+    /// </summary>
     public new async Task Close()
     {
-        base.Close();
         await WaitForReady();
 
-        // TODO CL
-        // if (options.Disconnect)
-        // {
-        //     await Disconnect();
-        // }
+        if (Closed) return;
 
+
+        await Disconnect();
+        base.Close();
         syncStreamImplementation?.Close();
         BucketStorageAdapter?.Close();
 
@@ -436,7 +462,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
     /// </summary>
     public async Task<CrudTransaction?> GetNextCrudTransaction()
     {
-        return await Database.ReadTransaction(async tx =>
+        return await ReadTransaction(async tx =>
         {
             var first = await tx.GetOptional<CrudEntryJSON>(
             $"SELECT id, tx_id, data FROM {PSInternalTable.CRUD} ORDER BY id ASC LIMIT 1");
@@ -451,6 +477,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
 
             if (txId == null)
             {
+
                 all = [CrudEntry.FromRow(first)];
             }
             else
@@ -529,6 +556,41 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         return await Database.Get<T>(query, parameters);
     }
 
+    public async Task<T> ReadLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null)
+    {
+        await WaitForReady();
+        return await Database.ReadLock(fn, options);
+    }
+
+    public async Task WriteLock(Func<ILockContext, Task> fn, DBLockOptions? options = null)
+    {
+        await WaitForReady();
+        await Database.WriteLock(fn, options);
+    }
+
+    public async Task<T> WriteLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null)
+    {
+        await WaitForReady();
+        return await Database.WriteLock(fn, options);
+    }
+
+    public async Task<T> ReadTransaction<T>(Func<ITransaction, Task<T>> fn, DBLockOptions? options = null)
+    {
+        await WaitForReady();
+        return await Database.ReadTransaction(fn, options);
+    }
+
+    public async Task WriteTransaction(Func<ITransaction, Task> fn, DBLockOptions? options = null)
+    {
+        await WaitForReady();
+        await Database.WriteTransaction(fn, options);
+    }
+
+    public async Task<T> WriteTransaction<T>(Func<ITransaction, Task<T>> fn, DBLockOptions? options = null)
+    {
+        await WaitForReady();
+        return await Database.WriteTransaction(fn, options);
+    }
 
     /// <summary>
     /// Executes a read query every time the source tables are modified.
@@ -536,8 +598,9 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
     /// Use <see cref="SQLWatchOptions.ThrottleMs"/> to specify the minimum interval between queries.
     /// Source tables are automatically detected using <c>EXPLAIN QUERY PLAN</c>.
     /// </summary>
-    public void Watch<T>(string query, object[]? parameters, WatchHandler<T> handler, SQLWatchOptions? options = null)
+    public Task Watch<T>(string query, object[]? parameters, WatchHandler<T> handler, SQLWatchOptions? options = null)
     {
+        var tcs = new TaskCompletionSource<bool>();
         Task.Run(async () =>
         {
             try
@@ -567,12 +630,14 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
                     Signal = options?.Signal,
                     ThrottleMs = options?.ThrottleMs
                 });
+                tcs.SetResult(true);
             }
             catch (Exception ex)
             {
                 handler.OnError?.Invoke(ex);
             }
         });
+        return tcs.Task;
     }
 
     private record ExplainedResult(string opcode, int p2, int p3);
@@ -591,7 +656,6 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
                 .Where(row => row.opcode == "OpenRead" && row.p3 == 0)
                 .Select(row => row.p2)
                 .ToList();
-
 
             var tables = await GetAll<TableSelectResult>(
                 "SELECT DISTINCT tbl_name FROM sqlite_master WHERE rootpage IN (SELECT json_each.value FROM json_each(?))",
