@@ -63,3 +63,6 @@ TestResults/
 *.so
 
 .env
+
+# Ignore user id file
+user_id.txt
