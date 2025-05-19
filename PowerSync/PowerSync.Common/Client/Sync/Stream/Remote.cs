@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Text.RegularExpressions;
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -29,7 +30,6 @@ public class RequestDetails
 
 public class Remote
 {
-    private static int REFRESH_CREDENTIALS_SAFETY_PERIOD_MS = 30_000;
     private readonly HttpClient httpClient;
     protected IPowerSyncBackendConnector connector;
 
@@ -41,16 +41,46 @@ public class Remote
         this.connector = connector;
     }
 
+    /// <summary>
+    /// Get credentials currently cached, or fetch new credentials if none are available.
+    /// These credentials may have expired already.
+    /// </summary>
     public async Task<PowerSyncCredentials?> GetCredentials()
     {
-        if (credentials?.ExpiresAt > DateTime.Now.AddMilliseconds(REFRESH_CREDENTIALS_SAFETY_PERIOD_MS))
+        if (credentials != null)
         {
             return credentials;
         }
+        return await PrefetchCredentials();
+    }
 
-        credentials = await connector.FetchCredentials();
-
+    /// <summary>
+    /// Fetch a new set of credentials and cache it.
+    /// Until this call succeeds, GetCredentials will still return the old credentials.
+    /// This may be called before the current credentials have expired.
+    /// </summary>
+    public async Task<PowerSyncCredentials?> PrefetchCredentials()
+    {
+        credentials = await FetchCredentials();
         return credentials;
+    }
+
+    /// <summary>
+    /// Get credentials for PowerSync.
+    /// This should always fetch a fresh set of credentials - don't use cached values.
+    /// </summary>
+    public async Task<PowerSyncCredentials?> FetchCredentials()
+    {
+        return await connector.FetchCredentials();
+    }
+
+    /// <summary>
+    /// Immediately invalidate credentials.
+    /// This may be called when the current credentials have expired.
+    /// </summary>
+    public void InvalidateCredentials()
+    {
+        credentials = null;
     }
 
     static string GetUserAgent()
@@ -76,6 +106,11 @@ public class Remote
         using var client = new HttpClient();
         var response = await client.SendAsync(request);
 
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            InvalidateCredentials();
+        }
+
         if (!response.IsSuccessStatusCode)
         {
             var errorMessage = await response.Content.ReadAsStringAsync();
@@ -95,7 +130,12 @@ public class Remote
         {
             throw new HttpRequestException($"HTTP {response.StatusCode}: No content");
         }
-        else
+
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            InvalidateCredentials();
+        }
+
         if (!response.IsSuccessStatusCode)
         {
             var errorText = await response.Content.ReadAsStringAsync();

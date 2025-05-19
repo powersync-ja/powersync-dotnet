@@ -539,11 +539,17 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                         {
                             // Connection would be closed automatically right after this
                             logger.LogDebug("Token expiring; reconnect");
+                            Options.Remote.InvalidateCredentials();
 
                             // For a rare case where the backend connector does not update the token
                             // (uses the same one), this should have some delay.
                             //
                             await DelayRetry();
+                            return new StreamingSyncIterationResult { Retry = true };
+                        } else if (remainingSeconds < 30) {
+                            logger.LogDebug("Token will expire soon; reconnect");
+                            // Pre-emptively refresh the token
+                            Options.Remote.InvalidateCredentials();
                             return new StreamingSyncIterationResult { Retry = true };
                         }
                         TriggerCrudUpload();
