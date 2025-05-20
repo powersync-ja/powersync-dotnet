@@ -113,4 +113,9 @@ public interface IBucketStorageAdapter : IEventStream<BucketStorageEvent>
     /// Get a unique client ID.
     /// </summary>
     Task<string> GetClientId();
+    
+    /// <summary>
+    /// Invokes the `powersync_control` function for the sync client.
+    /// </summary>
+    Task<string> Control(string op, object? payload);
 }

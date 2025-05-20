@@ -2,9 +2,7 @@ namespace PowerSync.Common.Client.Sync.Stream;
 
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-
 using Newtonsoft.Json;
-
 using PowerSync.Common.Client.Sync.Bucket;
 using PowerSync.Common.DB.Crud;
 using PowerSync.Common.Utils;
@@ -47,8 +45,37 @@ public class StreamingSyncImplementationOptions : AdditionalConnectionOptions
     public ILogger? Logger { get; init; }
 }
 
-public class BaseConnectionOptions(Dictionary<string, object>? parameters = null)
+/// <summary>
+/// Indicates which sync client implementation to use.
+/// </summary>
+public enum SyncClientImplementation
 {
+    /// <summary>
+    /// Decodes and handles sync lines received from the sync service in C#.
+    /// This is the default option.
+    /// </summary>
+    C_SHARP,
+
+    /// <summary>
+    /// This implementation offloads the sync line decoding and handling into the PowerSync
+    /// core extension.
+    ///
+    /// While this implementation is more performant than <see cref="C_SHARP"/>,
+    /// it has seen less real-world testing and is marked as experimental at the moment.
+    /// </summary>
+    RUST
+}
+
+public class BaseConnectionOptions(Dictionary<string, object>? parameters = null, SyncClientImplementation? clientImplementation = null )
+{
+    /// <summary>
+    /// Whether to use a C# implementation to handle received sync lines from the sync
+    /// service, or whether this work should be offloaded to the PowerSync core extension.
+    /// This defaults to the JavaScript implementation SyncClientImplementation.C_SHARP
+    /// since the SyncClientImplementation.RUST implementation is experimental at the moment.
+    /// </summary>
+    public SyncClientImplementation? ClientImplementation { get; set; } = clientImplementation;
+
     /// <summary>
     /// These parameters are passed to the sync rules and will be available under the `user_parameters` object.
     /// </summary>
@@ -57,6 +84,7 @@ public class BaseConnectionOptions(Dictionary<string, object>? parameters = null
 
 public class RequiredPowerSyncConnectionOptions : BaseConnectionOptions
 {
+    public new SyncClientImplementation ClientImplementation { get; set; } = new();
     public new Dictionary<string, object> Params { get; set; } = new();
 }
 
@@ -94,6 +122,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
 {
     public static RequiredPowerSyncConnectionOptions DEFAULT_STREAM_CONNECTION_OPTIONS = new()
     {
+        ClientImplementation = SyncClientImplementation.C_SHARP,
         Params = []
     };
 
@@ -163,6 +192,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
         {
             await Disconnect();
         }
+
         CancellationTokenSource = new CancellationTokenSource();
 
         streamingSyncTask = StreamingSync(CancellationTokenSource.Token, options);
@@ -199,6 +229,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
         {
             return;
         }
+
         // This might be called multiple times
         if (!CancellationTokenSource.Token.IsCancellationRequested)
         {
@@ -272,10 +303,10 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                 {
                     break;
                 }
+
                 var iterationResult = await StreamingSyncIteration(nestedCts.Token, options);
                 if (!iterationResult.Retry)
                 {
-
                     // A sync error ocurred that we cannot recover from here.
                     // This loop must terminate.
                     // The nestedCts will close any open network requests and streams below.
@@ -308,7 +339,6 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
             }
             finally
             {
-
                 if (!signal.Value.IsCancellationRequested)
                 {
                     // Closing sync stream network requests before retry.
@@ -337,7 +367,8 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
         public bool Retry { get; init; }
     }
 
-    protected async Task<StreamingSyncIterationResult> StreamingSyncIteration(CancellationToken signal, PowerSyncConnectionOptions? options)
+    protected async Task<StreamingSyncIterationResult> StreamingSyncIteration(CancellationToken signal,
+        PowerSyncConnectionOptions? options)
     {
         return await locks.ObtainLock(new LockOptions<StreamingSyncIterationResult>
         {
@@ -433,6 +464,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                             newBuckets.Add(checksum.Bucket);
                             bucketsToDelete.Remove(checksum.Bucket);
                         }
+
                         if (bucketsToDelete.Count > 0)
                         {
                             logger.LogDebug("Removing buckets: {message}", string.Join(", ", bucketsToDelete));
@@ -478,7 +510,6 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                             {
                                 ClearDownloadError = true
                             });
-
                         }
 
                         validatedCheckpoint = targetCheckpoint;
@@ -509,7 +540,8 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                             newBuckets.Remove(bucket);
                         }
 
-                        var newWriteCheckpoint = !string.IsNullOrEmpty(diff.WriteCheckpoint) ? diff.WriteCheckpoint : null;
+                        var newWriteCheckpoint =
+                            !string.IsNullOrEmpty(diff.WriteCheckpoint) ? diff.WriteCheckpoint : null;
                         var newCheckpoint = new Checkpoint
                         {
                             LastOpId = diff.LastOpId,
@@ -564,6 +596,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                             Options.Remote.InvalidateCredentials();
                             return new StreamingSyncIterationResult { Retry = true };
                         }
+
                         TriggerCrudUpload();
                     }
                     else
@@ -573,14 +606,14 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                         if (targetCheckpoint == appliedCheckpoint)
                         {
                             UpdateSyncStatus(new SyncStatusOptions
-                            {
-                                Connected = true,
-                                LastSyncedAt = DateTime.Now,
-                            },
-                            new UpdateSyncStatusOptions
-                            {
-                                ClearDownloadError = true
-                            }
+                                {
+                                    Connected = true,
+                                    LastSyncedAt = DateTime.Now,
+                                },
+                                new UpdateSyncStatusOptions
+                                {
+                                    ClearDownloadError = true
+                                }
                             );
                         }
                         else if (validatedCheckpoint == targetCheckpoint)
@@ -602,18 +635,18 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                             {
                                 appliedCheckpoint = targetCheckpoint;
                                 UpdateSyncStatus(new SyncStatusOptions
-                                {
-                                    Connected = true,
-                                    LastSyncedAt = DateTime.Now,
-                                    DataFlow = new SyncDataFlowStatus
                                     {
-                                        Downloading = false,
-                                    }
-                                },
-                                new UpdateSyncStatusOptions
-                                {
-                                    ClearDownloadError = true
-                                });
+                                        Connected = true,
+                                        LastSyncedAt = DateTime.Now,
+                                        DataFlow = new SyncDataFlowStatus
+                                        {
+                                            Downloading = false,
+                                        }
+                                    },
+                                    new UpdateSyncStatusOptions
+                                    {
+                                        ClearDownloadError = true
+                                    });
                             }
                         }
                     }
@@ -624,7 +657,6 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                 return new StreamingSyncIterationResult { Retry = true };
             }
         });
-
     }
 
     public new void Close()
@@ -635,12 +667,14 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
     }
 
     public record ResponseData(
-        [property: JsonProperty("write_checkpoint")] string WriteCheckpoint
+        [property: JsonProperty("write_checkpoint")]
+        string WriteCheckpoint
     );
 
     public record ApiResponse(
         [property: JsonProperty("data")] ResponseData Data
     );
+
     public async Task<string> GetWriteCheckpoint()
     {
         var clientId = await Options.Adapter.GetClientId();
@@ -652,7 +686,6 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
 
     protected async Task InternalUploadAllCrud()
     {
-
         await locks.ObtainLock(new LockOptions<Task>
         {
             Type = LockType.CRUD,
@@ -683,13 +716,12 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                             checkedCrudItem = nextCrudItem;
                             await Options.UploadCrud();
                             UpdateSyncStatus(new SyncStatusOptions
-                            {
-                            },
-                            new UpdateSyncStatusOptions
-                            {
-                                ClearUploadError = true
-                            });
-
+                                {
+                                },
+                                new UpdateSyncStatusOptions
+                                {
+                                    ClearUploadError = true
+                                });
                         }
                         else
                         {
@@ -718,11 +750,14 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                             break;
                         }
 
-                        logger.LogDebug("Caught exception when uploading. Upload will retry after a delay. Exception: {message}", ex.Message);
+                        logger.LogDebug(
+                            "Caught exception when uploading. Upload will retry after a delay. Exception: {message}",
+                            ex.Message);
                     }
                     finally
                     {
-                        UpdateSyncStatus(new SyncStatusOptions { DataFlow = new SyncDataFlowStatus { Uploading = false } });
+                        UpdateSyncStatus(new SyncStatusOptions
+                            { DataFlow = new SyncDataFlowStatus { Uploading = false } });
                     }
                 }
 
@@ -743,8 +778,10 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
     }
 
     protected record UpdateSyncStatusOptions(
-        bool? ClearDownloadError = null, bool? ClearUploadError = null
+        bool? ClearDownloadError = null,
+        bool? ClearUploadError = null
     );
+
     protected void UpdateSyncStatus(SyncStatusOptions options, UpdateSyncStatusOptions? updateOptions = null)
     {
         var updatedStatus = new SyncStatus(new SyncStatusOptions
@@ -756,8 +793,12 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
             {
                 Uploading = options.DataFlow?.Uploading ?? SyncStatus.DataFlowStatus.Uploading,
                 Downloading = options.DataFlow?.Downloading ?? SyncStatus.DataFlowStatus.Downloading,
-                DownloadError = updateOptions?.ClearDownloadError == true ? null : options.DataFlow?.DownloadError ?? SyncStatus.DataFlowStatus.DownloadError,
-                UploadError = updateOptions?.ClearUploadError == true ? null : options.DataFlow?.UploadError ?? SyncStatus.DataFlowStatus.UploadError,
+                DownloadError = updateOptions?.ClearDownloadError == true
+                    ? null
+                    : options.DataFlow?.DownloadError ?? SyncStatus.DataFlowStatus.DownloadError,
+                UploadError = updateOptions?.ClearUploadError == true
+                    ? null
+                    : options.DataFlow?.UploadError ?? SyncStatus.DataFlowStatus.UploadError,
             }
         });
 
