@@ -87,7 +87,7 @@ public class SyncStatus(SyncStatusOptions options)
     public string GetMessage()
     {
         var dataFlow = DataFlowStatus;
-        return $"SyncStatus<connected: {Connected} connecting: {Connecting} lastSyncedAt: {LastSyncedAt} hasSynced: {HasSynced}. Downloading: {dataFlow.Downloading}. Uploading: {dataFlow.Uploading}. UploadError: ${dataFlow.UploadError}, DownloadError?: ${dataFlow.DownloadError}>";
+        return $"SyncStatus<connected: {Connected} connecting: {Connecting} lastSyncedAt: {LastSyncedAt} hasSynced: {HasSynced}. Downloading: {dataFlow.Downloading}. Uploading: {dataFlow.Uploading}. UploadError: {dataFlow.UploadError}, DownloadError?: {dataFlow.DownloadError}>";
     }
 
     public string ToJSON()
