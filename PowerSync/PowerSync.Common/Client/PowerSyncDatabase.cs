@@ -242,7 +242,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
 
         DateTime? lastCompleteSync = null;
         
-        // TODO: Will be altered/extended when reporting individual sync priority statuses are supported 
+        // TODO: Will be altered/extended when reporting individual sync priority statuses is supported 
         foreach (var result in results)
         {
             var parsedDate = DateTime.Parse(result.last_synced_at + "Z");
