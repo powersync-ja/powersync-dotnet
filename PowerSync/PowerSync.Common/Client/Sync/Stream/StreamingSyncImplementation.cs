@@ -45,37 +45,8 @@ public class StreamingSyncImplementationOptions : AdditionalConnectionOptions
     public ILogger? Logger { get; init; }
 }
 
-/// <summary>
-/// Indicates which sync client implementation to use.
-/// </summary>
-public enum SyncClientImplementation
+public class BaseConnectionOptions(Dictionary<string, object>? parameters = null)
 {
-    /// <summary>
-    /// Decodes and handles sync lines received from the sync service in C#.
-    /// This is the default option.
-    /// </summary>
-    C_SHARP,
-
-    /// <summary>
-    /// This implementation offloads the sync line decoding and handling into the PowerSync
-    /// core extension.
-    ///
-    /// While this implementation is more performant than <see cref="C_SHARP"/>,
-    /// it has seen less real-world testing and is marked as experimental at the moment.
-    /// </summary>
-    RUST
-}
-
-public class BaseConnectionOptions(Dictionary<string, object>? parameters = null, SyncClientImplementation? clientImplementation = null )
-{
-    /// <summary>
-    /// Whether to use a C# implementation to handle received sync lines from the sync
-    /// service, or whether this work should be offloaded to the PowerSync core extension.
-    /// This defaults to the JavaScript implementation SyncClientImplementation.C_SHARP
-    /// since the SyncClientImplementation.RUST implementation is experimental at the moment.
-    /// </summary>
-    public SyncClientImplementation? ClientImplementation { get; set; } = clientImplementation;
-
     /// <summary>
     /// These parameters are passed to the sync rules and will be available under the `user_parameters` object.
     /// </summary>
@@ -84,7 +55,6 @@ public class BaseConnectionOptions(Dictionary<string, object>? parameters = null
 
 public class RequiredPowerSyncConnectionOptions : BaseConnectionOptions
 {
-    public new SyncClientImplementation ClientImplementation { get; set; } = new();
     public new Dictionary<string, object> Params { get; set; } = new();
 }
 
@@ -122,7 +92,6 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
 {
     public static RequiredPowerSyncConnectionOptions DEFAULT_STREAM_CONNECTION_OPTIONS = new()
     {
-        ClientImplementation = SyncClientImplementation.C_SHARP,
         Params = []
     };
 
@@ -657,6 +626,110 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                 return new StreamingSyncIterationResult { Retry = true };
             }
         });
+    }
+
+    // StreamingSync(CancellationToken? signal
+    private async Task RustSyncIteration(CancellationToken? signal, RequiredPowerSyncConnectionOptions resolvedOptions)
+    {
+        TaskCompletionSource<bool>? receivingLines;
+        // new TaskCompletionSource<bool>();
+
+        var nestedCts = new CancellationTokenSource();
+        signal?.Register(() => { nestedCts.Cancel(); });
+
+        async Task Connect(EstablishSyncStream instruction)
+        {
+            var syncOptions = new SyncStreamOptions
+            {
+                Path = "/sync/stream",
+                CancellationToken = nestedCts.Token,
+                Data = instruction.Request
+            };
+            
+            
+        }
+
+        async Task Stop()
+        {
+            await Control("stop");
+        }
+
+        async Task Control(string op, object? payload = null)
+        {
+            var rawResponse = await Options.Adapter.Control(op, payload);
+            await HandleInstructions(JsonConvert.DeserializeObject<Instruction[]>(rawResponse));
+        }
+
+        async Task HandleInstructions(Instruction[] instructions)
+        {
+            foreach (var instruction in instructions)
+            {
+                await HandleInstruction(instruction);
+            }
+        }
+
+        async Task HandleInstruction(Instruction instruction)
+        {
+            switch (instruction)
+            {
+                case LogLine logLine:
+                    switch (logLine.Severity)
+                    {
+                        case "DEBUG":
+                            logger.LogDebug("{message}", logLine.Line);
+                            break;
+                        case "INFO":
+                            logger.LogInformation("{message}", logLine.Line);
+                            break;
+                        case "WARNING":
+                            logger.LogWarning("{message}", logLine.Line);
+                            break;
+                    }
+
+                    break;
+                case UpdateSyncStatus syncStatus:
+                    break;
+                case EstablishSyncStream:
+                    // if (receivingLines != null) {
+                    //     // Already connected, this shouldn't happen during a single iteration.
+                    //     throw 'Unexpected request to establish sync stream, already connected';
+                    // }
+                    //
+                    // receivingLines = connect(instruction.EstablishSyncStream);
+                    break;
+                case FetchCredentials fetchCredentials when fetchCredentials.DidExpire:
+                    Options.Remote.InvalidateCredentials();
+                    break;
+                case FetchCredentials fetchCredentials:
+                    await Options.Remote.PrefetchCredentials();
+                    break;
+                case CloseSyncStream:
+                    CancellationTokenSource?.Cancel();
+                    break;
+                case FlushFileSystem:
+                    // ignore
+                    break;
+                case DidCompleteSync:
+                    UpdateSyncStatus(new SyncStatusOptions
+                    {
+                    }, new UpdateSyncStatusOptions { ClearDownloadError = true });
+                    break;
+            }
+        }
+
+        try
+        {
+            // this.notifyCompletedUploads = () => {
+            //     control('completed_upload');
+            // };
+            //
+            // await control('start', JSON.stringify(resolvedOptions.params));
+            // await receivingLines;
+        }
+        catch (Exception ex)
+        {
+            await Stop();
+        }
     }
 
     public new void Close()

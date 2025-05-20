@@ -4,9 +4,9 @@ namespace PowerSync.Common.Client.Sync.Bucket;
 using System;
 using System.Threading.Tasks;
 
+using Newtonsoft.Json;
 using PowerSync.Common.DB.Crud;
 using PowerSync.Common.Utils;
-using Newtonsoft.Json;
 
 public class Checkpoint
 {
