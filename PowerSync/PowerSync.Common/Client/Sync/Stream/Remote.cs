@@ -121,12 +121,25 @@ public class Remote
         return JsonConvert.DeserializeObject<T>(responseData)!;
     }
 
-    /// <summary>
-    /// Posts to the stream endpoint and returns an async enumerable of parsed NDJSON lines.
-    /// </summary>
-    public async IAsyncEnumerable<StreamingSyncLine?> PostStream(SyncStreamOptions options)
+    public async IAsyncEnumerable<StreamingSyncLine?> OldPostStream(SyncStreamOptions options)
     {
-        using var stream = await PostStreamRaw(options);
+        using var requestMessage = await BuildRequest(HttpMethod.Post, options.Path, options.Data, options.Headers);
+        using var response = await httpClient.SendAsync(requestMessage, HttpCompletionOption.ResponseHeadersRead, options.CancellationToken);
+
+        if (response.Content == null)
+        {
+            throw new HttpRequestException($"HTTP {response.StatusCode}: No content");
+        }
+        else
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorText = await response.Content.ReadAsStringAsync();
+            throw new HttpRequestException($"HTTP {response.StatusCode}: {errorText}");
+        }
+
+        var stream = await response.Content.ReadAsStreamAsync();
+
+        // Read NDJSON stream
         using var reader = new StreamReader(stream, Encoding.UTF8);
         string? line;
 
@@ -135,14 +148,14 @@ public class Remote
             yield return ParseStreamingSyncLine(JObject.Parse(line));
         }
     }
-
+    
      /// <summary>
-    /// Posts to the stream endpoint and returns a raw stream that can be read line by line.
+    /// Posts to the stream endpoint and returns a raw NDJSON stream that can be read line by line.
     /// </summary>
     public async Task<Stream> PostStreamRaw(SyncStreamOptions options)
     {
-        using var requestMessage = await BuildRequest(HttpMethod.Post, options.Path, options.Data, options.Headers);
-        using var response = await httpClient.SendAsync(requestMessage, HttpCompletionOption.ResponseHeadersRead, options.CancellationToken);
+         var requestMessage = await BuildRequest(HttpMethod.Post, options.Path, options.Data, options.Headers);
+         var response = await httpClient.SendAsync(requestMessage, HttpCompletionOption.ResponseHeadersRead, options.CancellationToken);
 
         if (response.Content == null)
         {

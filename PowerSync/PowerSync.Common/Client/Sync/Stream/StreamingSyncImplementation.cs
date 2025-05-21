@@ -1,4 +1,5 @@
 using System.Text;
+using Newtonsoft.Json.Linq;
 
 namespace PowerSync.Common.Client.Sync.Stream;
 
@@ -107,12 +108,12 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
     private Task? streamingSyncTask;
     public Action TriggerCrudUpload { get; }
     private Action? notifyCompletedUploads;
-    
+
     private CancellationTokenSource? crudUpdateCts;
     private readonly ILogger logger;
 
     private readonly StreamingSyncLocks locks;
-    
+
 
     public StreamingSyncImplementation(StreamingSyncImplementationOptions options)
     {
@@ -286,7 +287,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
             catch (Exception ex)
             {
                 logger.LogError("Caught exception in streaming sync: {message}", ex.Message);
-
+                Console.WriteLine(ex.StackTrace);
                 // Either:
                 //  - A network request failed with a failed connection or not OKAY response code.
                 //  - There was a sync processing error.
@@ -344,9 +345,9 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                 {
                     Params = options?.Params ?? DEFAULT_STREAM_CONNECTION_OPTIONS.Params
                 };
-                
+
                 await RustSyncIteration(signal, resolvedOptions);
-                
+
                 return true;
             }
         });
@@ -638,15 +639,14 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
         var nestedCts = new CancellationTokenSource();
         signal?.Register(() => { nestedCts.Cancel(); });
 
-        
+
         try
         {
-            notifyCompletedUploads = () => {
-                Task.Run(async () => await Control("completed_upload"));
-            };
-            
+            notifyCompletedUploads = () => { Task.Run(async () => await Control("completed_upload")); };
+
             await Control("start", JsonConvert.SerializeObject(resolvedOptions.Params));
-            if (receivingLines != null) {
+            if (receivingLines != null)
+            {
                 await receivingLines;
             }
         }
@@ -657,7 +657,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
         }
 
         return;
-        
+
         async Task Connect(EstablishSyncStream instruction)
         {
             var syncOptions = new SyncStreamOptions
@@ -666,17 +666,16 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                 CancellationToken = nestedCts.Token,
                 Data = instruction.Request
             };
-            
-            using var stream = await Options.Remote.PostStreamRaw(syncOptions);
+
+            var stream = await Options.Remote.PostStreamRaw(syncOptions);
             using var reader = new StreamReader(stream, Encoding.UTF8);
             string? line;
 
             while ((line = await reader.ReadLineAsync()) != null)
             {
                 logger.LogDebug("Parsing line for rust sync stream {message}", line);
-                await Control("line_binary", line);
+                await Control("line_text", line);
             }
-            
         }
 
         async Task Stop()
@@ -689,7 +688,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
             logger.LogDebug("Control call {message}", op);
 
             var rawResponse = await Options.Adapter.Control(op, payload);
-            await HandleInstructions(JsonConvert.DeserializeObject<Instruction[]>(rawResponse));
+            await HandleInstructions(Instruction.ParseInstructions(rawResponse));
         }
 
         async Task HandleInstructions(Instruction[] instructions)
@@ -699,10 +698,11 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                 await HandleInstruction(instruction);
             }
         }
-        
+
         DB.Crud.SyncPriorityStatus CoreStatusToSyncStatus(SyncPriorityStatus status)
         {
-            logger.LogWarning("Sync status {status}", status?.LastSyncedAt != null ? new DateTime(status!.LastSyncedAt) : null);
+            logger.LogWarning("Sync status {status}",
+                status?.LastSyncedAt != null ? new DateTime(status!.LastSyncedAt) : null);
             return new DB.Crud.SyncPriorityStatus
             {
                 Priority = status.Priority,
@@ -733,9 +733,10 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                     break;
                 case UpdateSyncStatus syncStatus:
                     var info = syncStatus.Status;
-                    var coreCompleteSync = info.PriorityStatus.FirstOrDefault(s => s.Priority == SyncProgress.FULL_SYNC_PRIORITY);
+                    var coreCompleteSync =
+                        info.PriorityStatus.FirstOrDefault(s => s.Priority == SyncProgress.FULL_SYNC_PRIORITY);
                     var completeSync = coreCompleteSync != null ? CoreStatusToSyncStatus(coreCompleteSync) : null;
-                    
+
                     UpdateSyncStatus(new SyncStatusOptions
                         {
                             Connected = info.Connected,
@@ -753,21 +754,22 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                         // TODO handle errors later?
                         new UpdateSyncStatusOptions
                         {
-                            ClearDownloadError = true,
-                            ClearUploadError = true
+                            // ClearDownloadError = true,
+                            // ClearUploadError = true
                         }
                     );
-                    
+
                     break;
                 case EstablishSyncStream establishSyncStream:
-                    if (receivingLines != null) {
+                    if (receivingLines != null)
+                    {
                         // Already connected, this shouldn't happen during a single iteration.
                         throw new Exception("Unexpected request to establish sync stream, already connected");
                     }
-                    
+
                     receivingLines = Connect(establishSyncStream);
                     break;
-                case FetchCredentials { DidExpire: true,  }:
+                case FetchCredentials { DidExpire: true, }:
                     Options.Remote.InvalidateCredentials();
                     break;
                 case FetchCredentials:
@@ -781,7 +783,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                     break;
                 case DidCompleteSync:
                     UpdateSyncStatus(
-                        new SyncStatusOptions{},
+                        new SyncStatusOptions { },
                         new UpdateSyncStatusOptions { ClearDownloadError = true });
                     break;
             }
@@ -929,7 +931,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                     ? null
                     : options.DataFlow?.UploadError ?? SyncStatus.DataFlowStatus.UploadError,
             },
-            PriorityStatusEntries =  options.PriorityStatusEntries ?? SyncStatus.PriorityStatusEntries
+            PriorityStatusEntries = options.PriorityStatusEntries ?? SyncStatus.PriorityStatusEntries
         });
 
         if (!SyncStatus.Equals(updatedStatus))
