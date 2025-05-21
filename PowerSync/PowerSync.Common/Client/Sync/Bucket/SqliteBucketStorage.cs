@@ -4,19 +4,15 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-
 using Newtonsoft.Json;
-
 using PowerSync.Common.DB;
 using PowerSync.Common.DB.Crud;
 using PowerSync.Common.Utils;
 
 public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStorageAdapter
 {
-
     public static readonly string MAX_OP_ID = "9223372036854775807";
 
     private readonly IDBAdapter db;
@@ -37,7 +33,8 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
     public SqliteBucketStorage(IDBAdapter db, ILogger? logger = null)
     {
         this.db = db;
-        this.logger = logger ?? NullLogger.Instance; ;
+        this.logger = logger ?? NullLogger.Instance;
+        ;
         hasCompletedSync = false;
         pendingBucketDeletes = true;
         tableNames = [];
@@ -62,9 +59,10 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
 
     public async Task Init()
     {
-
         hasCompletedSync = false;
-        var existingTableRows = await db.GetAll<ExistingTableRowsResult>("SELECT name FROM sqlite_master WHERE type='table' AND name GLOB 'ps_data_*'");
+        var existingTableRows =
+            await db.GetAll<ExistingTableRowsResult>(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name GLOB 'ps_data_*'");
 
         foreach (var row in existingTableRows)
         {
@@ -79,6 +77,7 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
     }
 
     private record ClientIdResult(string? client_id);
+
     public async Task<string> GetClientId()
     {
         if (clientId == null)
@@ -95,12 +94,15 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
         return MAX_OP_ID;
     }
 
-    public void StartSession() { }
+    public void StartSession()
+    {
+    }
 
     public async Task<BucketState[]> GetBucketStates()
     {
         return
-            await db.GetAll<BucketState>("SELECT name as bucket, cast(last_op as TEXT) as op_id FROM ps_buckets WHERE pending_delete = 0 AND name != '$local'");
+            await db.GetAll<BucketState>(
+                "SELECT name as bucket, cast(last_op as TEXT) as op_id FROM ps_buckets WHERE pending_delete = 0 AND name != '$local'");
     }
 
     public async Task SaveSyncData(SyncDataBatch batch)
@@ -115,6 +117,7 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
                 logger.LogDebug("saveSyncData {message}", JsonConvert.SerializeObject(result));
                 count += b.Data.Length;
             }
+
             compactCounter += count;
         });
     }
@@ -140,6 +143,7 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
     }
 
     private record LastSyncedResult(string? synced_at);
+
     public async Task<bool> HasCompletedSync()
     {
         if (hasCompletedSync) return true;
@@ -155,11 +159,13 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
         var validation = await ValidateChecksums(checkpoint);
         if (!validation.CheckpointValid)
         {
-            logger.LogError("Checksums failed for {failures}", JsonConvert.SerializeObject(validation.CheckpointFailures));
+            logger.LogError("Checksums failed for {failures}",
+                JsonConvert.SerializeObject(validation.CheckpointFailures));
             foreach (var failedBucket in validation.CheckpointFailures ?? [])
             {
                 await DeleteBucket(failedBucket);
             }
+
             return new SyncLocalDatabaseResult
             {
                 Ready = false,
@@ -210,7 +216,7 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
         return await db.WriteTransaction(async tx =>
         {
             var result = await tx.Execute("INSERT INTO powersync_operations(op, data) VALUES(?, ?)",
-                                           ["sync_local", ""]);
+                ["sync_local", ""]);
 
             return result.InsertId == 1;
         });
@@ -220,18 +226,16 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
 
     public class ResultDetail
     {
-        [JsonProperty("valid")]
-        public bool Valid { get; set; }
+        [JsonProperty("valid")] public bool Valid { get; set; }
 
-        [JsonProperty("failed_buckets")]
-        public List<string>? FailedBuckets { get; set; }
+        [JsonProperty("failed_buckets")] public List<string>? FailedBuckets { get; set; }
     }
 
     public async Task<SyncLocalDatabaseResult> ValidateChecksums(
         Checkpoint checkpoint)
     {
         var result = await db.Get<ResultResult>("SELECT powersync_validate_checkpoint(?) as result",
-                [JsonConvert.SerializeObject(checkpoint)]);
+            [JsonConvert.SerializeObject(checkpoint)]);
 
         logger.LogDebug("validateChecksums result item {message}", JsonConvert.SerializeObject(result));
 
@@ -298,6 +302,7 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
     }
 
     private record TargetOpResult(string target_op);
+
     private record SequenceResult(int seq);
 
     public async Task<bool> UpdateLocalTarget(Func<Task<string>> callback)
@@ -351,16 +356,18 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
 
             if (seqAfter != seqBefore)
             {
-                logger.LogDebug("[updateLocalTarget] seqAfter ({seqAfter}) != seqBefore ({seqBefore})", seqAfter, seqBefore);
+                logger.LogDebug("[updateLocalTarget] seqAfter ({seqAfter}) != seqBefore ({seqBefore})", seqAfter,
+                    seqBefore);
                 return false;
             }
 
             var response = await tx.Execute(
-               "UPDATE ps_buckets SET target_op = CAST(? as INTEGER) WHERE name='$local'",
-               [opId]
-           );
+                "UPDATE ps_buckets SET target_op = CAST(? as INTEGER) WHERE name='$local'",
+                [opId]
+            );
 
-            logger.LogDebug("[updateLocalTarget] Response from updating target_op: {response}", JsonConvert.SerializeObject(response));
+            logger.LogDebug("[updateLocalTarget] Response from updating target_op: {response}",
+                JsonConvert.SerializeObject(response));
             return true;
         });
     }
@@ -388,33 +395,33 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
         var last = all[all.Length - 1];
 
         return new CrudBatch(
-        Crud: all,
-        HaveMore: true,
-        CompleteCallback: async (string? writeCheckpoint) =>
-        {
-            await db.WriteTransaction(async tx =>
+            Crud: all,
+            HaveMore: true,
+            CompleteCallback: async (string? writeCheckpoint) =>
             {
-                await tx.Execute("DELETE FROM ps_crud WHERE id <= ?", [last.ClientId]);
-
-                if (!string.IsNullOrEmpty(writeCheckpoint))
+                await db.WriteTransaction(async tx =>
                 {
-                    var crudResult = await tx.GetAll<object>("SELECT 1 FROM ps_crud LIMIT 1");
-                    if (crudResult?.Length > 0)
+                    await tx.Execute("DELETE FROM ps_crud WHERE id <= ?", [last.ClientId]);
+
+                    if (!string.IsNullOrEmpty(writeCheckpoint))
+                    {
+                        var crudResult = await tx.GetAll<object>("SELECT 1 FROM ps_crud LIMIT 1");
+                        if (crudResult?.Length > 0)
+                        {
+                            await tx.Execute(
+                                "UPDATE ps_buckets SET target_op = CAST(? as INTEGER) WHERE name='$local'",
+                                [writeCheckpoint]);
+                        }
+                    }
+                    else
                     {
                         await tx.Execute(
                             "UPDATE ps_buckets SET target_op = CAST(? as INTEGER) WHERE name='$local'",
-                            [writeCheckpoint]);
+                            [GetMaxOpId()]);
                     }
-                }
-                else
-                {
-                    await tx.Execute(
-                        "UPDATE ps_buckets SET target_op = CAST(? as INTEGER) WHERE name='$local'",
-                        [GetMaxOpId()]);
-                }
-            });
-        }
-    );
+                });
+            }
+        );
     }
 
     public async Task<CrudEntry?> NextCrudItem()
@@ -436,13 +443,15 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
     }
 
     record ControlResult(string? r);
+
     public async Task<string> Control(string op, object? payload)
     {
         return await db.WriteTransaction(async tx =>
         {
-              var result = await tx.Get<ControlResult>("SELECT powersync_control(?, ?) AS r", [op, payload]);
-              Console.WriteLine("Control Response: " + result.r);
-              return result.r;
-        }); 
+            var result = await tx.Get<ControlResult>("SELECT powersync_control(?, ?) AS r", [op, payload]);
+
+
+            return result.r;
+        });
     }
 }

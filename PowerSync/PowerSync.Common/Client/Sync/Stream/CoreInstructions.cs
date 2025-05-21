@@ -16,15 +16,11 @@ public abstract class Instruction
         var jsonArray = JArray.Parse(rawResponse);
         List<Instruction> instructions = [];
         
-        Console.WriteLine("Scanning instructions: "+ jsonArray.Count);
         foreach (JObject item in jsonArray)
         {
             instructions.Add(ParseInstruction(item));
-            Console.WriteLine("Parsed instruction: " + JsonConvert.SerializeObject(ParseInstruction(item)));
         }
         
-        
-
         return instructions.ToArray();
     }
 
