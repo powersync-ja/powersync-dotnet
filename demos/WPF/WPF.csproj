@@ -12,9 +12,10 @@
 
   <ItemGroup>
     <PackageReference Include="DotNetEnv" Version="3.1.1" />
-    <PackageReference Include="PowerSync.Common" Version="0.0.2-alpha.1" />
-    <PackageReference Include="supabase" Version="1.1.1" />
     <Resource Include="Assets/Icons/icon.ico" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\PowerSync\Powersync.Common\PowerSync.Common.csproj" />
+  </ItemGroup>
 </Project>
