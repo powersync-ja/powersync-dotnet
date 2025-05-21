@@ -1,0 +1,102 @@
+﻿<Window x:Class="PowersyncDotnetTodoList.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:PowersyncDotnetTodoList.ViewModels"
+        xmlns:conv="clr-namespace:PowersyncDotnetTodoList.Converters"
+        Title="Todo Demo"
+        Height="750"
+        Width="800"
+        FontFamily="Segoe UI"
+        Icon="Assets/Icons/icon.ico">
+
+    <Window.Resources>
+        <conv:BoolToStatusConverter x:Key="BoolToStatusConverter"/>
+        <Style x:Key="ConnectionStatusStyle"
+               TargetType="TextBlock">
+            <Setter Property="FontSize"
+                    Value="14"/>
+            <Setter Property="FontWeight"
+                    Value="SemiBold"/>
+            <Setter Property="Margin"
+                    Value="12,8,0,0"/>
+            <Setter Property="Padding"
+                    Value="8,4"/>
+            <Setter Property="Foreground"
+                    Value="#333333"/>
+            <Setter Property="Background"
+                    Value="#E8F5E9"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Connected}"
+                             Value="False">
+                    <Setter Property="Background"
+                            Value="#FFEBEE"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <Grid Background="#F5F5F5">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0"
+                Background="#2196F3"
+                Height="48">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <!-- Connection Status -->
+                <ColumnDefinition Width="3*"/>
+                <!-- Title (Centered) -->
+                <ColumnDefinition Width="*"/>
+                <!-- Spacer -->
+            </Grid.ColumnDefinitions>
+
+            <!-- Connection Status (Top Left) -->
+            <Border Grid.Column="0"
+                    Background="#FFFFFF"
+                    CornerRadius="4"
+                    Margin="10,8,0,8"
+                    Padding="2">
+                <TextBlock Text="{Binding Connected, Converter={StaticResource BoolToStatusConverter}}"
+                           Padding="8,4"
+                           FontSize="14"
+                           HorizontalAlignment="Left"
+                           VerticalAlignment="Center"/>
+            </Border>
+
+            <!-- App Title (Centered) -->
+            <TextBlock Grid.Column="1"
+                       Text="TODO LIST DEMO"
+                       FontSize="22"
+                       FontWeight="Bold"
+                       Foreground="White"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"/>
+        </Grid>
+
+
+        <TextBlock Grid.Row="1"
+                   Text="Welcome to your PowerSync WPF Todo App"
+                   FontSize="16"
+                   Foreground="#555555"
+                   HorizontalAlignment="Center"
+                   Margin="0,16,0,16"/>
+
+        <!-- Frame for Page Navigation -->
+        <Border Grid.Row="2"
+                Background="White"
+                Margin="20,0,20,20">
+            <Border.Effect>
+                <DropShadowEffect ShadowDepth="1"
+                                  Direction="270"
+                                  Color="#CCCCCC"/>
+            </Border.Effect>
+            <Frame x:Name="MainFrame"
+                   NavigationUIVisibility="Hidden"
+                   Margin="2"/>
+        </Border>
+    </Grid>
+</Window>
