@@ -435,13 +435,14 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
         await Task.CompletedTask;
     }
 
-    record ControlResult(string? value);
+    record ControlResult(string? r);
     public async Task<string> Control(string op, object? payload)
     {
         return await db.WriteTransaction(async tx =>
         {
-              var result = await tx.Get<ControlResult>("SELECT powersync_control(?, ?)", [op, payload]);
-              return "5";
+              var result = await tx.Get<ControlResult>("SELECT powersync_control(?, ?) AS r", [op, payload]);
+              Console.WriteLine(result.r);
+              return result.r;
         }); 
     }
 }

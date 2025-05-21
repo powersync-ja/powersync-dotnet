@@ -94,7 +94,7 @@ public class InstructionConverter : JsonConverter<Instruction>
     public override Instruction ReadJson(JsonReader reader, Type objectType, Instruction? existingValue, bool hasExistingValue, JsonSerializer serializer)
     {
         var jsonObject = JObject.Load(reader);
-
+        Console.WriteLine("Meep" + jsonObject.ToString());
         if (jsonObject.ContainsKey("LogLine"))
             return jsonObject["LogLine"]!.ToObject<LogLine>(serializer)!;
         if (jsonObject.ContainsKey("UpdateSyncStatus"))
@@ -109,7 +109,7 @@ public class InstructionConverter : JsonConverter<Instruction>
             return new FlushFileSystem();
         if (jsonObject.ContainsKey("DidCompleteSync"))
             return new DidCompleteSync();
-
+        Console.WriteLine("Throwing on" + jsonObject.ToString());
         throw new JsonSerializationException("Unknown Instruction type.");
     }
 

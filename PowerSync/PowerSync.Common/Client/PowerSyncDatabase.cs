@@ -85,8 +85,6 @@ public interface IPowerSyncDatabase : IEventStream<PowerSyncDBEvent>
 
 public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDatabase
 {
-    private static readonly int FULL_SYNC_PRIORITY = 2147483647;
-
     public IDBAdapter Database;
     private Schema schema;
 
@@ -246,7 +244,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         {
             var parsedDate = DateTime.Parse(result.last_synced_at + "Z");
 
-            if (result.priority == FULL_SYNC_PRIORITY)
+            if (result.priority == SyncProgress.FULL_SYNC_PRIORITY)
             {
                 // This lowest-possible priority represents a complete sync.
                 lastCompleteSync = parsedDate;
