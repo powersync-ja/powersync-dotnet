@@ -26,8 +26,7 @@ public class SyncDataFlowStatus
 public class SyncPriorityStatus
 {
     [JsonProperty("uploading")] public int Priority { get; set; }
-
-
+    
     [JsonProperty("lastSyncedAt")] public DateTime? LastSyncedAt { get; set; }
 
     [JsonProperty("hasSynced")] public bool? HasSynced { get; set; }
@@ -35,9 +34,7 @@ public class SyncPriorityStatus
 
 public class SyncStatusOptions
 {
-    public SyncStatusOptions()
-    {
-    }
+    public SyncStatusOptions() {}
 
     public SyncStatusOptions(SyncStatusOptions options)
     {
@@ -146,7 +143,7 @@ public class SyncStatus(SyncStatusOptions options)
     {
         return JsonConvert.SerializeObject(this);
     }
-    
+
     private static int ComparePriorities(SyncPriorityStatus a, SyncPriorityStatus b)
     {
         // Lower numbers = higher priority

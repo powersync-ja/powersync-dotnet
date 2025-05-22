@@ -20,38 +20,6 @@ public class Checkpoint
     public string? WriteCheckpoint { get; set; } = null;
 }
 
-public class BucketState
-{
-    [JsonProperty("bucket")]
-    public string Bucket { get; set; } = null!;
-
-    [JsonProperty("op_id")]
-    public string OpId { get; set; } = null!;
-}
-
-public class SyncLocalDatabaseResult
-{
-    [JsonProperty("ready")]
-    public bool Ready { get; set; }
-
-    [JsonProperty("checkpointValid")]
-    public bool CheckpointValid { get; set; }
-
-    [JsonProperty("checkpointFailures")]
-    public string[]? CheckpointFailures { get; set; }
-
-    public override bool Equals(object? obj)
-    {
-        if (obj is not SyncLocalDatabaseResult other) return false;
-        return JsonConvert.SerializeObject(this) == JsonConvert.SerializeObject(other);
-    }
-
-    public override int GetHashCode()
-    {
-        return JsonConvert.SerializeObject(this).GetHashCode();
-    }
-}
-
 public class BucketChecksum
 {
     [JsonProperty("bucket")]
@@ -84,21 +52,11 @@ public class BucketStorageEvent
 public interface IBucketStorageAdapter : IEventStream<BucketStorageEvent>
 {
     Task Init();
-    Task SaveSyncData(SyncDataBatch batch);
-    Task RemoveBuckets(string[] buckets);
-    Task SetTargetCheckpoint(Checkpoint checkpoint);
-
-    void StartSession();
-
-    Task<BucketState[]> GetBucketStates();
-
-    Task<SyncLocalDatabaseResult> SyncLocalDatabase(Checkpoint checkpoint);
-
+    
     Task<CrudEntry?> NextCrudItem();
     Task<bool> HasCrud();
     Task<CrudBatch?> GetCrudBatch(int limit = 100);
 
-    Task<bool> HasCompletedSync();
     Task<bool> UpdateLocalTarget(Func<Task<string>> callback);
 
     /// <summary>

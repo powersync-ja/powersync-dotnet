@@ -619,11 +619,6 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
         });
     }
 
-    public async Task<bool> HasCompletedSync()
-    {
-        return await Options.Adapter.HasCompletedSync();
-    }
-
     public async Task WaitForReady()
     {
         // Do nothing
