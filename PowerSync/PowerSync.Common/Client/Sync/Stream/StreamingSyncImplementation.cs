@@ -493,7 +493,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                     Options.Remote.InvalidateCredentials();
                     break;
                 case FetchCredentials:
-                    await Options.Remote.PrefetchCredentials();
+                    Options.Remote.InvalidateCredentials();
                     break;
                 case CloseSyncStream:
                     CancellationTokenSource?.Cancel();
