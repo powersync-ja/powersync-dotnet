@@ -158,10 +158,37 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
 
         await isReadyTask;
     }
-
-    public async Task WaitForFirstSync(CancellationToken? cancellationToken = null)
+    
+    public class PrioritySyncRequest
     {
-        if (CurrentStatus.HasSynced == true)
+        public CancellationToken? Token { get; set; }
+        public int? Priority { get; set; }
+    }
+
+    /// <summary>
+    /// Wait for the first sync operation to complete.
+    /// </summary>
+    /// <param name="request">
+    /// An object providing a cancellation token and a priority target.
+    /// When a priority target is set, the task may complete when all buckets with the given (or higher)
+    /// priorities have been synchronized. This can be earlier than a complete sync.
+    /// </param>
+    /// <returns>A task which will complete once the first full sync has completed.</returns>
+    public async Task WaitForFirstSync(PrioritySyncRequest? request = null)
+    {
+        var priority =  request?.Priority ?? null;
+        var cancellationToken = request?.Token ?? null;
+
+        bool StatusMatches(SyncStatus status)
+        {
+            if (priority == null)
+            {
+                return status.HasSynced == true;
+            }
+            return status.StatusForPriority(priority.Value).HasSynced == true;
+        }
+
+        if (StatusMatches(CurrentStatus))
         {
             return;
         }
@@ -169,11 +196,11 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         var tcs = new TaskCompletionSource<bool>();
         var cts = new CancellationTokenSource();
 
-        var _ = Task.Run(() =>
+        _ = Task.Run(() =>
         {
             foreach (var update in Listen(cts.Token))
             {
-                if (update.StatusChanged?.HasSynced == true)
+                if  (update.StatusChanged != null && StatusMatches(update.StatusChanged!))
                 {
                     cts.Cancel();
                     tcs.SetResult(true);
@@ -230,7 +257,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         }
     }
 
-    private record LastSyncedResult(int? priority, string? last_synced_at);
+    private record LastSyncedResult(int priority, string? last_synced_at);
 
     protected async Task UpdateHasSynced()
     {
@@ -239,6 +266,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         );
 
         DateTime? lastCompleteSync = null;
+        List<DB.Crud.SyncPriorityStatus> priorityStatuses = [];
 
         foreach (var result in results)
         {
@@ -249,17 +277,28 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
                 // This lowest-possible priority represents a complete sync.
                 lastCompleteSync = parsedDate;
             }
+            else
+            {
+                priorityStatuses.Add(new DB.Crud.SyncPriorityStatus
+                {
+                    Priority = result.priority,
+                    HasSynced = true,
+                    LastSyncedAt = parsedDate
+                });
+            }
         }
 
         var hasSynced = lastCompleteSync != null;
-        if (hasSynced != CurrentStatus.HasSynced)
+        var updatedStatus = new SyncStatus(new SyncStatusOptions(CurrentStatus.Options)
         {
-            CurrentStatus = new SyncStatus(new SyncStatusOptions(CurrentStatus.Options)
-            {
-                HasSynced = hasSynced,
-                LastSyncedAt = lastCompleteSync,
-            });
-
+            HasSynced = hasSynced,
+            PriorityStatusEntries = priorityStatuses.ToArray(),
+            LastSyncedAt = lastCompleteSync,
+        });
+        
+        if (!updatedStatus.IsEqual(CurrentStatus))
+        {
+            CurrentStatus = updatedStatus;
             Emit(new PowerSyncDBEvent { StatusChanged = CurrentStatus });
         }
     }
@@ -536,7 +575,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
     }
 
     /// <summary>
-    /// Get an unique client id for this database.
+    /// Get a unique client id for this database.
     ///
     /// The id is not reset when the database is cleared, only when the database is deleted.
     /// </summary>

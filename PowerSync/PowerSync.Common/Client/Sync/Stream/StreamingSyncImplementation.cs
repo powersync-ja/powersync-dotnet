@@ -332,10 +332,10 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
         });
     }
 
-    protected async Task<bool> StreamingSyncIteration(CancellationToken signal,
+    protected async Task StreamingSyncIteration(CancellationToken signal,
         PowerSyncConnectionOptions? options)
     {
-        return await locks.ObtainLock(new LockOptions<bool>
+        await locks.ObtainLock(new LockOptions<bool>
         {
             Type = LockType.SYNC,
             Token = signal,
@@ -473,11 +473,9 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                                 // DownloadProgress = info.Downloading?.Buckets
                             }
                         },
-                        // TODO handle errors later?
                         new UpdateSyncStatusOptions
                         {
-                            // ClearDownloadError = true,
-                            // ClearUploadError = true
+                            ClearDownloadError = true,
                         }
                     );
 

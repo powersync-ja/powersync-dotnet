@@ -16,16 +16,11 @@ using PowerSync.Common.Client.Connection;
 public class SyncStreamOptions
 {
     public string Path { get; set; } = "";
+    
     public StreamingSyncRequest Data { get; set; } = new();
     public Dictionary<string, string> Headers { get; set; } = new();
 
     public CancellationToken CancellationToken { get; set; } = CancellationToken.None;
-}
-
-public class RequestDetails
-{
-    public string Url { get; set; } = "";
-    public Dictionary<string, string> Headers { get; set; } = new();
 }
 
 public class Remote
@@ -120,34 +115,6 @@ public class Remote
         var responseData = await response.Content.ReadAsStringAsync();
         return JsonConvert.DeserializeObject<T>(responseData)!;
     }
-
-    public async IAsyncEnumerable<StreamingSyncLine?> OldPostStream(SyncStreamOptions options)
-    {
-        using var requestMessage = await BuildRequest(HttpMethod.Post, options.Path, options.Data, options.Headers);
-        using var response = await httpClient.SendAsync(requestMessage, HttpCompletionOption.ResponseHeadersRead, options.CancellationToken);
-
-        if (response.Content == null)
-        {
-            throw new HttpRequestException($"HTTP {response.StatusCode}: No content");
-        }
-        else
-        if (!response.IsSuccessStatusCode)
-        {
-            var errorText = await response.Content.ReadAsStringAsync();
-            throw new HttpRequestException($"HTTP {response.StatusCode}: {errorText}");
-        }
-
-        var stream = await response.Content.ReadAsStreamAsync();
-
-        // Read NDJSON stream
-        using var reader = new StreamReader(stream, Encoding.UTF8);
-        string? line;
-
-        while ((line = await reader.ReadLineAsync()) != null)
-        {
-            yield return ParseStreamingSyncLine(JObject.Parse(line));
-        }
-    }
     
      /// <summary>
     /// Posts to the stream endpoint and returns a raw NDJSON stream that can be read line by line.
@@ -175,35 +142,7 @@ public class Remote
         return await response.Content.ReadAsStreamAsync();
     }
 
-    public static StreamingSyncLine? ParseStreamingSyncLine(JObject json)
-    {
-        // Determine the type based on available keys
-        if (json.ContainsKey("checkpoint"))
-        {
-            return json.ToObject<StreamingSyncCheckpoint>();
-        }
-        else if (json.ContainsKey("checkpoint_diff"))
-        {
-            return json.ToObject<StreamingSyncCheckpointDiff>();
-        }
-        else if (json.ContainsKey("checkpoint_complete"))
-        {
-            return json.ToObject<StreamingSyncCheckpointComplete>();
-        }
-        else if (json.ContainsKey("data"))
-        {
-            return json.ToObject<StreamingSyncDataJSON>();
-        }
-        else if (json.ContainsKey("token_expires_in"))
-        {
-            return json.ToObject<StreamingSyncKeepalive>();
-        }
-        else
-        {
-            return null;
-        }
-    }
-
+  
     private async Task<HttpRequestMessage> BuildRequest(HttpMethod method, string path, object? data = null, Dictionary<string, string>? additionalHeaders = null)
     {
         var credentials = await GetCredentials();
