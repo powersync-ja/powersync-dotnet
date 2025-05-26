@@ -137,7 +137,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
 
         TriggerCrudUpload = () =>
         {
-            if (!SyncStatus.Connected || SyncStatus.DataFlowStatus.Uploading)
+            if (!SyncStatus.Connected)
             {
                 return;
             }
@@ -280,8 +280,9 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                 {
                     break;
                 }
-
+                Console.WriteLine("XXXX starting");
                 await StreamingSyncIteration(nestedCts.Token, options);
+                Console.WriteLine("XXXX ending");
                 // Continue immediately
             }
             catch (Exception ex)
@@ -346,41 +347,24 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                     Params = options?.Params ?? DEFAULT_STREAM_CONNECTION_OPTIONS.Params
                 };
 
-                await RustSyncIteration(signal, resolvedOptions);
+                await SyncIteration(signal, resolvedOptions);
 
                 return true;
             }
         });
     }
     
-    private async Task RustSyncIteration(CancellationToken? signal, RequiredPowerSyncConnectionOptions resolvedOptions)
+    private async Task SyncIteration(CancellationToken? signal, RequiredPowerSyncConnectionOptions resolvedOptions)
     {
         Task? receivingLines = null;
 
         var nestedCts = new CancellationTokenSource();
         signal?.Register(() => { nestedCts.Cancel(); });
 
-
-        try
-        {
-            notifyCompletedUploads = () => { Task.Run(async () => await Control("completed_upload")); };
-
-            await Control("start", JsonConvert.SerializeObject(resolvedOptions.Params));
-            if (receivingLines != null)
-            {
-                await receivingLines;
-            }
-        }
-        finally
-        {
-            notifyCompletedUploads = null;
-            await Stop();
-        }
-
-        return;
-
         async Task Connect(EstablishSyncStream instruction)
         {
+            Console.WriteLine("----- We got het here again" + nestedCts.Token.IsCancellationRequested);
+            Console.WriteLine("-----" + JsonConvert.SerializeObject(instruction.Request));
             var syncOptions = new SyncStreamOptions
             {
                 Path = "/sync/stream",
@@ -390,14 +374,19 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
 
             var stream = await Options.Remote.PostStreamRaw(syncOptions);
             using var reader = new StreamReader(stream, Encoding.UTF8);
+            
+            syncOptions.CancellationToken.Register(() => {
+                try { stream?.Close(); } catch { }
+            });
+            
             string? line;
 
             while ((line = await reader.ReadLineAsync()) != null)
             {
-                logger.LogDebug("Parsing line for rust sync stream {message}", line);
+                logger.LogDebug("Parsing line for rust sync stream {message}", "xx");
                 await Control("line_text", line);
-                
             }
+            Console.WriteLine("Done");
         }
 
         async Task Stop()
@@ -410,31 +399,18 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
             logger.LogDebug("Control call {message}", op);
 
             var rawResponse = await Options.Adapter.Control(op, payload);
-            await HandleInstructions(Instruction.ParseInstructions(rawResponse));
+            HandleInstructions(Instruction.ParseInstructions(rawResponse));
         }
 
-        async Task HandleInstructions(Instruction[] instructions)
+        void HandleInstructions(Instruction[] instructions)
         {
             foreach (var instruction in instructions)
             {
-                await HandleInstruction(instruction);
+                HandleInstruction(instruction);
             }
         }
 
-        DB.Crud.SyncPriorityStatus CoreStatusToSyncStatus(SyncPriorityStatus status)
-        {
-            logger.LogWarning("Sync status {status}",
-                status?.LastSyncedAt != null ? new DateTime(status!.LastSyncedAt) : null);
-            return new DB.Crud.SyncPriorityStatus
-            {
-                Priority = status.Priority,
-                HasSynced = status.HasSynced ?? null,
-                // TODO check this value
-                LastSyncedAt = status?.LastSyncedAt != null ? new DateTime(status!.LastSyncedAt) : null
-            };
-        }
-
-        async Task HandleInstruction(Instruction instruction)
+        void HandleInstruction(Instruction instruction)
         {
             switch (instruction)
             {
@@ -451,7 +427,6 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                             logger.LogWarning("{message}", logLine.Line);
                             break;
                     }
-
                     break;
                 case UpdateSyncStatus syncStatus:
                     var info = syncStatus.Status;
@@ -477,25 +452,20 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                             ClearDownloadError = true,
                         }
                     );
-
                     break;
                 case EstablishSyncStream establishSyncStream:
                     if (receivingLines != null)
                     {
-                        // Already connected, this shouldn't happen during a single iteration.
                         throw new Exception("Unexpected request to establish sync stream, already connected");
                     }
-
                     receivingLines = Connect(establishSyncStream);
                     break;
-                case FetchCredentials { DidExpire: true, }:
-                    Options.Remote.InvalidateCredentials();
-                    break;
-                case FetchCredentials:
+                case FetchCredentials fetchCredentials:
                     Options.Remote.InvalidateCredentials();
                     break;
                 case CloseSyncStream:
-                    CancellationTokenSource?.Cancel();
+                    nestedCts.Cancel();
+                    logger.LogWarning("Closing stream");
                     break;
                 case FlushFileSystem:
                     // ignore
@@ -506,6 +476,27 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                         new UpdateSyncStatusOptions { ClearDownloadError = true });
                     break;
             }
+        }
+
+        try
+        {
+            notifyCompletedUploads = () => { Task.Run(async () => await Control("completed_upload")); };
+            logger.LogError("START");
+            await Control("start", JsonConvert.SerializeObject(resolvedOptions.Params));
+            if (receivingLines != null)
+            {
+                await receivingLines;
+                logger.LogError("Done waiting");
+            }
+            else
+            {
+                Console.WriteLine("No receiving lines task was started, this should not happen.");
+            }
+        }
+        finally
+        {
+            notifyCompletedUploads = null;
+            await Stop();
         }
     }
 
@@ -667,6 +658,16 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
         {
             await Task.Delay(Options.RetryDelayMs.Value);
         }
+    }
+
+    private static DB.Crud.SyncPriorityStatus CoreStatusToSyncStatus(SyncPriorityStatus status)
+    {
+        return new DB.Crud.SyncPriorityStatus
+        {
+            Priority = status.Priority,
+            HasSynced = status.HasSynced ?? null,
+            LastSyncedAt = status?.LastSyncedAt != null ? new DateTime(status!.LastSyncedAt) : null
+        };
     }
 }
 

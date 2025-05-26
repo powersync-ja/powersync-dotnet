@@ -18,7 +18,12 @@ public abstract class Instruction
         
         foreach (JObject item in jsonArray)
         {
-            instructions.Add(ParseInstruction(item));
+            var instruction = ParseInstruction(item);
+            if (instruction == null)
+            {
+                throw new JsonSerializationException("Failed to parse instruction from JSON.");
+            }
+            instructions.Add(instruction);
         }
         
         return instructions.ToArray();

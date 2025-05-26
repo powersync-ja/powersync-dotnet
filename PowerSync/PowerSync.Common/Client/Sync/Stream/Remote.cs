@@ -1,17 +1,15 @@
 namespace PowerSync.Common.Client.Sync.Stream;
 
+using Connection;
 using System.IO;
 using System.Net.Http;
 using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Text.RegularExpressions;
 
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 
-using PowerSync.Common.Client.Connection;
 
 public class SyncStreamOptions
 {
