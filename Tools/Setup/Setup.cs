@@ -8,7 +8,7 @@ public class Setup
 {
     static async Task Main(string[] args)
     {
-        const string baseUrl = "https://github.com/powersync-ja/powersync-sqlite-core/releases/download/v0.3.8";
+        const string baseUrl = "https://github.com/powersync-ja/powersync-sqlite-core/releases/download/v0.3.14";
         string powersyncCorePath = Path.Combine(AppContext.BaseDirectory, "../../../../..", "PowerSync/PowerSync.Common/");
 
         var runtimeIdentifiers = new Dictionary<string, (string originalFile, string newFile)>

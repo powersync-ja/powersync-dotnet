@@ -297,6 +297,10 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                 UpdateSyncStatus(new SyncStatusOptions
                 {
                     Connected = false,
+                    DataFlow = new SyncDataFlowStatus
+                    {
+                        DownloadError = ex
+                    }
                 });
 
                 // On error, wait a little before retrying
@@ -466,7 +470,13 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                             {
                                 Connected = true,
                                 LastSyncedAt = DateTime.Now,
-                                DataFlow = new SyncDataFlowStatus { Downloading = false }
+                                DataFlow = new SyncDataFlowStatus
+                                {
+                                    Downloading = false
+                                }
+                            }, new UpdateSyncStatusOptions
+                            {
+                                ClearDownloadError = true
                             });
 
                         }
@@ -539,11 +549,19 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                         {
                             // Connection would be closed automatically right after this
                             logger.LogDebug("Token expiring; reconnect");
+                            Options.Remote.InvalidateCredentials();
 
                             // For a rare case where the backend connector does not update the token
                             // (uses the same one), this should have some delay.
                             //
                             await DelayRetry();
+                            return new StreamingSyncIterationResult { Retry = true };
+                        }
+                        else if (remainingSeconds < 30)
+                        {
+                            logger.LogDebug("Token will expire soon; reconnect");
+                            // Pre-emptively refresh the token
+                            Options.Remote.InvalidateCredentials();
                             return new StreamingSyncIterationResult { Retry = true };
                         }
                         TriggerCrudUpload();
@@ -557,8 +575,13 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                             UpdateSyncStatus(new SyncStatusOptions
                             {
                                 Connected = true,
-                                LastSyncedAt = DateTime.Now
-                            });
+                                LastSyncedAt = DateTime.Now,
+                            },
+                            new UpdateSyncStatusOptions
+                            {
+                                ClearDownloadError = true
+                            }
+                            );
                         }
                         else if (validatedCheckpoint == targetCheckpoint)
                         {
@@ -584,8 +607,12 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                                     LastSyncedAt = DateTime.Now,
                                     DataFlow = new SyncDataFlowStatus
                                     {
-                                        Downloading = false
+                                        Downloading = false,
                                     }
+                                },
+                                new UpdateSyncStatusOptions
+                                {
+                                    ClearDownloadError = true
                                 });
                             }
                         }
@@ -655,6 +682,14 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
 
                             checkedCrudItem = nextCrudItem;
                             await Options.UploadCrud();
+                            UpdateSyncStatus(new SyncStatusOptions
+                            {
+                            },
+                            new UpdateSyncStatusOptions
+                            {
+                                ClearUploadError = true
+                            });
+
                         }
                         else
                         {
@@ -666,7 +701,14 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                     catch (Exception ex)
                     {
                         checkedCrudItem = null;
-                        UpdateSyncStatus(new SyncStatusOptions { DataFlow = new SyncDataFlowStatus { Uploading = false } });
+                        UpdateSyncStatus(new SyncStatusOptions
+                        {
+                            DataFlow = new SyncDataFlowStatus
+                            {
+                                Uploading = false,
+                                UploadError = ex
+                            }
+                        });
 
                         await DelayRetry();
 
@@ -700,7 +742,10 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
         await Task.CompletedTask;
     }
 
-    protected void UpdateSyncStatus(SyncStatusOptions options)
+    protected record UpdateSyncStatusOptions(
+        bool? ClearDownloadError = null, bool? ClearUploadError = null
+    );
+    protected void UpdateSyncStatus(SyncStatusOptions options, UpdateSyncStatusOptions? updateOptions = null)
     {
         var updatedStatus = new SyncStatus(new SyncStatusOptions
         {
@@ -710,7 +755,9 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
             DataFlow = new SyncDataFlowStatus
             {
                 Uploading = options.DataFlow?.Uploading ?? SyncStatus.DataFlowStatus.Uploading,
-                Downloading = options.DataFlow?.Downloading ?? SyncStatus.DataFlowStatus.Downloading
+                Downloading = options.DataFlow?.Downloading ?? SyncStatus.DataFlowStatus.Downloading,
+                DownloadError = updateOptions?.ClearDownloadError == true ? null : options.DataFlow?.DownloadError ?? SyncStatus.DataFlowStatus.DownloadError,
+                UploadError = updateOptions?.ClearUploadError == true ? null : options.DataFlow?.UploadError ?? SyncStatus.DataFlowStatus.UploadError,
             }
         });
 

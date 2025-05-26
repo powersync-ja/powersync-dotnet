@@ -85,6 +85,7 @@ public interface IPowerSyncDatabase : IEventStream<PowerSyncDBEvent>
 
 public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDatabase
 {
+    private static readonly int FULL_SYNC_PRIORITY = 2147483647;
 
     public IDBAdapter Database;
     private Schema schema;
@@ -231,21 +232,35 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         }
     }
 
-    private record LastSyncedResult(string? synced_at);
+    private record LastSyncedResult(int? priority, string? last_synced_at);
 
     protected async Task UpdateHasSynced()
     {
-        var result = await Database.Get<LastSyncedResult>("SELECT powersync_last_synced_at() as synced_at");
+        var results = await Database.GetAll<LastSyncedResult>(
+            "SELECT priority, last_synced_at FROM ps_sync_state ORDER BY priority DESC"
+        );
 
-        var hasSynced = result.synced_at != null;
-        DateTime? syncedAt = result.synced_at != null ? DateTime.Parse(result.synced_at + "Z") : null;
+        DateTime? lastCompleteSync = null;
+        
+        // TODO: Will be altered/extended when reporting individual sync priority statuses is supported 
+        foreach (var result in results)
+        {
+            var parsedDate = DateTime.Parse(result.last_synced_at + "Z");
 
+            if (result.priority == FULL_SYNC_PRIORITY)
+            {
+                // This lowest-possible priority represents a complete sync.
+                lastCompleteSync = parsedDate;
+            }
+        }
+
+        var hasSynced = lastCompleteSync != null;
         if (hasSynced != CurrentStatus.HasSynced)
         {
             CurrentStatus = new SyncStatus(new SyncStatusOptions(CurrentStatus.Options)
             {
                 HasSynced = hasSynced,
-                LastSyncedAt = syncedAt
+                LastSyncedAt = lastCompleteSync,
             });
 
             Emit(new PowerSyncDBEvent { StatusChanged = CurrentStatus });
