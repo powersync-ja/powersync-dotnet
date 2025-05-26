@@ -65,11 +65,11 @@ public interface IPowerSyncDatabase : IEventStream<PowerSyncDBEvent>
 
     Task<NonQueryResult> Execute(string query, object[]? parameters = null);
 
-    Task<T[]> GetAll<T>(string sql, params object[]? parameters);
+    Task<T[]> GetAll<T>(string sql, object[]? parameters = null);
 
-    Task<T?> GetOptional<T>(string sql, params object[]? parameters);
+    Task<T?> GetOptional<T>(string sql, object[]? parameters = null);
 
-    Task<T> Get<T>(string sql, params object[]? parameters);
+    Task<T> Get<T>(string sql, object[]? parameters = null);
 
     Task<T> ReadLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null);
 
