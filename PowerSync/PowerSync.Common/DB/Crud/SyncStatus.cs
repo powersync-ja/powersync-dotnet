@@ -1,5 +1,6 @@
 namespace PowerSync.Common.DB.Crud;
 
+using PowerSync.Common.Client.Sync.Stream;
 using Newtonsoft.Json;
 
 public class SyncDataFlowStatus
@@ -21,12 +22,18 @@ public class SyncDataFlowStatus
     /// </summary>
     [JsonProperty("uploadError")]
     public Exception? UploadError { get; set; } = null;
+
+
+    /// <summary>
+    /// Internal information about how far we are downloading operations in buckets.
+    /// </summary>
+    public Dictionary<string, BucketProgress>? DownloadProgress { get; set; } = null;
 }
 
 public class SyncPriorityStatus
 {
     [JsonProperty("uploading")] public int Priority { get; set; }
-    
+
     [JsonProperty("lastSyncedAt")] public DateTime? LastSyncedAt { get; set; }
 
     [JsonProperty("hasSynced")] public bool? HasSynced { get; set; }
@@ -34,7 +41,9 @@ public class SyncPriorityStatus
 
 public class SyncStatusOptions
 {
-    public SyncStatusOptions() {}
+    public SyncStatusOptions()
+    {
+    }
 
     public SyncStatusOptions(SyncStatusOptions options)
     {
@@ -92,6 +101,21 @@ public class SyncStatus(SyncStatusOptions options)
         (Options.PriorityStatusEntries ?? [])
         .OrderBy(entry => entry.Priority)
         .ToArray();
+
+    /// <summary>
+    /// A realtime progress report on how many operations have been downloaded and
+    /// how many are necessary in total to complete the next sync iteration.
+    /// </summary>
+    public SyncProgress? DownloadProgress()
+    {
+        var internalProgress = Options.DataFlow?.DownloadProgress;
+        if (internalProgress == null)
+        {
+            return null;
+        }
+
+        return new SyncProgress(internalProgress);
+    }
 
     /// <summary>
     /// Reports the sync status (a pair of HasSynced and LastSyncedAt fields)

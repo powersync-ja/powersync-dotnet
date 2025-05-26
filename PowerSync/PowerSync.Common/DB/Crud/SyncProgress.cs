@@ -1,3 +1,5 @@
+using PowerSync.Common.Client.Sync.Stream;
+
 namespace PowerSync.Common.DB.Crud;
 
 /// <summary>
@@ -18,12 +20,11 @@ namespace PowerSync.Common.DB.Crud;
 public class SyncProgress : ProgressWithOperations
 {
     public static readonly int FULL_SYNC_PRIORITY = 2147483647;
-
-    private InternalProgressInformation internalProgress;
-
-    public SyncProgress(InternalProgressInformation progress)
+    protected Dictionary<string, BucketProgress> InternalProgress { get; }
+    
+    public SyncProgress(Dictionary<string, BucketProgress> progress)
     {
-        this.internalProgress = progress;
+        this.InternalProgress = progress;
         var untilCompletion = UntilPriority(FULL_SYNC_PRIORITY);
 
         TotalOperations = untilCompletion.TotalOperations;
@@ -31,12 +32,12 @@ public class SyncProgress : ProgressWithOperations
         DownloadedFraction = untilCompletion.DownloadedFraction;
     }
 
-    private ProgressWithOperations UntilPriority(int priority)
+    public ProgressWithOperations UntilPriority(int priority)
     {
         var total = 0;
         var downloaded = 0;
 
-        foreach (var progress in internalProgress.Buckets.Values)
+        foreach (var progress in InternalProgress.Values)
         {
             // Include higher-priority buckets, which are represented by lower numbers.
             if (progress.Priority <= priority)
@@ -53,43 +54,6 @@ public class SyncProgress : ProgressWithOperations
             DownloadedFraction = total == 0 ? 1.0 : (double)downloaded / total
         };
     }
-}
-
-/// <summary>
-/// Represents progress information for sync operations.
-/// </summary>
-public class InternalProgressInformation
-{
-    /// <summary>
-    /// Dictionary mapping bucket names to their progress information.
-    /// </summary>
-    public Dictionary<string, BucketProgressInfo> Buckets { get; set; } = new();
-}
-
-/// <summary>
-/// Represents progress information for a single bucket.
-/// </summary>
-public class BucketProgressInfo
-{
-    /// <summary>
-    /// Priority of the associated buckets
-    /// </summary>
-    public int Priority { get; set; }
-
-    /// <summary>
-    /// Total ops at last completed sync, or 0
-    /// </summary>
-    public int AtLast { get; set; }
-
-    /// <summary>
-    /// Total ops since the last completed sync
-    /// </summary>
-    public int SinceLast { get; set; }
-
-    /// <summary>
-    /// Total opcount for next checkpoint as indicated by service
-    /// </summary>
-    public int TargetCount { get; set; }
 }
 
 /// <summary>

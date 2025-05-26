@@ -469,8 +469,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                             DataFlow = new SyncDataFlowStatus
                             {
                                 Downloading = info.Downloading != null,
-                                // TODO CL
-                                // DownloadProgress = info.Downloading?.Buckets
+                                DownloadProgress = info.Downloading?.Buckets
                             }
                         },
                         new UpdateSyncStatusOptions
@@ -645,6 +644,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                 UploadError = updateOptions?.ClearUploadError == true
                     ? null
                     : options.DataFlow?.UploadError ?? SyncStatus.DataFlowStatus.UploadError,
+                DownloadProgress = options.DataFlow?.DownloadProgress ?? SyncStatus.DataFlowStatus.DownloadProgress,
             },
             PriorityStatusEntries = options.PriorityStatusEntries ?? SyncStatus.PriorityStatusEntries
         });
