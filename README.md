@@ -23,6 +23,7 @@ Demo applications are located in the [`demos/`](./demos/) directory. Also see ou
 ### Command-Line
 
 - [demos/CommandLine](./demos/CommandLine/README.md): A CLI to-do list example app using a Node-js backend.
+- [demos/WPF](./demos/WPF/README.md): This is a demo WPF application that showcases how to use the [PowerSync SDK](https://www.powersync.com) for data synchronization in a to-do list application using a Node-js backend.
 
 # Supported Frameworks
 
