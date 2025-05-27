@@ -280,9 +280,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                 {
                     break;
                 }
-                Console.WriteLine("XXXX starting");
                 await StreamingSyncIteration(nestedCts.Token, options);
-                Console.WriteLine("XXXX ending");
                 // Continue immediately
             }
             catch (Exception ex)
@@ -363,8 +361,6 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
 
         async Task Connect(EstablishSyncStream instruction)
         {
-            Console.WriteLine("----- We got het here again" + nestedCts.Token.IsCancellationRequested);
-            Console.WriteLine("-----" + JsonConvert.SerializeObject(instruction.Request));
             var syncOptions = new SyncStreamOptions
             {
                 Path = "/sync/stream",
@@ -386,7 +382,6 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                 logger.LogDebug("Parsing line for rust sync stream {message}", "xx");
                 await Control("line_text", line);
             }
-            Console.WriteLine("Done");
         }
 
         async Task Stop()
@@ -481,16 +476,10 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
         try
         {
             notifyCompletedUploads = () => { Task.Run(async () => await Control("completed_upload")); };
-            logger.LogError("START");
             await Control("start", JsonConvert.SerializeObject(resolvedOptions.Params));
             if (receivingLines != null)
             {
                 await receivingLines;
-                logger.LogError("Done waiting");
-            }
-            else
-            {
-                Console.WriteLine("No receiving lines task was started, this should not happen.");
             }
         }
         finally
