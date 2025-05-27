@@ -1,9 +1,11 @@
 namespace PowerSync.Common.Tests.Client;
 
+using Microsoft.Data.Sqlite;
+
 using System.Diagnostics;
 using PowerSync.Common.Client;
 
-public class PowerSyncDatabaseTransactionTests : IAsyncLifetime
+public class PowerSyncDatabaseTests : IAsyncLifetime
 {
     private PowerSyncDatabase db = default!;
 
@@ -26,6 +28,63 @@ public class PowerSyncDatabaseTransactionTests : IAsyncLifetime
     private record IdResult(string id);
     private record AssetResult(string id, string description, string? make = null);
     private record CountResult(int count);
+
+    [Fact]
+    public async Task QueryWithoutParamsTest()
+    {
+        var name = "Test User";
+        var age = 30;
+
+        await db.Execute(
+            "INSERT INTO assets(id, description, make) VALUES(?, ?, ?)",
+            [Guid.NewGuid().ToString(), name, age.ToString()]
+        );
+
+        var result = await db.GetAll<AssetResult>("SELECT id, description, make FROM assets");
+
+        Assert.Single(result);
+        var row = result.First();
+        Assert.Equal(name, row.description);
+        Assert.Equal(age.ToString(), row.make);
+    }
+
+    [Fact]
+    public async Task QueryWithParamsTest()
+    {
+        var id = Guid.NewGuid().ToString();
+        var name = "Test User";
+        var age = 30;
+
+        await db.Execute(
+            "INSERT INTO assets(id, description, make) VALUES(?, ?, ?)",
+            [id, name, age.ToString()]
+        );
+
+        var result = await db.GetAll<AssetResult>("SELECT id, description, make FROM assets WHERE id = ?", [id]);
+
+        Assert.Single(result);
+        var row = result.First();
+        Assert.Equal(id, row.id);
+        Assert.Equal(name, row.description);
+        Assert.Equal(age.ToString(), row.make);
+    }
+
+    [Fact]
+    public async Task FailedInsertTest()
+    {
+        var name = "Test User";
+        var age = 30;
+
+        var exception = await Assert.ThrowsAsync<SqliteException>(async () =>
+        {
+            await db.Execute(
+                "INSERT INTO assetsfail (id, description, make) VALUES(?, ?, ?)",
+                [Guid.NewGuid().ToString(), name, age.ToString()]
+            );
+        });
+
+        Assert.Contains("no such table", exception.Message);
+    }
 
     [Fact]
     public async Task SimpleReadTransactionTest()
@@ -334,7 +393,7 @@ public class PowerSyncDatabaseTransactionTests : IAsyncLifetime
             int n = random.Next(0, 100000);
             await db.Execute(
                 "INSERT INTO assets(id, description) VALUES(?, ?)",
-                [i + 1, n]
+                [(i + 1).ToString(), n]
             );
         }
 

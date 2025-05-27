@@ -1,4 +1,4 @@
-# PowerSync CLI demo app
+# PowerSync CLI Demo App
 
 This demo features a CLI-based table view that stays *live* using a *watch query*, ensuring the data updates in real time as changes occur.
 To run this demo, you need to have one of our Node.js self-host demos ([Postgres](https://github.com/powersync-ja/self-host-demo/tree/main/demos/nodejs) | [MongoDB](https://github.com/powersync-ja/self-host-demo/tree/main/demos/nodejs-mongodb) | [MySQL](https://github.com/powersync-ja/self-host-demo/tree/main/demos/nodejs-mysql)) running, as it provides the PowerSync server that this CLI's PowerSync SDK connects to.
@@ -8,6 +8,36 @@ Changes made to the backend's source DB or to the self-hosted web UI will be syn
 ## Authentication
 
 This essentially uses anonymous authentication. A random user ID is generated and stored in local storage. The backend returns a valid token which is not linked to a specific user. All data is synced to all users.
+
+> **Note for Supabase users:**  
+> If you are using `USE_SUPABASE=true`, this demo expects a valid, **already existing Supabase user**.  
+> You must provide their credentials via the `.env` file using `SUPABASE_USERNAME` and `SUPABASE_PASSWORD`.
+
+## Connection Options
+
+By default, this demo uses the NodeConnector for connecting to the PowerSync server. However, you can swap this out with the SupabaseConnector if needed
+
+1. Copy the `.env.template` file to a new `.env` file:
+   ```bash
+   # On Linux/macOS
+   cp .env.template .env
+   
+   # On Windows
+   copy .env.template .env
+   ```
+
+2. Replace the necessary fields in the `.env` file with your Supabase and PowerSync credentials:
+   ```
+    SUPABASE_URL=your-supabase-url
+    SUPABASE_ANON_KEY=your_anon_key_here
+    POWERSYNC_URL=your-powersync-url
+    BACKEND_URL=your-backend-url
+    SUPABASE_USERNAME=your-supabase-username
+    SUPABASE_PASSWORD=your-supabase-password
+    # Set to true if you want to use Supabase as the backend
+    # Set to false if you want to use the Powersync backend
+    USE_SUPABASE=false
+   ```
 
 ## Getting Started
 

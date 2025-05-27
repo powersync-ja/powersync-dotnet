@@ -1,0 +1,124 @@
+<Page x:Class="PowersyncDotnetTodoList.Views.SQLConsoleView"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:vm="clr-namespace:PowersyncDotnetTodoList.ViewModels"
+      Title="SQL Console">
+
+    <Grid Background="#F5F5F5">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Back Button -->
+        <Button Grid.Column="0"
+                Content="← Back"
+                Command="{Binding BackCommand}"
+                Width="120"
+                Height="40"
+                Background="#2196F3"
+                Foreground="White"
+                FontSize="14"
+                FontWeight="Bold"
+                BorderThickness="0"
+                Cursor="Hand"
+                HorizontalAlignment="Left"
+                Margin="20,20,0,10"/>
+
+        <!-- Title -->
+        <TextBlock Grid.Column="1"
+                   Text="SQL Console"
+                   FontSize="22"
+                   FontWeight="Bold"
+                   Foreground="#333"
+                   HorizontalAlignment="Center"
+                   Margin="0,10,0,10"/>
+
+        <!-- SQL Console Section -->
+        <Border Grid.Row="1"
+                Background="White"
+                CornerRadius="8"
+                Margin="20"
+                Padding="20"
+                BorderBrush="#DDDDDD"
+                BorderThickness="1">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <!-- SQL Input and Button -->
+                    <RowDefinition Height="Auto"/>
+                    <!-- Error Message -->
+                    <RowDefinition Height="*"/>
+                    <!-- Results Grid -->
+                </Grid.RowDefinitions>
+
+                <!-- SQL Input and Execute Button -->
+                <Grid Grid.Row="0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <!-- Query Input -->
+                        <ColumnDefinition Width="Auto"/>
+                        <!-- Execute Button -->
+                    </Grid.ColumnDefinitions>
+
+                    <!-- SQL Input Box -->
+                    <TextBox Grid.Column="0"
+                             Text="{Binding SqlQuery, UpdateSourceTrigger=PropertyChanged}"
+                             Height="40"
+                             FontFamily="Consolas"
+                             FontSize="14"
+                             Padding="10"
+                             VerticalContentAlignment="Center"
+                             Margin="0,0,10,0"
+                             BorderBrush="#CCCCCC"/>
+
+                    <!-- Execute Button -->
+                    <Button Grid.Column="1"
+                            Content="Execute Query"
+                            Command="{Binding ExecuteQueryCommand}"
+                            Width="150"
+                            Height="40"
+                            Background="#2196F3"
+                            Foreground="White"
+                            FontSize="14"
+                            FontWeight="Bold"
+                            BorderThickness="0"
+                            Cursor="Hand"/>
+                </Grid>
+
+                <!-- Error Message -->
+                <TextBlock Grid.Row="1"
+                           Text="{Binding ErrorMessage}"
+                           Foreground="Red"
+                           FontSize="14"
+                           TextWrapping="Wrap"
+                           Margin="0,10,0,10"
+                           Visibility="{Binding ErrorMessage, Converter={StaticResource StringToVisibilityConverter}}"/>
+
+                <!-- Results DataGrid -->
+                <DataGrid Grid.Row="2"
+                          ItemsSource="{Binding QueryResults}"
+                          AutoGenerateColumns="True"
+                          IsReadOnly="True"
+                          Margin="0,10,0,0"
+                          BorderBrush="#CCCCCC"
+                          BorderThickness="1"
+                          AlternatingRowBackground="#F0F0F0"
+                          RowBackground="White"
+                          HorizontalGridLinesBrush="#E0E0E0"
+                          VerticalGridLinesBrush="#E0E0E0">
+                    <DataGrid.ColumnHeaderStyle>
+                        <Style TargetType="DataGridColumnHeader">
+                            <Setter Property="Background"
+                                    Value="#EFEFEF"/>
+                            <Setter Property="FontWeight"
+                                    Value="Bold"/>
+                            <Setter Property="Padding"
+                                    Value="8"/>
+                        </Style>
+                    </DataGrid.ColumnHeaderStyle>
+                </DataGrid>
+            </Grid>
+        </Border>
+    </Grid>
+</Page>
