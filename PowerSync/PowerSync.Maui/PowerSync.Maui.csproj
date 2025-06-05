@@ -1,0 +1,33 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.0;net6.0;net8.0;net9.0;net8.0-ios;net8.0-android</TargetFrameworks>
+    <LangVersion>12</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PackageId>PowerSync.Maui</PackageId>
+    <Title>PowerSync.Maui</Title>
+    <Description>PowerSync.Maui is a package that enables MAUI usage for PowerSync</Description>
+    <Authors>PowerSync</Authors>
+    <owners>powersync</owners>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/powersync-ja/powersync-dotnet</RepositoryUrl>
+    <PackageProjectUrl>https://powersync.com</PackageProjectUrl>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <PackageReleaseNotes>https://github.com/powersync-ja/powersync-dotnet/PowerSync/PowerSync.Maui/CHANGELOG.md</PackageReleaseNotes>
+    <PackageTags>powersync local-first local-storage state-management offline sql db persistence sqlite sync </PackageTags>
+    <PackageIcon>icon.png</PackageIcon>
+    <NoWarn>NU5100</NoWarn>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PowerSync.Common\PowerSync.Common.csproj" />
+  </ItemGroup>
+  
+  <ItemGroup>
+    <None Include="..\..\icon.png" Pack="true" PackagePath=""/>
+    <None Include="README.md" Pack="true" PackagePath=""/>
+  </ItemGroup>
+  
+</Project>
