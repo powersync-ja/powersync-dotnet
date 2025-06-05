@@ -8,11 +8,11 @@ public class MDSQLiteOpenFactoryOptions : SQLOpenOptions
     public MDSQLiteOptions? SqliteOptions { get; set; }
 }
 
-public class MDSqliteDBOpenFactory : ISQLOpenFactory
+public class MDSQLiteDBOpenFactory : ISQLOpenFactory
 {
     private readonly MDSQLiteOpenFactoryOptions options;
 
-    public MDSqliteDBOpenFactory(MDSQLiteOpenFactoryOptions options)
+    public MDSQLiteDBOpenFactory(MDSQLiteOpenFactoryOptions options)
     {
         this.options = options;
     }
