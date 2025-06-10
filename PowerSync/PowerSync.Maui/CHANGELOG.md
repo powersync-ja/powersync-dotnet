@@ -1,15 +1,9 @@
 # PowerSync.Maui Changelog
 
-## 0.0.2-alpha.2
 
-- Updated core extension to v0.3.14
-- Loading last synced time from core extension
-- Expose upload and download errors on SyncStatus
-- Improved credentials management and error handling. Credentials are invalidated when they expire or become invalid based on responses from the PowerSync service. The frequency of credential fetching has been reduced as a result of this work.
+## 0.0.1-alpha.1
 
-## 0.0.2-alpha.1
-
-- Introduce package. Support for Desktop .NET use cases.
+- Introduce package. Support for iOS/Android use cases.
 
 ### Platform Runtime Support Added
 * MAUI iOS
