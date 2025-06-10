@@ -3,11 +3,8 @@
 	<PropertyGroup>
 	    <ApplicationId>com.companyname.todo</ApplicationId>
 
-		<TargetFrameworks>net8.0-android;net8.0-ios;net8.0-maccatalyst</TargetFrameworks>
-		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net8.0-windows10.0.19041.0</TargetFrameworks>
-		<!-- Uncomment to also build the tizen app. You will need to install tizen by following this: https://github.com/Samsung/Tizen.NET -->
-		<!-- <TargetFrameworks>$(TargetFrameworks);net8.0-tizen</TargetFrameworks> -->
-
+		<TargetFrameworks>net8.0-android;net8.0-ios</TargetFrameworks>
+		
 		<!-- Note for MacCatalyst:
 		The default runtime is maccatalyst-x64, except in Release config, in which case the default is maccatalyst-x64;maccatalyst-arm64.
 		When specifying both architectures, use the plural <RuntimeIdentifiers> instead of the singular <RuntimeIdentifier>.
@@ -34,9 +31,6 @@
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">11.0</SupportedOSPlatformVersion>
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">13.1</SupportedOSPlatformVersion>
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">21.0</SupportedOSPlatformVersion>
-		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
-		<TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
-		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'tizen'">6.5</SupportedOSPlatformVersion>
 	</PropertyGroup>
 	<ItemGroup>
 		<!-- App Icon -->
@@ -72,33 +66,4 @@
     	<ProjectReference Include="..\..\PowerSync\Powersync.Common\PowerSync.Common.csproj" />
 		<ProjectReference Include="..\..\PowerSync\Powersync.Maui\PowerSync.Maui.csproj" />
   	</ItemGroup>
-
-<!--	<ItemGroup>-->
-<!--	  <Folder Include="Platforms\iOS\NativeLibs\" />-->
-<!--	</ItemGroup>-->
-
-<!--	<ItemGroup Condition="'$(TargetFramework)' == 'net8.0-ios'">-->
-<!--		<NativeReference Include="Platforms/iOS/NativeLibs/powersync-sqlite-core.xcframework">-->
-<!--			<Kind>Framework</Kind>-->
-<!--			<ForceLoad>true</ForceLoad>     &lt;!&ndash; Required if static &ndash;&gt;-->
-<!--			<Frameworks>Foundation</Frameworks>-->
-<!--		</NativeReference>-->
-<!--	</ItemGroup>-->
-
-<!--	<ItemGroup Condition="'$(TargetFramework)' == 'net8.0-android'">-->
-<!--		<AndroidNativeLibrary Include="Platforms/Android/jniLibs/**/*.so" />-->
-<!--	</ItemGroup>-->
-<!--	-->
-<!--		<ItemGroup Condition="'$(TargetFramework)' == 'net8.0-android'">-->
-<!--			<AndroidNativeLibrary Include="$(MSBuildThisFileDirectory)../Platforms/Android/jniLibs/**/*.so" />-->
-<!--		</ItemGroup>-->
-
-<!--		<ItemGroup Condition="'$(TargetFramework)' == 'net8.0-ios'">-->
-<!--			<NativeReference Include="$(MSBuildThisFileDirectory)../Platforms/iOS/NativeLibs/powersync-sqlite-core.xcframework">-->
-<!--				<Kind>Framework</Kind>-->
-<!--				<ForceLoad>true</ForceLoad>-->
-<!--				<Frameworks>Foundation</Frameworks>-->
-<!--			</NativeReference>-->
-<!--		</ItemGroup>-->
-<!--	-->
 </Project>

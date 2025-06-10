@@ -32,30 +32,26 @@
       <SubType>Designer</SubType>
     </None>
   </ItemGroup>
-
+  
   <!-- For monorepo-->
-  <ItemGroup>
-    <Content Include="Platforms\**\*.*">
+  <ItemGroup Condition="$(TargetFramework.Contains('-android'))">
+    <Content Include="Platforms\Android\**\*.*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup Condition="$(TargetFramework.Contains('-ios'))">
+    <Content Include="Platforms\iOS\**\*.*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
 
   <!-- For releasing runtimes  -->
-  <ItemGroup>
-    <None Include="Platforms\**\*.*" Pack="true" PackagePath="Platforms\" />
+  <ItemGroup Condition="$(TargetFramework.Contains('-android'))">
+  <None Include="Platforms\Android\**\*.*" Pack="true" PackagePath="Platforms\Android" />
   </ItemGroup>
 
-
-  <!--  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0-ios'">-->
-<!--    <NativeReference Include="Platforms/iOS/NativeLibs/powersync-sqlite-core.xcframework">-->
-<!--      <Kind>Framework</Kind>-->
-<!--      <ForceLoad>true</ForceLoad>     &lt;!&ndash; Required if static &ndash;&gt;-->
-<!--      <Frameworks>Foundation</Frameworks>-->
-<!--    </NativeReference>-->
-<!--  </ItemGroup>-->
-
-<!--  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0-android'">-->
-<!--    <AndroidNativeLibrary Include="Platforms/Android/jniLibs/**/*.so" />-->
-<!--  </ItemGroup>-->
-<!--  -->
+  <ItemGroup Condition="$(TargetFramework.Contains('-ios'))">
+    <None Include="Platforms\iOS\**\*.*" Pack="true" PackagePath="Platforms\iOS" />
+  </ItemGroup>
 </Project>
