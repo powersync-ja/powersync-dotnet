@@ -33,8 +33,7 @@ public partial class TodoListPage : ContentPage
             var todo = new TodoItem 
             { 
                 Description = description,
-                ListId = _list.ID.ToString(),
-                CreatedBy = "user" // TODO: Replace with actual user ID
+                ListId = _list.ID
             };
             await _database.SaveItemAsync(todo);
             TodoItemsCollection.ItemsSource = await _database.GetItemsAsync(_list.ID);
@@ -64,7 +63,6 @@ public partial class TodoListPage : ContentPage
         {
             todo.Completed = e.Value;
             todo.CompletedAt = e.Value ? DateTime.UtcNow.ToString("o") : null;
-            todo.CompletedBy = e.Value ? "user" : null; // TODO: Replace with actual user ID
             await _database.SaveItemAsync(todo);
         }
     }

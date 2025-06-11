@@ -18,7 +18,7 @@ public class NodeConnector : IPowerSyncBackendConnector
 
     public string BackendUrl { get; }
     public string PowerSyncUrl { get; }
-    public string UserId { get; private set; }
+    public string UserId { get; }
     private string? clientId;
 
     public NodeConnector()
@@ -37,7 +37,7 @@ public class NodeConnector : IPowerSyncBackendConnector
     public string LoadOrGenerateUserId()
     {
 
-        return "78bb787c-ff0b-41b2-a297-6a7701648f4a";
+        return "8ba3ec38-6cc8-449c-88c0-9275987ea5d2";
     }
 
     public async Task<PowerSyncCredentials?> FetchCredentials()
