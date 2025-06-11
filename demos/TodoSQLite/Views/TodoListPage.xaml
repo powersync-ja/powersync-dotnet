@@ -20,13 +20,13 @@
                                Padding="10"
                                CornerRadius="5">
                             <Grid ColumnDefinitions="*,Auto">
-                                <Label Text="{Binding Name}"
+                                <Label Text="{Binding Description}"
                                        FontSize="16"
                                        VerticalOptions="Center"/>
                                 <HorizontalStackLayout Grid.Column="1" 
                                                      Spacing="10"
                                                      VerticalOptions="Center">
-                                    <CheckBox IsChecked="{Binding Done}"
+                                    <CheckBox IsChecked="{Binding Completed}"
                                              CheckedChanged="OnCheckBoxChanged"
                                              VerticalOptions="Center"/>
                                     <Button Text="Delete"

@@ -46,8 +46,9 @@ public class TodoItemDatabase
     public async Task<int> DeleteListAsync(TodoList list)
     {
         await Init();
+        string listId = list.ID.ToString();
         // First delete all todo items in this list
-        await database.Table<TodoItem>().Where(t => t.ListId == list.ID).DeleteAsync();
+        await database.Table<TodoItem>().Where(t => t.ListId == listId).DeleteAsync();
         return await database.DeleteAsync(list);
     }
 
@@ -55,18 +56,20 @@ public class TodoItemDatabase
     public async Task<List<TodoItem>> GetItemsAsync(int listId)
     {
         await Init();
+        string listIdStr = listId.ToString();
         return await database.Table<TodoItem>()
-            .Where(t => t.ListId == listId)
-            .OrderByDescending(t => t.ID)
+            .Where(t => t.ListId == listIdStr)
+            .OrderByDescending(t => t.CreatedAt)
             .ToListAsync();
     }
 
     public async Task<List<TodoItem>> GetItemsNotDoneAsync(int listId)
     {
         await Init();
+        string listIdStr = listId.ToString();
         return await database.Table<TodoItem>()
-            .Where(t => t.ListId == listId && !t.Done)
-            .OrderByDescending(t => t.ID)
+            .Where(t => t.ListId == listIdStr && !t.Completed)
+            .OrderByDescending(t => t.CreatedAt)
             .ToListAsync();
     }
 

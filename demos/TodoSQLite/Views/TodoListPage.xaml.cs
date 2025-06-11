@@ -27,13 +27,14 @@ public partial class TodoListPage : ContentPage
 
     private async void OnAddClicked(object sender, EventArgs e)
     {
-        string name = await DisplayPromptAsync("New Todo", "Enter todo name:");
-        if (!string.IsNullOrWhiteSpace(name))
+        string description = await DisplayPromptAsync("New Todo", "Enter todo description:");
+        if (!string.IsNullOrWhiteSpace(description))
         {
             var todo = new TodoItem 
             { 
-                Name = name,
-                ListId = _list.ID
+                Description = description,
+                ListId = _list.ID.ToString(),
+                CreatedBy = "user" // TODO: Replace with actual user ID
             };
             await _database.SaveItemAsync(todo);
             TodoItemsCollection.ItemsSource = await _database.GetItemsAsync(_list.ID);
@@ -46,7 +47,7 @@ public partial class TodoListPage : ContentPage
         var todo = (TodoItem)button.CommandParameter;
         
         bool confirm = await DisplayAlert("Confirm Delete", 
-            $"Are you sure you want to delete '{todo.Name}'?", 
+            $"Are you sure you want to delete '{todo.Description}'?", 
             "Yes", "No");
             
         if (confirm)
@@ -61,7 +62,9 @@ public partial class TodoListPage : ContentPage
         if (sender is CheckBox checkBox && 
             checkBox.Parent?.Parent?.BindingContext is TodoItem todo)
         {
-            todo.Done = e.Value;
+            todo.Completed = e.Value;
+            todo.CompletedAt = e.Value ? DateTime.UtcNow.ToString("o") : null;
+            todo.CompletedBy = e.Value ? "user" : null; // TODO: Replace with actual user ID
             await _database.SaveItemAsync(todo);
         }
     }
@@ -70,13 +73,13 @@ public partial class TodoListPage : ContentPage
     {
         if (e.CurrentSelection.FirstOrDefault() is TodoItem selectedItem)
         {
-            string newName = await DisplayPromptAsync("Edit Todo", 
-                "Enter new name:", 
-                initialValue: selectedItem.Name);
+            string newDescription = await DisplayPromptAsync("Edit Todo", 
+                "Enter new description:", 
+                initialValue: selectedItem.Description);
                 
-            if (!string.IsNullOrWhiteSpace(newName))
+            if (!string.IsNullOrWhiteSpace(newDescription))
             {
-                selectedItem.Name = newName;
+                selectedItem.Description = newDescription;
                 await _database.SaveItemAsync(selectedItem);
                 TodoItemsCollection.ItemsSource = await _database.GetItemsAsync(_list.ID);
             }
