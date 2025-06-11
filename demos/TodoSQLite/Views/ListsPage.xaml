@@ -3,6 +3,12 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="TodoSQLite.Views.ListsPage"
              Title="Todo Lists">
+    <ContentPage.ToolbarItems>
+        <ToolbarItem IconImageSource="wifi.png" 
+                     Order="Primary" 
+                     Priority="0"/>
+    </ContentPage.ToolbarItems>
+
     <Grid RowDefinitions="Auto,*">
         <Button Text="New List" 
                 Clicked="OnAddClicked"
