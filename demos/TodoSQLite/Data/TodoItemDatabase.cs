@@ -1,59 +1,79 @@
-﻿using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
-using PowerSync.Common.Client;
-using SQLite;
+﻿using SQLite;
 using TodoSQLite.Models;
 
 namespace TodoSQLite.Data;
 
 public class TodoItemDatabase
 {
-    SQLiteAsyncConnection Database;
-    public TodoItemDatabase()
-    {
-    }
+    SQLiteAsyncConnection database;
+
     async Task Init()
     {
-
-        var db = new PowerSyncDatabase(new PowerSyncDatabaseOptions
-        {
-            Database = new SQLOpenOptions { DbFilename = "cli-example.db" },
-            Schema = AppSchema.PowerSyncSchema,
-        });
-        await db.Init();
-        var x = await db.GetAll<object>("select * from lists;");
-        await Application.Current.MainPage.DisplayAlert("Title", JsonConvert.SerializeObject(x), "OK");
-
-        if (Database is not null)
+        if (database is not null)
             return;
 
-
-        Database = new SQLiteAsyncConnection(Constants.DatabasePath, Constants.Flags);
-        var result = await Database.CreateTableAsync<TodoItem>();
-
-
-
+        database = new SQLiteAsyncConnection(Constants.DatabasePath, Constants.Flags);
+        await database.CreateTableAsync<TodoList>();
+        await database.CreateTableAsync<TodoItem>();
     }
 
-    public async Task<List<TodoItem>> GetItemsAsync()
+    // List operations
+    public async Task<List<TodoList>> GetListsAsync()
     {
         await Init();
-        return await Database.Table<TodoItem>().ToListAsync();
+        return await database.Table<TodoList>().OrderByDescending(l => l.CreatedAt).ToListAsync();
     }
 
-    public async Task<List<TodoItem>> GetItemsNotDoneAsync()
+    public async Task<TodoList> GetListAsync(int id)
     {
         await Init();
-        return await Database.Table<TodoItem>().Where(t => t.Done).ToListAsync();
+        return await database.Table<TodoList>().Where(l => l.ID == id).FirstOrDefaultAsync();
+    }
 
-        // SQL queries are also possible
-        //return await Database.QueryAsync<TodoItem>("SELECT * FROM [TodoItem] WHERE [Done] = 0");
+    public async Task<int> SaveListAsync(TodoList list)
+    {
+        await Init();
+        if (list.ID != 0)
+        {
+            return await database.UpdateAsync(list);
+        }
+        else
+        {
+            return await database.InsertAsync(list);
+        }
+    }
+
+    public async Task<int> DeleteListAsync(TodoList list)
+    {
+        await Init();
+        // First delete all todo items in this list
+        await database.Table<TodoItem>().Where(t => t.ListId == list.ID).DeleteAsync();
+        return await database.DeleteAsync(list);
+    }
+
+    // Todo item operations
+    public async Task<List<TodoItem>> GetItemsAsync(int listId)
+    {
+        await Init();
+        return await database.Table<TodoItem>()
+            .Where(t => t.ListId == listId)
+            .OrderByDescending(t => t.ID)
+            .ToListAsync();
+    }
+
+    public async Task<List<TodoItem>> GetItemsNotDoneAsync(int listId)
+    {
+        await Init();
+        return await database.Table<TodoItem>()
+            .Where(t => t.ListId == listId && !t.Done)
+            .OrderByDescending(t => t.ID)
+            .ToListAsync();
     }
 
     public async Task<TodoItem> GetItemAsync(int id)
     {
         await Init();
-        return await Database.Table<TodoItem>().Where(i => i.ID == id).FirstOrDefaultAsync();
+        return await database.Table<TodoItem>().Where(i => i.ID == id).FirstOrDefaultAsync();
     }
 
     public async Task<int> SaveItemAsync(TodoItem item)
@@ -61,17 +81,17 @@ public class TodoItemDatabase
         await Init();
         if (item.ID != 0)
         {
-            return await Database.UpdateAsync(item);
+            return await database.UpdateAsync(item);
         }
         else
         {
-            return await Database.InsertAsync(item);
+            return await database.InsertAsync(item);
         }
     }
 
     public async Task<int> DeleteItemAsync(TodoItem item)
     {
         await Init();
-        return await Database.DeleteAsync(item);
+        return await database.DeleteAsync(item);
     }
 }

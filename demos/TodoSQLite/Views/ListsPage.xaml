@@ -1,18 +1,18 @@
-﻿<?xml version="1.0" encoding="utf-8" ?>
+<?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             x:Class="TodoSQLite.Views.TodoListPage"
-             Title="{Binding ListName}">
+             x:Class="TodoSQLite.Views.ListsPage"
+             Title="Todo Lists">
     <Grid RowDefinitions="Auto,*">
-        <Button Text="New Todo" 
+        <Button Text="New List" 
                 Clicked="OnAddClicked"
                 Margin="10"
                 HorizontalOptions="End"/>
         
         <CollectionView Grid.Row="1"
-                        x:Name="TodoItemsCollection"
+                        x:Name="ListsCollection"
                         SelectionMode="Single"
-                        SelectionChanged="OnItemSelected">
+                        SelectionChanged="OnListSelected">
             <CollectionView.ItemTemplate>
                 <DataTemplate>
                     <Grid Padding="10">
@@ -23,16 +23,10 @@
                                 <Label Text="{Binding Name}"
                                        FontSize="16"
                                        VerticalOptions="Center"/>
-                                <HorizontalStackLayout Grid.Column="1" 
-                                                     Spacing="10"
-                                                     VerticalOptions="Center">
-                                    <CheckBox IsChecked="{Binding Done}"
-                                             CheckedChanged="OnCheckBoxChanged"
-                                             VerticalOptions="Center"/>
-                                    <Button Text="Delete"
-                                            Clicked="OnDeleteClicked"
-                                            CommandParameter="{Binding .}"/>
-                                </HorizontalStackLayout>
+                                <Button Grid.Column="1"
+                                        Text="Delete"
+                                        Clicked="OnDeleteClicked"
+                                        CommandParameter="{Binding .}"/>
                             </Grid>
                         </Frame>
                     </Grid>
@@ -40,4 +34,4 @@
             </CollectionView.ItemTemplate>
         </CollectionView>
     </Grid>
-</ContentPage>
+</ContentPage> 

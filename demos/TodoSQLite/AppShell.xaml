@@ -7,8 +7,8 @@
     Shell.FlyoutBehavior="Disabled">
 
     <ShellContent
-        Title="Todo"
-        ContentTemplate="{DataTemplate views:TodoListPage}"
-        Route="TodoList" />
+        Title="Todo Lists"
+        ContentTemplate="{DataTemplate views:ListsPage}"
+        Route="ListsPage" />
 
 </Shell>
