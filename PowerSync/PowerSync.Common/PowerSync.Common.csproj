@@ -31,7 +31,7 @@
     <PackageReference Include="System.Threading.Channels" Version="8.0.0" />
   </ItemGroup>
   
-  <!--  Check allows us to skip for all MAUI targets-->
+  <!-- Check allows us to skip for all MAUI targets-->
   <!-- For monorepo-->
   <ItemGroup Condition="!$(TargetFramework.Contains('-'))">
     <Content Include="runtimes\**\*.*">
