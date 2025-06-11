@@ -6,12 +6,12 @@ namespace TodoSQLite.Views;
 
 public partial class TodoListPage : ContentPage
 {
-    private readonly TodoItemDatabase _database;
+    private readonly PowerSyncData _database;
     private readonly TodoList _list;
 
     public string ListName => _list.Name;
 
-    public TodoListPage(TodoItemDatabase database, TodoList list)
+    public TodoListPage(PowerSyncData database, TodoList list)
     {
         InitializeComponent();
         _database = database;

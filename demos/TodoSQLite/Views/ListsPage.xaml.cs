@@ -5,9 +5,9 @@ namespace TodoSQLite.Views;
 
 public partial class ListsPage : ContentPage
 {
-    private readonly TodoItemDatabase _database;
+    private readonly PowerSyncData _database;
 
-    public ListsPage(TodoItemDatabase database)
+    public ListsPage(PowerSyncData database)
     {
         InitializeComponent();
         _database = database;

@@ -19,7 +19,7 @@ public static class MauiProgram
 			});
 		builder.Logging.SetMinimumLevel(LogLevel.Debug);
 		builder.Logging.AddDebug();
-		builder.Services.AddSingleton<TodoItemDatabase>();
+		builder.Services.AddSingleton<PowerSyncData>();
 		builder.Services.AddTransient<ListsPage>();
 		builder.Services.AddTransient<TodoListPage>();
 

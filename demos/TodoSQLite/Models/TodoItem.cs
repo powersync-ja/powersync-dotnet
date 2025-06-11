@@ -4,8 +4,8 @@ namespace TodoSQLite.Models;
 
 public class TodoItem
 {
-    [PrimaryKey, AutoIncrement]
-    public int ID { get; set; }
+    [PrimaryKey]
+    public string ID { get; set; } = "";
     public string ListId { get; set; }
     public string CreatedAt { get; set; } = DateTime.UtcNow.ToString("o");
     public string CompletedAt { get; set; }
