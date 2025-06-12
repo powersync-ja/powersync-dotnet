@@ -1,5 +1,4 @@
-﻿using System.Collections.ObjectModel;
-using PowerSync.Common.Client;
+﻿using PowerSync.Common.Client;
 using TodoSQLite.Data;
 using TodoSQLite.Models;
 
@@ -7,21 +6,24 @@ namespace TodoSQLite.Views;
 
 public partial class TodoListPage : ContentPage
 {
-    public readonly PowerSyncData _database;
-    private readonly TodoList _list;
+    private readonly PowerSyncData database;
+    private readonly TodoList selectedList;
 
-    public TodoListPage(PowerSyncData database, TodoList list)
+    public TodoListPage(PowerSyncData powerSyncData, TodoList list)
     {
         InitializeComponent();
-        _database = database;
-        _list = list;
+        database = powerSyncData;
+        selectedList = list;
         BindingContext = this;
     }
 
+    public string ListName => selectedList?.Name ?? "";
+    
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        await _database._db.Watch("select * from todos", null, new WatchHandler<TodoItem>
+        
+        await database.Db.Watch("select * from todos", null, new WatchHandler<TodoItem>
         {
             OnResult = (results) =>
             {
@@ -42,9 +44,9 @@ public partial class TodoListPage : ContentPage
             var todo = new TodoItem 
             { 
                 Description = description,
-                ListId = _list.ID
+                ListId = selectedList.ID
             };
-            await _database.SaveItemAsync(todo);
+            await database.SaveItemAsync(todo);
         }
     }
 
@@ -59,7 +61,7 @@ public partial class TodoListPage : ContentPage
             
         if (confirm)
         {
-            await _database.DeleteItemAsync(todo);
+            await database.DeleteItemAsync(todo);
         }
     }
 
@@ -72,12 +74,12 @@ public partial class TodoListPage : ContentPage
             {
                 todo.Completed = e.Value;
                 todo.CompletedAt =  DateTime.UtcNow.ToString("o");
-                await _database.SaveItemAsync(todo);
+                await database.SaveItemAsync(todo);
             } else if (e.Value == false && todo.CompletedAt != null)
             {
                 todo.Completed = e.Value;
                 todo.CompletedAt = null; // Uncheck, clear completed time
-                await _database.SaveItemAsync(todo);
+                await database.SaveItemAsync(todo);
             }
         }
     }
@@ -93,7 +95,7 @@ public partial class TodoListPage : ContentPage
             if (!string.IsNullOrWhiteSpace(newDescription))
             {
                 selectedItem.Description = newDescription;
-                await _database.SaveItemAsync(selectedItem);
+                await database.SaveItemAsync(selectedItem);
             }
             
             TodoItemsCollection.SelectedItem = null;

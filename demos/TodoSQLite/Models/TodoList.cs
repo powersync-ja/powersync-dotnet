@@ -8,7 +8,7 @@ public class TodoList
     public string ID { get; set; } = "";
     
     [JsonProperty("created_at")]
-    public string CreatedAt { get; set; } = DateTime.UtcNow.ToString("o");
+    public string CreatedAt { get; set; }
     
     [JsonProperty("name")]
     public string Name { get; set; }

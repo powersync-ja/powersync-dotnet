@@ -36,7 +36,6 @@ public class NodeConnector : IPowerSyncBackendConnector
 
     public string LoadOrGenerateUserId()
     {
-
         return "8ba3ec38-6cc8-449c-88c0-9275987ea5d2";
     }
 

@@ -6,27 +6,33 @@ namespace TodoSQLite.Views;
 
 public partial class ListsPage : ContentPage
 {
-    private readonly PowerSyncData _database;
-    private bool connected = false;
+    private readonly PowerSyncData database;
 
-    public ListsPage(PowerSyncData database)
+    public ListsPage(PowerSyncData powerSyncData)
     {
         InitializeComponent();
-        _database = database;
-        UpdateWifiStatus();
-    }
-
-    private void UpdateWifiStatus()
-    {
-        WifiStatusItem.IconImageSource = connected ? "wifi.png" : "wifi_off.png";
+        database = powerSyncData;
+        WifiStatusItem.IconImageSource = "wifi_off.png";
     }
 
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        await _database.Init();
         
-        await _database._db.Watch("select * from lists", null, new WatchHandler<TodoList>
+        database.Db.RunListener((update) =>
+        {
+            if (update.StatusChanged != null)
+            {
+                Console.WriteLine("XXX Connected: " +update.StatusChanged.Connected);
+                MainThread.BeginInvokeOnMainThread(() =>
+                {
+                    WifiStatusItem.IconImageSource = update.StatusChanged.Connected ? "wifi.png" : "wifi_off.png";
+                });
+
+            }
+        });
+        
+        await database.Db.Watch("select * from lists", null, new WatchHandler<TodoList>
         {
             OnResult = (results) =>
             {
@@ -45,7 +51,7 @@ public partial class ListsPage : ContentPage
         if (!string.IsNullOrWhiteSpace(name))
         {
             var list = new TodoList { Name = name };
-            await _database.SaveListAsync(list);
+            await database.SaveListAsync(list);
         }
     }
 
@@ -60,7 +66,7 @@ public partial class ListsPage : ContentPage
 
         if (confirm)
         {
-            await _database.DeleteListAsync(list);
+            await database.DeleteListAsync(list);
         }
     }
 
@@ -68,7 +74,7 @@ public partial class ListsPage : ContentPage
     {
         if (e.CurrentSelection.FirstOrDefault() is TodoList selectedList)
         {
-            await Navigation.PushAsync(new TodoListPage(_database, selectedList));
+            await Navigation.PushAsync(new TodoListPage(database, selectedList));
             ListsCollection.SelectedItem = null;
         }
     }

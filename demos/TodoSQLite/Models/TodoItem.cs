@@ -11,7 +11,7 @@ public class TodoItem
     public string ListId { get; set; }
     
     [JsonProperty("created_at")]
-    public string CreatedAt { get; set; } = DateTime.UtcNow.ToString("o");
+    public string CreatedAt { get; set; }
     
     [JsonProperty("completed_at")]
     public string CompletedAt { get; set; }

@@ -1,5 +1,3 @@
-using TodoSQLite.Models;
-
 using PowerSync.Common.DB.Schema;
 
 class AppSchema
