@@ -8,13 +8,33 @@ namespace TodoSQLite.Data;
 
 public class PowerSyncData
 {
-    private PowerSyncDatabase _db;
+    public PowerSyncDatabase _db;
     private ILogger _logger;
+    private bool _isConnected;
+
+
+    public PowerSyncData()
+    {
+        Console.WriteLine("Creating PowerSyncData instance");
+    }
 
     public string UserId { get; set; } = "";
+    public bool IsConnected 
+    { 
+        get => _isConnected;
+        private set
+        {
+            if (_isConnected != value)
+            {
+                _isConnected = value;
+                ConnectionStatusChanged?.Invoke(this, EventArgs.Empty);
+            }
+        }
+    }
 
-    
-    async Task Init()
+    public event EventHandler ConnectionStatusChanged;
+
+    public async Task Init()
     {
         if (_db != null) return;
 
@@ -25,7 +45,7 @@ public class PowerSyncData
         });
         _logger = loggerFactory.CreateLogger("PowerSyncLogger");
 
-        var dbPath = Path.Combine(FileSystem.AppDataDirectory, "mydb.db");
+        var dbPath = Path.Combine(FileSystem.AppDataDirectory, "examplsee.db");
         var factory = new MAUISQLiteDBOpenFactory(new MDSQLiteOpenFactoryOptions()
         {
             DbFilename = dbPath
@@ -40,15 +60,8 @@ public class PowerSyncData
 
         var nodeConnector = new NodeConnector();
         UserId = nodeConnector.UserId;
-        await _db.Connect(nodeConnector);
-    }
-
-    // List operations
-    public async Task<List<TodoList>> GetListsAsync()
-    {
-        await Init();
-        var results = await _db.GetAll<TodoList>("SELECT * FROM lists ORDER BY created_at DESC");
-        return results.ToList();
+        
+        _db.Connect(nodeConnector);
     }
 
     public async Task SaveListAsync(TodoList list)
@@ -63,7 +76,7 @@ public class PowerSyncData
         else
         {
             await _db.Execute(
-                "INSERT INTO lists (id, name, owner_id, created_at) VALUES (uuid(), ?, ?, ?)",
+                "INSERT INTO lists (id, created_at, name, owner_id, created_at) VALUES (uuid(), datetime(), ?, ?, ?)",
                 [list.Name, UserId, DateTime.UtcNow.ToString("o")]);
         }
     }
@@ -76,15 +89,6 @@ public class PowerSyncData
         await _db.Execute("DELETE FROM todos WHERE list_id = ?", [listId]);
         await _db.Execute("DELETE FROM lists WHERE id = ?", [listId]);
     }
-    public async Task<List<TodoItem>> GetItemsAsync(string listId)
-    {
-        await Init();
-        var results = await _db.GetAll<TodoItem>(
-            "SELECT * FROM todos WHERE list_id = ? ORDER BY created_at DESC", [listId]);
-
-        return results.ToList();
-    }
-
     public async Task SaveItemAsync(TodoItem item)
     {
         await Init();
@@ -106,8 +110,8 @@ public class PowerSyncData
         {
             await _db.Execute(
                 @"INSERT INTO todos 
-                  (id, list_id, description, created_at, completed, created_by)
-                  VALUES (uuid(), ?, ?, ?, ?, ?)",
+                  (id, list_id, description, created_at, completed, created_by, created_at)
+                  VALUES (uuid(), ?, ?, ?, ?, ?, datetime())",
                 [
                     item.ListId,
                     item.Description,

@@ -4,7 +4,7 @@
              x:Class="TodoSQLite.Views.ListsPage"
              Title="Todo Lists">
     <ContentPage.ToolbarItems>
-        <ToolbarItem IconImageSource="wifi.png" 
+        <ToolbarItem x:Name="WifiStatusItem"
                      Order="Primary" 
                      Priority="0"/>
     </ContentPage.ToolbarItems>

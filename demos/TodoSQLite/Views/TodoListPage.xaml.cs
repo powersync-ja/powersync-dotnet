@@ -1,4 +1,5 @@
 ﻿using System.Collections.ObjectModel;
+using PowerSync.Common.Client;
 using TodoSQLite.Data;
 using TodoSQLite.Models;
 
@@ -6,7 +7,7 @@ namespace TodoSQLite.Views;
 
 public partial class TodoListPage : ContentPage
 {
-    private readonly PowerSyncData _database;
+    public readonly PowerSyncData _database;
     private readonly TodoList _list;
 
     public TodoListPage(PowerSyncData database, TodoList list)
@@ -20,7 +21,17 @@ public partial class TodoListPage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        TodoItemsCollection.ItemsSource = await _database.GetItemsAsync(_list.ID);
+        await _database._db.Watch("select * from todos", null, new WatchHandler<TodoItem>
+        {
+            OnResult = (results) =>
+            {
+                MainThread.BeginInvokeOnMainThread(() => { TodoItemsCollection.ItemsSource = results.ToList(); });
+            },
+            OnError = (error) =>
+            {
+                Console.WriteLine("Error: " + error.Message);
+            }
+        });
     }
 
     private async void OnAddClicked(object sender, EventArgs e)
@@ -34,7 +45,6 @@ public partial class TodoListPage : ContentPage
                 ListId = _list.ID
             };
             await _database.SaveItemAsync(todo);
-            TodoItemsCollection.ItemsSource = await _database.GetItemsAsync(_list.ID);
         }
     }
 
@@ -50,7 +60,6 @@ public partial class TodoListPage : ContentPage
         if (confirm)
         {
             await _database.DeleteItemAsync(todo);
-            TodoItemsCollection.ItemsSource = await _database.GetItemsAsync(_list.ID);
         }
     }
 
@@ -59,9 +68,17 @@ public partial class TodoListPage : ContentPage
         if (sender is CheckBox checkBox && 
             checkBox.Parent?.Parent?.BindingContext is TodoItem todo)
         {
-            todo.Completed = e.Value;
-            todo.CompletedAt = e.Value ? DateTime.UtcNow.ToString("o") : null;
-            await _database.SaveItemAsync(todo);
+            if (e.Value == true && todo.CompletedAt == null)
+            {
+                todo.Completed = e.Value;
+                todo.CompletedAt =  DateTime.UtcNow.ToString("o");
+                await _database.SaveItemAsync(todo);
+            } else if (e.Value == false && todo.CompletedAt != null)
+            {
+                todo.Completed = e.Value;
+                todo.CompletedAt = null; // Uncheck, clear completed time
+                await _database.SaveItemAsync(todo);
+            }
         }
     }
 
@@ -77,7 +94,6 @@ public partial class TodoListPage : ContentPage
             {
                 selectedItem.Description = newDescription;
                 await _database.SaveItemAsync(selectedItem);
-                TodoItemsCollection.ItemsSource = await _database.GetItemsAsync(_list.ID);
             }
             
             TodoItemsCollection.SelectedItem = null;
