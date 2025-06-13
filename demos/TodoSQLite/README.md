@@ -8,6 +8,7 @@
 3. cd into this directory: `* cd demos/TodoSQLite `
 4. run `dotnet build -t:Run -f:net8.0-ios`
    1. Or specify an iOS simulator identifier e.g.: `dotnet build -t:Run -f:net8.0-ios -p:_DeviceName=:v2:udid=B1CA156A-56FC-4C3C-B35D-4BC349111FDF`
+5. The easiest way to inspect your server's data at this stage would be via a tool like `psql`, e.g. `psql -h localhost -p 5432 -U postgres -d postgres`
 
 ## Current known issues:
 * Switching from offline to online mode isn't yet handled
