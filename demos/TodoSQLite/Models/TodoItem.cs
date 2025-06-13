@@ -5,9 +5,10 @@ namespace TodoSQLite.Models;
 public class TodoItem
 {
     [JsonProperty("id")]
-    public string ID { get; set; } =  null!;
-
-    [JsonProperty("list_id")] public string ListId { get; set; } = null!;
+    public string ID { get; set; } =  "";
+    
+    [JsonProperty("list_id")] 
+    public string ListId { get; set; } = null!;
     
     [JsonProperty("created_at")]
     public string CreatedAt { get; set; }= null!;

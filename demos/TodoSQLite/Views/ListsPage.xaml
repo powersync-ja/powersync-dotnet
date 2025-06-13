@@ -22,19 +22,20 @@
             <CollectionView.ItemTemplate>
                 <DataTemplate>
                     <Grid Padding="10">
-                        <Frame BorderColor="Gray" 
-                               Padding="10"
-                               CornerRadius="5">
-                            <Grid ColumnDefinitions="*,Auto">
-                                <Label Text="{Binding Name}"
-                                       FontSize="16"
-                                       VerticalOptions="Center"/>
-                                <Button Grid.Column="1"
-                                        Text="Delete"
-                                        Clicked="OnDeleteClicked"
-                                        CommandParameter="{Binding .}"/>
-                            </Grid>
-                        </Frame>
+                        <Grid Padding="10" 
+                              BackgroundColor="White"
+                              ColumnDefinitions="*,Auto">
+                            <Grid.Shadow>
+                                <Shadow Brush="Gray" Offset="1,1" Radius="3" Opacity="0.3"/>
+                            </Grid.Shadow>
+                            <Label Text="{Binding Name}"
+                                   FontSize="16"
+                                   VerticalOptions="Center"/>
+                            <Button Grid.Column="1"
+                                    Text="Delete"
+                                    Clicked="OnDeleteClicked"
+                                    CommandParameter="{Binding .}"/>
+                        </Grid>
                     </Grid>
                 </DataTemplate>
             </CollectionView.ItemTemplate>
