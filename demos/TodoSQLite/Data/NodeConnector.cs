@@ -13,16 +13,17 @@ using System.Threading.Tasks;
 
 public class NodeConnector : IPowerSyncBackendConnector
 {
-    private readonly HttpClient httpClient;
+    private static readonly string StorageFilePath = "user_id.txt"; // Simulating local storage
+    private readonly HttpClient _httpClient;
 
     public string BackendUrl { get; }
     public string PowerSyncUrl { get; }
-    public string UserId { get; }
+    public string UserId { get; private set; }
     private string? clientId;
 
     public NodeConnector()
     {
-        httpClient = new HttpClient();
+        _httpClient = new HttpClient();
 
         // Load or generate User ID
         UserId = LoadOrGenerateUserId();
@@ -35,15 +36,22 @@ public class NodeConnector : IPowerSyncBackendConnector
 
     public string LoadOrGenerateUserId()
     {
-        return "8ba3ec38-6cc8-449c-88c0-9275987ea5d2";
+        if (File.Exists(StorageFilePath))
+        {
+            return File.ReadAllText(StorageFilePath);
+        }
+
+        string newUserId = Guid.NewGuid().ToString();
+        File.WriteAllText(StorageFilePath, newUserId);
+        return newUserId;
     }
 
     public async Task<PowerSyncCredentials?> FetchCredentials()
     {
-        var tokenEndpoint = "api/auth/token";
-        var url = $"{BackendUrl}/{tokenEndpoint}?user_id={UserId}";
+        string tokenEndpoint = "api/auth/token";
+        string url = $"{BackendUrl}/{tokenEndpoint}?user_id={UserId}";
 
-        var response = await httpClient.GetAsync(url);
+        HttpResponseMessage response = await _httpClient.GetAsync(url);
         if (!response.IsSuccessStatusCode)
         {
             throw new Exception($"Received {response.StatusCode} from {tokenEndpoint}: {await response.Content.ReadAsStringAsync()}");
@@ -98,7 +106,7 @@ public class NodeConnector : IPowerSyncBackendConnector
             var payload = JsonSerializer.Serialize(new { batch });
             var content = new StringContent(payload, Encoding.UTF8, "application/json");
 
-            HttpResponseMessage response = await httpClient.PostAsync($"{BackendUrl}/api/data", content);
+            HttpResponseMessage response = await _httpClient.PostAsync($"{BackendUrl}/api/data", content);
 
             if (!response.IsSuccessStatusCode)
             {
