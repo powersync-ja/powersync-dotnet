@@ -13,8 +13,7 @@ using System.Threading.Tasks;
 
 public class NodeConnector : IPowerSyncBackendConnector
 {
-    private static readonly string StorageFilePath = "user_id.txt"; // Simulating local storage
-    private readonly HttpClient _httpClient;
+    private readonly HttpClient httpClient;
 
     public string BackendUrl { get; }
     public string PowerSyncUrl { get; }
@@ -23,7 +22,7 @@ public class NodeConnector : IPowerSyncBackendConnector
 
     public NodeConnector()
     {
-        _httpClient = new HttpClient();
+        httpClient = new HttpClient();
 
         // Load or generate User ID
         UserId = LoadOrGenerateUserId();
@@ -41,10 +40,10 @@ public class NodeConnector : IPowerSyncBackendConnector
 
     public async Task<PowerSyncCredentials?> FetchCredentials()
     {
-        string tokenEndpoint = "api/auth/token";
-        string url = $"{BackendUrl}/{tokenEndpoint}?user_id={UserId}";
+        var tokenEndpoint = "api/auth/token";
+        var url = $"{BackendUrl}/{tokenEndpoint}?user_id={UserId}";
 
-        HttpResponseMessage response = await _httpClient.GetAsync(url);
+        var response = await httpClient.GetAsync(url);
         if (!response.IsSuccessStatusCode)
         {
             throw new Exception($"Received {response.StatusCode} from {tokenEndpoint}: {await response.Content.ReadAsStringAsync()}");
@@ -99,7 +98,7 @@ public class NodeConnector : IPowerSyncBackendConnector
             var payload = JsonSerializer.Serialize(new { batch });
             var content = new StringContent(payload, Encoding.UTF8, "application/json");
 
-            HttpResponseMessage response = await _httpClient.PostAsync($"{BackendUrl}/api/data", content);
+            HttpResponseMessage response = await httpClient.PostAsync($"{BackendUrl}/api/data", content);
 
             if (!response.IsSuccessStatusCode)
             {

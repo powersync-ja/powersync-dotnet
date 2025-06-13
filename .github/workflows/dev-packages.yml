@@ -1,5 +1,5 @@
 # The version is pulled from the CHANGELOG.md file of the package.
-# Add a `-dev.xxx` suffix to the version.
+# Add a `-dev.xxx` suffix to the version. Example: `0.0.1-dev.1`
 name: Create Dev Release
 
 on: workflow_dispatch
@@ -24,17 +24,25 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore
       
-      - name: Extract Version from CHANGELOG.md
+      - name: Extract Common Package Version from CHANGELOG.md
         id: extract_version
         shell: bash
         run: |
-          VERSION=$(awk '/^## [0-9]+\.[0-9]+\.[0-9]+-dev(\.[0-9]+)?$/ {print $2; exit}' PowerSync/PowerSync.Common/CHANGELOG.md)
-          echo "Detected Version: $VERSION"
-          echo "VERSION=$VERSION" >> $GITHUB_ENV 
+          COMMON_VERSION=$(awk '/^## [0-9]+\.[0-9]+\.[0-9]+-dev(\.[0-9]+)?$/ {print $2; exit}' PowerSync/PowerSync.Common/CHANGELOG.md)
+          echo "Detected Version: $COMMON_VERSION"
+          echo "VERSION=$COMMON_VERSION" >> $GITHUB_ENV 
+          
+      - name: Extract MAUI Package Version from CHANGELOG.md
+        id: extract_maui_version
+        shell: bash
+        run: |
+          COMMON_VERSION=$(awk '/^## [0-9]+\.[0-9]+\.[0-9]+-dev(\.[0-9]+)?$/ {print $2; exit}' PowerSync/PowerSync.MAUI/CHANGELOG.md)
+          echo "Detected Version: $COMMON_VERSION"
+          echo "VERSION=$COMMON_VERSION" >> $GITHUB_ENV 
 
-      - name: Run Pack
-        run: dotnet pack -c Release -o ${{ github.workspace }}/output
-
-      - name: Run Push
-        run: dotnet nuget push ${{ github.workspace }}\output\*.nupkg --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }}
-       
+#      - name: Run Pack
+#        run: dotnet pack -c Release -o ${{ github.workspace }}/output
+#
+#      - name: Run Push
+#        run: dotnet nuget push ${{ github.workspace }}\output\*.nupkg --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }}
+#       

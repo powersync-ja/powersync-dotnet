@@ -17,7 +17,7 @@ public class PowerSyncData
         ILoggerFactory loggerFactory = LoggerFactory.Create(builder =>
         {
             builder.AddConsole();
-            builder.SetMinimumLevel(LogLevel.Trace);
+            builder.SetMinimumLevel(LogLevel.Error);
         });
         var logger = loggerFactory.CreateLogger("PowerSyncLogger");
 
@@ -73,7 +73,7 @@ public class PowerSyncData
                 [
                     item.Description,
                     item.Completed ? 1 : 0,
-                    item.CompletedAt,
+                    item.CompletedAt!,
                     UserId,
                     item.ID
                 ]);

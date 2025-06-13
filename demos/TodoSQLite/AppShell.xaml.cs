@@ -8,5 +8,6 @@ public partial class AppShell : Shell
 	{
 		InitializeComponent();
 		Routing.RegisterRoute(nameof(TodoListPage), typeof(TodoListPage));
+		Routing.RegisterRoute(nameof(SqlConsolePage), typeof(SqlConsolePage));
 	}
 }

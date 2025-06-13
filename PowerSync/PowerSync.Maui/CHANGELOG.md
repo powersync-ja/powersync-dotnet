@@ -1,7 +1,6 @@
 # PowerSync.Maui Changelog
 
-
-## 0.0.1-alpha.1
+## 0.0.1-dev.1
 
 - Introduce package. Support for iOS/Android use cases.
 

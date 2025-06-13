@@ -112,7 +112,7 @@ public class PowerSyncSetup
             var downloadUrl = $"{MAVEN_BASE_URL}/{aarFileName}";
             
             await DownloadFile(downloadUrl, aarPath);
-            await ExtractAarNativeLibraries(aarPath, nativeDir);
+            ExtractAarNativeLibraries(aarPath, nativeDir);
             
             Console.WriteLine($"✓ Android: Extracted native libraries from {aarFileName}");
         }
@@ -122,7 +122,7 @@ public class PowerSyncSetup
         }
     }
 
-    private async Task ExtractAarNativeLibraries(string aarPath, string nativeDir)
+    private void ExtractAarNativeLibraries(string aarPath, string nativeDir)
     {
         var extractedDir = Path.Combine(nativeDir, "temp_extracted");
         

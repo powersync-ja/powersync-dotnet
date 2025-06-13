@@ -6,9 +6,19 @@
     xmlns:views="clr-namespace:TodoSQLite.Views"
     Shell.FlyoutBehavior="Disabled">
 
-    <ShellContent
-        Title="Todo Lists"
-        ContentTemplate="{DataTemplate views:ListsPage}"
-        Route="ListsPage" />
+    <TabBar>
+        <Tab Title="Todo Lists">
+            <ShellContent
+                Title="Todo Lists"
+                ContentTemplate="{DataTemplate views:ListsPage}"
+                Route="ListsPage" />
+        </Tab>
+        <Tab Title="SQL Console">
+            <ShellContent
+                Title="SQL Console"
+                ContentTemplate="{DataTemplate views:SqlConsolePage}"
+                Route="SqlConsolePage" />
+        </Tab>
+    </TabBar>
 
 </Shell>

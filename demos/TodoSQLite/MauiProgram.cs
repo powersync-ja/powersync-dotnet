@@ -22,6 +22,7 @@ public static class MauiProgram
 		builder.Services.AddSingleton<PowerSyncData>();
 		builder.Services.AddTransient<ListsPage>();
 		builder.Services.AddTransient<TodoListPage>();
+		builder.Services.AddTransient<SqlConsolePage>();
 
 		return builder.Build();
 	}

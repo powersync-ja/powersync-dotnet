@@ -41,7 +41,7 @@
   </ItemGroup>
 
   <ItemGroup Condition="$(TargetFramework.Contains('-ios'))">
-    <Content Include="Platforms\iOS\**\*.*">
+    <Content Include="Platforms\iOS\NativeLibs\powersync-sqlite-core.xcframework\**\*.*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
@@ -52,6 +52,6 @@
   </ItemGroup>
 
   <ItemGroup Condition="$(TargetFramework.Contains('-ios'))">
-    <None Include="Platforms\iOS\**\*.*" Pack="true" PackagePath="Platforms\iOS" />
+    <None Include="Platforms\iOS\NativeLibs\powersync-sqlite-core.xcframework\**\*.*" Pack="true" PackagePath="Platforms\iOS" />
   </ItemGroup>
 </Project>
