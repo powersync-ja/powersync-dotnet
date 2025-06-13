@@ -23,7 +23,7 @@ public partial class TodoListPage : ContentPage
     {
         base.OnAppearing();
         
-        await database.Db.Watch("select * from todos", null, new WatchHandler<TodoItem>
+        await database.Db.Watch("select * from todos where list_id = ?", [selectedList.ID], new WatchHandler<TodoItem>
         {
             OnResult = (results) =>
             {
