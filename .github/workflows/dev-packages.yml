@@ -31,18 +31,23 @@ jobs:
           COMMON_VERSION=$(awk '/^## [0-9]+\.[0-9]+\.[0-9]+-dev(\.[0-9]+)?$/ {print $2; exit}' PowerSync/PowerSync.Common/CHANGELOG.md)
           echo "Detected Version: $COMMON_VERSION"
           echo "VERSION=$COMMON_VERSION" >> $GITHUB_ENV 
-          
+
+      - name: Run Pack For Common
+        run: dotnet pack PowerSync/PowerSync.Common -c Release -o ${{ github.workspace }}/output
+
+      - name: Run Push For Common
+        run: dotnet nuget push ${{ github.workspace }}\output\PowerSync.Common*.nupkg --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }}
+
       - name: Extract MAUI Package Version from CHANGELOG.md
         id: extract_maui_version
         shell: bash
         run: |
-          COMMON_VERSION=$(awk '/^## [0-9]+\.[0-9]+\.[0-9]+-dev(\.[0-9]+)?$/ {print $2; exit}' PowerSync/PowerSync.MAUI/CHANGELOG.md)
-          echo "Detected Version: $COMMON_VERSION"
-          echo "VERSION=$COMMON_VERSION" >> $GITHUB_ENV 
+          MAUI_VERSION=$(awk '/^## [0-9]+\.[0-9]+\.[0-9]+-dev(\.[0-9]+)?$/ {print $2; exit}' PowerSync/PowerSync.Maui/CHANGELOG.md)
+          echo "Detected Version: $MAUI_VERSION"
+          echo "VERSION=$MAUI_VERSION" >> $GITHUB_ENV 
+          
+      - name: Run Pack For MAUI
+        run: dotnet pack PowerSync/PowerSync.Maui -c Release -o ${{ github.workspace }}/output
 
-#      - name: Run Pack
-#        run: dotnet pack -c Release -o ${{ github.workspace }}/output
-#
-#      - name: Run Push
-#        run: dotnet nuget push ${{ github.workspace }}\output\*.nupkg --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }}
-#       
+      - name: Run Push For MAUI
+        run: dotnet nuget push ${{ github.workspace }}\output\PowerSync.Maui*.nupkg --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }}    
