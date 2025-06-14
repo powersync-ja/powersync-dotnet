@@ -23,7 +23,6 @@ public partial class ListsPage : ContentPage
         {
             if (update.StatusChanged != null)
             {
-                Console.WriteLine("XXX Connected: " +update.StatusChanged.Connected);
                 MainThread.BeginInvokeOnMainThread(() =>
                 {
                     WifiStatusItem.IconImageSource = update.StatusChanged.Connected ? "wifi.png" : "wifi_off.png";
