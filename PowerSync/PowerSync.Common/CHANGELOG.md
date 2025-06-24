@@ -1,9 +1,6 @@
 # PowerSync.Common Changelog
 
-## 0.0.2-dev.2
-
-
-## 0.0.2-alpha.3
+## 0.0.3-alpha.1
 - Minor changes to accommodate PowerSync.MAUI package extension.
 
 ## 0.0.2-alpha.2
