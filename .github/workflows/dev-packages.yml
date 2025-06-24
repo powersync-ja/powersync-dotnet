@@ -36,6 +36,7 @@ jobs:
         run: dotnet pack PowerSync/PowerSync.Common -c Release -o ${{ github.workspace }}/output
 
       - name: Run Push For Common
+        continue-on-error: true
         run: dotnet nuget push ${{ github.workspace }}\output\PowerSync.Common*.nupkg --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }}
 
       - name: Extract MAUI Package Version from CHANGELOG.md
@@ -50,4 +51,5 @@ jobs:
         run: dotnet pack PowerSync/PowerSync.Maui -c Release -o ${{ github.workspace }}/output
 
       - name: Run Push For MAUI
+        continue-on-error: true
         run: dotnet nuget push ${{ github.workspace }}\output\PowerSync.Maui*.nupkg --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }}    
