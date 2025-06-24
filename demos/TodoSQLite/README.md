@@ -10,7 +10,3 @@
    1. Or specify an iOS simulator identifier e.g.: `dotnet build -t:Run -f:net8.0-ios -p:_DeviceName=:v2:udid=B1CA156A-56FC-4C3C-B35D-4BC349111FDF`
 5. Changes made to the backend's source DB (inspect via a tool like `psql`) or to the self-hosted aapp's web UI will be synced to this iOS client (and vice versa)
 
-## Current known issues:
-* Switching from offline to online mode isn't yet handled
-* Android has some instability
-
