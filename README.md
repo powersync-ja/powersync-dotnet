@@ -26,10 +26,12 @@ Demo applications are located in the [`demos/`](./demos/) directory. Also see ou
 
 # Supported Frameworks
 
-This PowerSync SDK currently targets the following .NET versions:
+## Target Frameworks
+
+This PowerSync SDK supports the following target frameworks:
 - **.NET 9** - [Latest version](https://dotnet.microsoft.com/en-us/download/dotnet/9.0)
 -	**.NET 8** - [Current LTS Version, used for development of this project](https://dotnet.microsoft.com/en-us/download/dotnet/8.0)
-- **.NET 6** - supported for compatibility with older projects)
+- **.NET 6** - supported for compatibility with older projects
 -	**.NET Standard 2.0** - for compatibility with older libraries and frameworks, tested/verified older versions will be listed below.
 
 - .NET Framework 4.8:
@@ -66,6 +68,12 @@ This PowerSync SDK currently targets the following .NET versions:
 ------- 
 
 When running commands such as `dotnet run` or `dotnet test`, you may need to specify the target framework explicitly using the `--framework` flag.
+
+## Application Frameworks
+- MAUI - Cross-platform native apps for mobile and desktop
+  - Platforms: iOS, Android, Windows
+- WPF - Windows desktop applications
+- Console Applications - Command-line and binary apps
 
 # Development
 
