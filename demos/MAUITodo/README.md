@@ -54,5 +54,5 @@ dotnet build -t:Run -f:net8.0-android -p:_DeviceName=emulator-5554
 ### Windows
 
 ```sh
-dotnet build -t:Run -f net8.0-windows10.0.19041.0
+dotnet run -f net8.0-windows10.0.19041.0
 ```
