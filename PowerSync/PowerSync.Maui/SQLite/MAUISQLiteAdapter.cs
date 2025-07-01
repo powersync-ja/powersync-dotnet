@@ -22,6 +22,8 @@ public class MAUISQLiteAdapter : MDSQLiteAdapter
        LoadExtensionIOS(db);
 #elif ANDROID
         db.LoadExtension("libpowersync");
+#else
+        base.LoadExtension(db);
 #endif
     }
 
