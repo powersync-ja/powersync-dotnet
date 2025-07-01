@@ -20,10 +20,9 @@ Packages are published to [NuGet](https://www.nuget.org/profiles/PowerSync).
 
 Demo applications are located in the [`demos/`](./demos/) directory. Also see our [Demo Apps / Example Projects](https://docs.powersync.com/resources/demo-apps-example-projects) gallery which lists all projects by the backend and client-side framework they use.
 
-### Command-Line
-
-- [demos/CommandLine](./demos/CommandLine/README.md): A CLI to-do list example app using a Node-js backend.
-- [demos/WPF](./demos/WPF/README.md): This is a demo WPF application that showcases how to use the [PowerSync SDK](https://www.powersync.com) for data synchronization in a to-do list application using a Node-js backend.
+- [demos/CommandLine](./demos/CommandLine/README.md): A CLI-based app demonstrating real-time data sync
+- [demos/WPF](./demos/WPF/README.md): A Windows desktop to-do list app real-time data sync
+- [demos/MAUITodo](./demos/MAUITodo/README.md): A cross-platform mobile and desktop to-do list app built with .NET MAUI, running on iOS, Android and Windows
 
 # Supported Frameworks
 

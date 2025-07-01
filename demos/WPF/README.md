@@ -2,7 +2,7 @@
 
 ## Overview
 
-This is a demo WPF application that showcases how to use the [PowerSync SDK](https://www.powersync.com) for data synchronization in a to-do list application. The app leverages PowerSync to sync task lists and items while working seamlessly online and offline.
+This is a demo WPF application that showcases how to use the [PowerSync .NET SDK](https://docs.powersync.com/client-sdk-references/dotnet) for data synchronization in a to-do list application. The app leverages PowerSync to sync task lists and items while working seamlessly online and offline.
 
 To run this demo, you need to have one of our Node.js self-host demos ([Postgres](https://github.com/powersync-ja/self-host-demo/tree/main/demos/nodejs) | [MongoDB](https://github.com/powersync-ja/self-host-demo/tree/main/demos/nodejs-mongodb) | [MySQL](https://github.com/powersync-ja/self-host-demo/tree/main/demos/nodejs-mysql)) running, as it provides the PowerSync server that this CLI's PowerSync SDK connects to.
 
