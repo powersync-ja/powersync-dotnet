@@ -50,8 +50,8 @@ Alternatively, open the solution in Visual Studio and start debugging (`F5`).
 
 ## Learn More
 
-- [PowerSync SDK Documentation](https://docs.powersync.com)
-- [PowerSync GitHub Repository](https://github.com/powersync-ja/powersync-js)
+- [PowerSync SDK Documentation](https://docs.powersync.com/client-sdk-references/dotnet)
+- [PowerSync GitHub Repository](https://github.com/powersync-ja/powersync-dotnet)
 
 Feedback and contributions are welcome!
 
