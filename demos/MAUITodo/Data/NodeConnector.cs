@@ -13,7 +13,8 @@ using System.Threading.Tasks;
 
 public class NodeConnector : IPowerSyncBackendConnector
 {
-    private static readonly string StorageFilePath = "user_id.txt"; // Simulating local storage
+    private string StorageFilePath => Path.Combine(FileSystem.AppDataDirectory, "user_id.txt");
+
     private readonly HttpClient _httpClient;
 
     public string BackendUrl { get; }
