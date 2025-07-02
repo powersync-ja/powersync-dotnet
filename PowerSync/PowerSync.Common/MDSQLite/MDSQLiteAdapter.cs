@@ -129,7 +129,7 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
         return connection;
     }
 
-    private void LoadExtension(SqliteConnection db)
+    protected virtual void LoadExtension(SqliteConnection db)
     {
         string extensionPath = PowerSyncPathResolver.GetNativeLibraryPath(AppContext.BaseDirectory);
         db.EnableExtensions(true);

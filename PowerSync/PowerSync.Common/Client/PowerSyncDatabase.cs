@@ -35,11 +35,6 @@ public class DBAdapterSource(IDBAdapter Adapter) : IDatabaseSource
     public IDBAdapter Adapter { get; init; } = Adapter;
 }
 
-public class OpenFactorySource(ISQLOpenFactory Factory) : IDatabaseSource
-{
-    public ISQLOpenFactory Factory { get; init; } = Factory;
-}
-
 public class PowerSyncDatabaseOptions() : BasePowerSyncDatabaseOptions()
 {
     /// <summary> 
@@ -115,9 +110,9 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         {
             Database = adapterSource.Adapter;
         }
-        else if (options.Database is OpenFactorySource factorySource)
+        else if (options.Database is ISQLOpenFactory factorySource)
         {
-            Database = factorySource.Factory.OpenDatabase();
+            Database = factorySource.OpenDatabase();
         }
         else if (options.Database is SQLOpenOptions openOptions)
         {
