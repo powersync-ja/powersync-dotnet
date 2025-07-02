@@ -19,7 +19,7 @@ dotnet add package PowerSync.Common --prerelease
 
 ## Usage
 
-Initialization differs slightly when using MAUI.
+Initialization differs slightly from our Common SDK when using MAUI.
 
 ```csharp
 
