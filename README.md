@@ -12,9 +12,10 @@ _[PowerSync](https://www.powersync.com) is a sync engine for building local-firs
 
 Packages are published to [NuGet](https://www.nuget.org/profiles/PowerSync).
 
-- [PowerSync/Common](./PowerSync/Common/README.md)
-
+- [PowerSync.Common](./PowerSync/PowerSync.Common/README.md)
   - Core package: .NET implementation of a PowerSync database connector and streaming sync bucket implementation. Packages meant for specific platforms will extend functionality of `Common`.
+- [PowerSync.Maui](./PowerSync/PowerSync.Maui/README.md)
+  - Extends the PowerSync.Common package to provide the .NET Multi-platform App UI (MAUI) integration for PowerSync for cross-platform mobile and desktop applications.
 
 ## Demo Apps / Example Projects
 
