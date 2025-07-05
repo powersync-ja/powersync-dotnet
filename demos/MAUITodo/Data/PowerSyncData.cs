@@ -21,7 +21,7 @@ public class PowerSyncData
         });
         var logger = loggerFactory.CreateLogger("PowerSyncLogger");
 
-        var dbPath = Path.Combine(FileSystem.AppDataDirectory, "examplsee.db");
+        var dbPath = Path.Combine(FileSystem.AppDataDirectory, "example.db");
         var factory = new MAUISQLiteDBOpenFactory(new MDSQLiteOpenFactoryOptions()
         {
             DbFilename = dbPath
@@ -50,8 +50,8 @@ public class PowerSyncData
         else
         {
             await Db.Execute(
-                "INSERT INTO lists (id, created_at, name, owner_id, created_at) VALUES (uuid(), datetime(), ?, ?, ?)",
-                [list.Name, UserId, DateTime.UtcNow.ToString("o")]);
+                "INSERT INTO lists (id, created_at, name, owner_id) VALUES (uuid(), datetime(), ?, ?)",
+                [list.Name, UserId]);
         }
     }
 
@@ -82,14 +82,14 @@ public class PowerSyncData
         {
             await Db.Execute(
                 @"INSERT INTO todos 
-                  (id, list_id, description, created_at, completed, created_by, created_at)
-                  VALUES (uuid(), ?, ?, ?, ?, ?, datetime())",
+                  (id, list_id, description, created_at, completed, created_by, completed_at)
+                  VALUES (uuid(), ?, ?, datetime(), ?, ?, ?)",
                 [
                     item.ListId,
                     item.Description,
-                    item.CreatedAt,
                     item.Completed ? 1 : 0,
-                    UserId
+                    UserId,
+                    item.CompletedAt!,
                 ]);
         }
     }
