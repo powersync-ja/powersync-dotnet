@@ -62,6 +62,7 @@ public class PowerSyncData
         await Db.Execute("DELETE FROM todos WHERE list_id = ?", [listId]);
         await Db.Execute("DELETE FROM lists WHERE id = ?", [listId]);
     }
+    
     public async Task SaveItemAsync(TodoItem item)
     {
         if (item.ID != "")
@@ -74,7 +75,7 @@ public class PowerSyncData
                     item.Description,
                     item.Completed ? 1 : 0,
                     item.CompletedAt!,
-                    UserId,
+                    item.Completed ? UserId : null,
                     item.ID
                 ]);
         }
@@ -82,14 +83,15 @@ public class PowerSyncData
         {
             await Db.Execute(
                 @"INSERT INTO todos 
-                  (id, list_id, description, created_at, completed, created_by, completed_at)
-                  VALUES (uuid(), ?, ?, datetime(), ?, ?, ?)",
+                  (id, list_id, description, created_at, created_by, completed, completed_at, completed_by)
+                  VALUES (uuid(), ?, ?, datetime(), ?, ?, ?, ?)",
                 [
                     item.ListId,
                     item.Description,
-                    item.Completed ? 1 : 0,
                     UserId,
+                    item.Completed ? 1 : 0,
                     item.CompletedAt!,
+                    item.Completed ? UserId : null
                 ]);
         }
     }

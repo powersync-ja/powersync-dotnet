@@ -4,7 +4,7 @@ using MAUITodo.Data;
 
 namespace MAUITodo.Views;
 
-public partial class ListsPage : ContentPage
+public partial class ListsPage
 {
     private readonly PowerSyncData database;
 
@@ -46,7 +46,7 @@ public partial class ListsPage : ContentPage
 
     private async void OnAddClicked(object sender, EventArgs e)
     {
-        string name = await DisplayPromptAsync("New List", "Enter list name:");
+        var name = await DisplayPromptAsync("New List", "Enter list name:");
         if (!string.IsNullOrWhiteSpace(name))
         {
             var list = new TodoList { Name = name };
@@ -56,16 +56,16 @@ public partial class ListsPage : ContentPage
 
     private async void OnDeleteClicked(object sender, EventArgs e)
     {
-        var button = (Button)sender;
-        var list = (TodoList)button.CommandParameter;
-
-        bool confirm = await DisplayAlert("Confirm Delete",
-            $"Are you sure you want to delete the list '{list.Name}'?",
-            "Yes", "No");
-
-        if (confirm)
+        if (sender is Button button && button.CommandParameter is TodoList list)
         {
-            await database.DeleteListAsync(list);
+            var confirm = await DisplayAlert("Confirm Delete",
+                $"Are you sure you want to delete the list '{list.Name}'?",
+                "Yes", "No");
+
+            if (confirm)
+            {
+                await database.DeleteListAsync(list);
+            }
         }
     }
 
