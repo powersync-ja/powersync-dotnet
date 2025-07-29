@@ -18,11 +18,11 @@ public partial class TodoListPage
     }
 
     public string ListName => selectedList?.Name ?? "";
-    
+
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        
+
         await database.Db.Watch("select * from todos where list_id = ?", [selectedList.ID], new WatchHandler<TodoItem>
         {
             OnResult = (results) =>
@@ -72,14 +72,12 @@ public partial class TodoListPage
             if (e.Value && todo.CompletedAt == null)
             {
                 todo.Completed = e.Value;
-                todo.CompletedAt = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
-                await database.SaveItemAsync(todo);
+                await database.SaveTodoCompletedAsync(todo.ID, true);
             }
             else if (e.Value == false && todo.CompletedAt != null)
             {
                 todo.Completed = e.Value;
-                todo.CompletedAt = null; // Uncheck, clear completed time
-                await database.SaveItemAsync(todo);
+                await database.SaveTodoCompletedAsync(todo.ID, false);
             }
         }
     }
