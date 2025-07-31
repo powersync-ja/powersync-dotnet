@@ -4,7 +4,7 @@ using MAUITodo.Models;
 
 namespace MAUITodo.Views;
 
-public partial class TodoListPage : ContentPage
+public partial class TodoListPage
 {
     private readonly PowerSyncData database;
     private readonly TodoList selectedList;
@@ -18,11 +18,11 @@ public partial class TodoListPage : ContentPage
     }
 
     public string ListName => selectedList?.Name ?? "";
-    
+
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        
+
         await database.Db.Watch("select * from todos where list_id = ?", [selectedList.ID], new WatchHandler<TodoItem>
         {
             OnResult = (results) =>
@@ -38,11 +38,11 @@ public partial class TodoListPage : ContentPage
 
     private async void OnAddClicked(object sender, EventArgs e)
     {
-        string description = await DisplayPromptAsync("New Todo", "Enter todo description:");
+        var description = await DisplayPromptAsync("New Todo", "Enter todo description:");
         if (!string.IsNullOrWhiteSpace(description))
         {
-            var todo = new TodoItem 
-            { 
+            var todo = new TodoItem
+            {
                 Description = description,
                 ListId = selectedList.ID
             };
@@ -52,34 +52,32 @@ public partial class TodoListPage : ContentPage
 
     private async void OnDeleteClicked(object sender, EventArgs e)
     {
-        var button = (Button)sender;
-        var todo = (TodoItem)button.CommandParameter;
-        
-        bool confirm = await DisplayAlert("Confirm Delete", 
-            $"Are you sure you want to delete '{todo.Description}'?", 
-            "Yes", "No");
-            
-        if (confirm)
+        if (sender is Button button && button.CommandParameter is TodoItem todo)
         {
-            await database.DeleteItemAsync(todo);
+            var confirm = await DisplayAlert("Confirm Delete",
+                $"Are you sure you want to delete '{todo.Description}'?",
+                "Yes", "No");
+
+            if (confirm)
+            {
+                await database.DeleteItemAsync(todo);
+            }
         }
     }
 
     private async void OnCheckBoxChanged(object sender, CheckedChangedEventArgs e)
     {
-        if (sender is CheckBox checkBox && 
-            checkBox.Parent?.Parent?.BindingContext is TodoItem todo)
+        if (sender is CheckBox checkBox && checkBox.Parent?.Parent?.BindingContext is TodoItem todo)
         {
-            if (e.Value == true && todo.CompletedAt == null)
+            if (e.Value && todo.CompletedAt == null)
             {
                 todo.Completed = e.Value;
-                todo.CompletedAt =  DateTime.UtcNow.ToString("o");
-                await database.SaveItemAsync(todo);
-            } else if (e.Value == false && todo.CompletedAt != null)
+                await database.SaveTodoCompletedAsync(todo.ID, true);
+            }
+            else if (e.Value == false && todo.CompletedAt != null)
             {
                 todo.Completed = e.Value;
-                todo.CompletedAt = null; // Uncheck, clear completed time
-                await database.SaveItemAsync(todo);
+                await database.SaveTodoCompletedAsync(todo.ID, false);
             }
         }
     }
@@ -88,16 +86,16 @@ public partial class TodoListPage : ContentPage
     {
         if (e.CurrentSelection.FirstOrDefault() is TodoItem selectedItem)
         {
-            string newDescription = await DisplayPromptAsync("Edit Todo", 
-                "Enter new description:", 
+            var newDescription = await DisplayPromptAsync("Edit Todo",
+                "Enter new description:",
                 initialValue: selectedItem.Description);
-                
+
             if (!string.IsNullOrWhiteSpace(newDescription))
             {
                 selectedItem.Description = newDescription;
                 await database.SaveItemAsync(selectedItem);
             }
-            
+
             TodoItemsCollection.SelectedItem = null;
         }
     }

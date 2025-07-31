@@ -1,15 +1,10 @@
-﻿using PowerSync.Common.Client;
+﻿using System.Text;
+using System.Text.Json;
+using PowerSync.Common.Client;
 using PowerSync.Common.Client.Connection;
 using PowerSync.Common.DB.Crud;
 
 namespace MAUITodo.Data;
-
-using System;
-using System.Collections.Generic;
-using System.Net.Http;
-using System.Text;
-using System.Text.Json;
-using System.Threading.Tasks;
 
 public class NodeConnector : IPowerSyncBackendConnector
 {
