@@ -19,4 +19,10 @@
   <ItemGroup>
     <ProjectReference Include="..\..\PowerSync\Powersync.Common\PowerSync.Common.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <None Update=".env">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
 </Project>

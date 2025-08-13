@@ -29,17 +29,40 @@ namespace PowersyncDotnetTodoList.ViewModels
         #region Constructor
         public MainWindowViewModel(PowerSyncDatabase db)
         {
-            _db = db;
-            // Set up the listener to track the status changes
-            _db.RunListener(
-                (update) =>
+            try
+            {
+                Console.WriteLine("MainWindowViewModel constructor started");
+
+                if (db == null)
                 {
-                    if (update.StatusChanged != null)
-                    {
-                        Connected = update.StatusChanged.Connected;
-                    }
+                    Console.WriteLine("ERROR: PowerSyncDatabase is null!");
+                    throw new ArgumentNullException(nameof(db));
                 }
-            );
+
+                _db = db;
+                Console.WriteLine("PowerSyncDatabase assigned successfully");
+
+                // Set up the listener to track the status changes
+                Console.WriteLine("Setting up RunListener...");
+                _db.RunListener(
+                    (update) =>
+                    {
+                        Console.WriteLine(
+                            $"Listener callback triggered: StatusChanged = {update.StatusChanged?.Connected}"
+                        );
+                        if (update.StatusChanged != null)
+                        {
+                            Connected = update.StatusChanged.Connected;
+                        }
+                    }
+                );
+                Console.WriteLine("RunListener setup complete");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"ERROR in MainWindowViewModel constructor: {ex}");
+                throw;
+            }
         }
         #endregion
     }
