@@ -32,10 +32,6 @@ namespace PowersyncDotnetTodoList
                     MessageBoxImage.Error
                 );
 
-                // Log to console if available
-                Console.WriteLine($"=== APPLICATION STARTUP FAILED ===");
-                Console.WriteLine($"Exception: {ex}");
-
                 // Shut down the application
                 Current.Shutdown(1);
                 return;
@@ -44,34 +40,20 @@ namespace PowersyncDotnetTodoList
 
         private async Task InitializeApplicationAsync()
         {
-            Console.WriteLine("DEBUG: Starting application initialization...");
-
             var services = new ServiceCollection();
             ConfigureServices(services);
-            Console.WriteLine("DEBUG: Services configured");
 
             // Build the service provider
             Services = services.BuildServiceProvider();
             var mainWindow = Services.GetRequiredService<MainWindow>();
-            Console.WriteLine("DEBUG: Got MainWindow");
-
-            Console.WriteLine("DEBUG: Getting NavigationService...");
             var navigationService = Services.GetRequiredService<INavigationService>();
-            Console.WriteLine("DEBUG: Got NavigationService");
 
-            Console.WriteLine("DEBUG: Navigating to TodoListViewModel...");
             navigationService.Navigate<TodoListViewModel>();
-            Console.WriteLine("DEBUG: Navigation completed");
-
-            Console.WriteLine("DEBUG: Showing main window...");
             mainWindow.Show();
-            Console.WriteLine("DEBUG: Main window shown - startup complete!");
         }
 
         private void ConfigureServices(IServiceCollection services)
         {
-            Console.WriteLine("DEBUG: Configuring services...");
-
             ILoggerFactory loggerFactory = LoggerFactory.Create(builder =>
             {
                 builder.AddConsole();
@@ -81,7 +63,6 @@ namespace PowersyncDotnetTodoList
             // Register PowerSyncDatabase
             services.AddSingleton<PowerSyncDatabase>(sp =>
             {
-                Console.WriteLine("DEBUG: Creating PowerSyncDatabase...");
                 var logger = loggerFactory.CreateLogger("PowerSyncLogger");
                 return new PowerSyncDatabase(
                     new PowerSyncDatabaseOptions
@@ -101,7 +82,6 @@ namespace PowersyncDotnetTodoList
             // Register PowerSyncConnector
             services.AddSingleton<PowerSyncConnector>(sp =>
             {
-                Console.WriteLine("DEBUG: Creating PowerSyncConnector...");
                 return new PowerSyncConnector();
             });
 
@@ -118,12 +98,9 @@ namespace PowersyncDotnetTodoList
 
             services.AddSingleton<INavigationService>(sp =>
             {
-                Console.WriteLine("DEBUG: Creating NavigationService...");
                 var mainWindow = sp.GetRequiredService<MainWindow>();
                 return new NavigationService(mainWindow.MainFrame, sp);
             });
-
-            Console.WriteLine("DEBUG: Service configuration completed");
         }
 
         // Add global exception handler
@@ -132,9 +109,6 @@ namespace PowersyncDotnetTodoList
             System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e
         )
         {
-            Console.WriteLine($"=== UNHANDLED EXCEPTION ===");
-            Console.WriteLine($"Exception: {e.Exception}");
-
             MessageBox.Show(
                 $"An unhandled exception occurred: {e.Exception.Message}\n\nFull error: {e.Exception}",
                 "Unhandled Exception",

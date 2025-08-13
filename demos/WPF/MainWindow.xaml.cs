@@ -8,7 +8,7 @@ public partial class MainWindow : Window
 {
     private readonly MainWindowViewModel _viewModel;
     private readonly PowerSyncConnector _connector;
-    private readonly PowerSyncDatabase _db; // Replace with your actual database interface/type
+    private readonly PowerSyncDatabase _db;
 
     public MainWindow(
         MainWindowViewModel viewModel,
@@ -32,18 +32,11 @@ public partial class MainWindow : Window
     {
         try
         {
-            Console.WriteLine("DEBUG: Initializing database...");
             await _db.Init();
-            Console.WriteLine("DEBUG: Database initialized");
-
-            Console.WriteLine("DEBUG: Connecting to database...");
             await _db.Connect(_connector);
-            Console.WriteLine("DEBUG: Database connected");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"ERROR: Failed to initialize or connect to database: {ex.Message}");
-            // Optionally show an error message to the user
             MessageBox.Show(
                 $"Failed to initialize database: {ex.Message}",
                 "Error",

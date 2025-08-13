@@ -31,7 +31,6 @@ namespace PowersyncDotnetTodoList.ViewModels
         {
             try
             {
-                Console.WriteLine("MainWindowViewModel constructor started");
 
                 if (db == null)
                 {
@@ -41,9 +40,6 @@ namespace PowersyncDotnetTodoList.ViewModels
 
                 _db = db;
                 Console.WriteLine("PowerSyncDatabase assigned successfully");
-
-                // Set up the listener to track the status changes
-                Console.WriteLine("Setting up RunListener...");
                 _db.RunListener(
                     (update) =>
                     {
@@ -56,7 +52,6 @@ namespace PowersyncDotnetTodoList.ViewModels
                         }
                     }
                 );
-                Console.WriteLine("RunListener setup complete");
             }
             catch (Exception ex)
             {
