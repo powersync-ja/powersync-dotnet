@@ -23,7 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\PowerSync.Common\PowerSync.Common.csproj" />
-      <None Include="build\PowerSync.Maui.targets" Pack="true" PackagePath="build\PowerSync.Maui.targets" />
+      <!-- <None Include="build\PowerSync.Maui.targets" Pack="true" PackagePath="build\PowerSync.Maui.targets" /> -->
 
   </ItemGroup>
   
@@ -49,10 +49,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Always include Android native libs -->
-    <None Include="Platforms\Android\jniLibs\**\*.*" Pack="true" PackagePath="Platforms\Android\jniLibs" />
-    
-    <!-- Always include iOS framework -->
-    <None Include="Platforms\iOS\NativeLibs\powersync-sqlite-core.xcframework\**\*.*" Pack="true" PackagePath="Platforms\iOS\NativeLibs" />
+    <None Include="Platforms\**\*.*" Pack="true" PackagePath="Platforms\" />
   </ItemGroup>
 </Project>
