@@ -1,6 +1,6 @@
 <Project>
   <ItemGroup Condition="$(TargetFramework.Contains('-android'))">
-    <Content Include="Platforms\Android\**\*.*" pack="true">
+    <Content Include="..\Platforms\Android\**\*.*" pack="true">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
