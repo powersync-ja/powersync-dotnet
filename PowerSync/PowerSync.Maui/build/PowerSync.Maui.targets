@@ -1,0 +1,13 @@
+<Project>
+  <ItemGroup Condition="$(TargetFramework.Contains('-android'))">
+    <Content Include="$(MSBuildThisFileDirectory)..\Platforms\Android\jniLibs\**\*.so">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup Condition="$(TargetFramework.Contains('-ios'))">
+    <Content Include="$(MSBuildThisFileDirectory)..\Platforms\iOS\NativeLibs\powersync-sqlite-core.xcframework\**\*.*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+</Project>
