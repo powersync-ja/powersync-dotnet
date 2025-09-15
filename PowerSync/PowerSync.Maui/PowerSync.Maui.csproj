@@ -19,6 +19,9 @@
     <PackageIcon>icon.png</PackageIcon>
     <NoWarn>NU5100</NoWarn>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <IsBindingProject>true</IsBindingProject>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <IncludeBuildOutput>true</IncludeBuildOutput>
   </PropertyGroup>
 
   <ItemGroup>
@@ -32,26 +35,14 @@
       <SubType>Designer</SubType>
     </None>
   </ItemGroup>
-  
-  <!-- For monorepo-->
-  <ItemGroup Condition="$(TargetFramework.Contains('-android'))">
-    <Content Include="Platforms\Android\**\*.*">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-  </ItemGroup>
+
 
   <ItemGroup Condition="$(TargetFramework.Contains('-ios'))">
-    <Content Include="Platforms\iOS\NativeLibs\powersync-sqlite-core.xcframework\**\*.*">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-  </ItemGroup>
+      <ObjcBindingApiDefinition Include="build\ApiDefinition.cs" />
 
-  <!-- For releasing runtimes  -->
-  <ItemGroup Condition="$(TargetFramework.Contains('-android'))">
-  <None Include="Platforms\Android\**\*.*" Pack="true" PackagePath="Platforms\Android" />
-  </ItemGroup>
-
-  <ItemGroup Condition="$(TargetFramework.Contains('-ios'))">
-    <None Include="Platforms\iOS\NativeLibs\powersync-sqlite-core.xcframework\**\*.*" Pack="true" PackagePath="Platforms\iOS" />
+     <NativeReference Include="platforms\iOS\NativeLibs\powersync-sqlite-core.xcframework">
+     <Kind>Framework</Kind>
+      <SmartLink>False</SmartLink>
+     </NativeReference>
   </ItemGroup>
 </Project>
