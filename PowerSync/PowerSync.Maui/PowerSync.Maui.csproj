@@ -46,12 +46,11 @@
     </Content>
   </ItemGroup>
 
-  <!-- For releasing runtimes  -->
-  <ItemGroup Condition="$(TargetFramework.Contains('-android'))">
-  <None Include="Platforms\Android\**\*.*" Pack="true" PackagePath="Platforms\Android" />
-  </ItemGroup>
-
-  <ItemGroup Condition="$(TargetFramework.Contains('-ios'))">
-    <None Include="Platforms\iOS\NativeLibs\powersync-sqlite-core.xcframework\**\*.*" Pack="true" PackagePath="Platforms\iOS" />
-  </ItemGroup>
+  <ItemGroup>
+    <!-- Always include Android native libs -->
+    <None Include="Platforms\Android\jniLibs\**\*.so" Pack="true" PackagePath="Platforms\Android\jniLibs" />
+    
+    <!-- Always include iOS framework -->
+    <None Include="Platforms\iOS\NativeLibs\powersync-sqlite-core.xcframework\**\*.*" Pack="true" PackagePath="Platforms\iOS\NativeLibs" />
+</ItemGroup>
 </Project>
