@@ -23,7 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\PowerSync.Common\PowerSync.Common.csproj" />
-      <!-- <None Include="build\PowerSync.Maui.targets" Pack="true" PackagePath="build\PowerSync.Maui.targets" /> -->
+      <None Include="build\PowerSync.Maui.targets" Pack="true" PackagePath="build\PowerSync.Maui.targets" />
 
   </ItemGroup>
   
