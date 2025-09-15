@@ -50,5 +50,10 @@
 
   <ItemGroup>
     <None Include="Platforms\**\*.*" Pack="true" PackagePath="Platforms\" />
+
+      <Content Include="Platforms\Android\jniLibs\**\*.so" Pack="true" PackagePath="build\Platforms\Android\jniLibs\">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </Content>
   </ItemGroup>
+  
 </Project>
