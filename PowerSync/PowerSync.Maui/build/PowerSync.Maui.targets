@@ -1,6 +1,6 @@
 <Project>
   <ItemGroup Condition="$(TargetFramework.Contains('-android'))">
-    <Content Include="$(MSBuildThisFileDirectory)..\Platforms\Android\jniLibs\**\*.so">
+    <Content Include="Platforms\Android\**\*.*" pack="true">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
