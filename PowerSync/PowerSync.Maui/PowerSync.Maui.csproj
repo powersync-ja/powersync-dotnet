@@ -23,7 +23,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\PowerSync.Common\PowerSync.Common.csproj" />
-      <None Include="build\PowerSync.Maui.targets" Pack="true" PackagePath="build\PowerSync.Maui.targets" />
 
   </ItemGroup>
   
@@ -42,18 +41,9 @@
     </Content>
   </ItemGroup>
 
-  <ItemGroup Condition="$(TargetFramework.Contains('-ios'))">
+ <ItemGroup Condition="$(TargetFramework.Contains('-ios'))">
     <Content Include="Platforms\iOS\NativeLibs\powersync-sqlite-core.xcframework\**\*.*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Include="Platforms\**\*.*" Pack="true" PackagePath="Platforms\" />
-
-      <Content Include="Platforms\Android\jniLibs\**\*.so" Pack="true" PackagePath="build\Platforms\Android\jniLibs\">
-        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-      </Content>
-  </ItemGroup>
-  
+  </ItemGroup> 
 </Project>
