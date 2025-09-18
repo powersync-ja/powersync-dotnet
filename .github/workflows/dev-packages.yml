@@ -7,16 +7,24 @@ on: workflow_dispatch
 jobs:
   dev-release:
     name: Publish Dev Packages
-    runs-on: windows-latest
+    runs-on: macos-latest  # Changed from windows-latest
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
 
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0' 
+          dotnet-version: '8.0'
+    
+      - name: Clean workspace
+        run: dotnet clean
+
+      - name: Restore dependencies
+        run: dotnet restore --no-cache
 
       - name: Download PowerSync extension
         run: dotnet run --project Tools/Setup    
