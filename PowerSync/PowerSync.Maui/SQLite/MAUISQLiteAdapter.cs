@@ -19,7 +19,7 @@ public class MAUISQLiteAdapter : MDSQLiteAdapter
         db.EnableExtensions(true);
 
 #if IOS
-       LoadExtensionIOS(db);
+        LoadExtensionIOS(db);
 #elif ANDROID
         db.LoadExtension("libpowersync");
 #else
@@ -29,16 +29,21 @@ public class MAUISQLiteAdapter : MDSQLiteAdapter
 
     private void LoadExtensionIOS(SqliteConnection db)
     {
-        #if IOS
-        var bundlePath = Foundation.NSBundle.MainBundle.BundlePath;
+#if IOS
+        var bundlePath = Foundation.NSBundle.FromIdentifier("co.powersync.sqlitecore")?.BundlePath;
+        if (bundlePath == null)
+        {
+            throw new Exception("Could not find PowerSync SQLite extension bundle path");
+        }
+
         var filePath =
-            Path.Combine(bundlePath, "Frameworks", "powersync-sqlite-core.framework", "powersync-sqlite-core");
-        
+            Path.Combine(bundlePath, "powersync-sqlite-core");
+
         using var loadExtension = db.CreateCommand();
         loadExtension.CommandText = "SELECT load_extension(@path, @entryPoint)";
         loadExtension.Parameters.AddWithValue("@path", filePath);
         loadExtension.Parameters.AddWithValue("@entryPoint", "sqlite3_powersync_init");
         loadExtension.ExecuteNonQuery();
-        #endif
+#endif
     }
 }
