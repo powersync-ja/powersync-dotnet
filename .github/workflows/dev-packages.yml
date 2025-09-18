@@ -46,7 +46,10 @@ jobs:
           MAUI_VERSION=$(awk '/^## [0-9]+\.[0-9]+\.[0-9]+-dev(\.[0-9]+)?$/ {print $2; exit}' PowerSync/PowerSync.Maui/CHANGELOG.md)
           echo "Detected Version: $MAUI_VERSION"
           echo "VERSION=$MAUI_VERSION" >> $GITHUB_ENV 
-          
+        
+      - name: Build MAUI Project
+        run: dotnet build PowerSync/PowerSync.Maui -c Release
+
       - name: Run Pack For MAUI
         run: dotnet pack PowerSync/PowerSync.Maui -c Release -o ${{ github.workspace }}/output
 
