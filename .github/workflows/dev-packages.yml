@@ -7,7 +7,7 @@ on: workflow_dispatch
 jobs:
   dev-release:
     name: Publish Dev Packages
-    runs-on: macos-latest  # Changed from windows-latest
+    runs-on: macos-latest
 
     steps:
       - name: Checkout Repository
@@ -19,6 +19,9 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0'
+
+      - name: Install MAUI Workloads
+        run: dotnet workload restore
 
       - name: Download PowerSync extension
         run: dotnet run --project Tools/Setup    
