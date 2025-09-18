@@ -19,12 +19,6 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0'
-    
-      - name: Clean workspace
-        run: dotnet clean
-
-      - name: Restore dependencies
-        run: dotnet restore --no-cache
 
       - name: Download PowerSync extension
         run: dotnet run --project Tools/Setup    
