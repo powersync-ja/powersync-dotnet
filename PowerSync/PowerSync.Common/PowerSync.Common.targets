@@ -1,8 +1,7 @@
 <Project>
-  <ItemGroup>
-    <!-- Automatically exclude native assets for Android targets -->
-    <PackageReference Update="PowerSync.Common" Condition="$(TargetFramework.Contains('android'))">
-      <ExcludeAssets>%(ExcludeAssets);native</ExcludeAssets>
-    </PackageReference>
-  </ItemGroup>
+  <Target Name="RemovePowerSyncNativeForAndroid" AfterTargets="ResolvePackageAssets" Condition="$(TargetFramework.Contains('android'))">
+    <ItemGroup>
+      <NativeCopyLocalItems Remove="@(NativeCopyLocalItems)" Condition="'%(NuGetPackageId)' == 'PowerSync.Common'" />
+    </ItemGroup>
+  </Target>
 </Project>
