@@ -51,3 +51,10 @@ dotnet build -t:Run -f:net8.0-android -p:_DeviceName=emulator-5554
 ```sh
 dotnet run -f net8.0-windows10.0.19041.0
 ```
+
+## Android on Windows
+You may need to overwrite the [backend and PowerSync URLs](./Data/NodeConnector.cs) when running an Android emulator on Windows.
+```
+BackendUrl = "http://10.0.2.2:6060";
+PowerSyncUrl = "http://10.0.2.2:8080";
+```

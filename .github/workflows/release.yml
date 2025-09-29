@@ -6,17 +6,22 @@ on: workflow_dispatch
 jobs:
   release:
     name: Release
-    runs-on: windows-latest
+    runs-on: macos-latest
     if: github.ref == 'refs/heads/main'
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
 
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0' 
+          dotnet-version: '8.0'
+
+      - name: Install MAUI Workloads
+        run: dotnet workload restore
 
       - name: Download PowerSync extension
         run: dotnet run --project Tools/Setup    
@@ -37,7 +42,7 @@ jobs:
 
       - name: Run Push for Common
         continue-on-error: true
-        run: dotnet nuget push ${{ github.workspace }}\output\PowerSync.Common*.nupkg --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }}
+        run: dotnet nuget push ${{ github.workspace }}/output/PowerSync.Common*.nupkg --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }}
 
       - name: Extract MAUI Package Version from CHANGELOG.md
         id: extract_maui_version
@@ -55,4 +60,4 @@ jobs:
 
       - name: Run Push For MAUI
         continue-on-error: true
-        run: dotnet nuget push ${{ github.workspace }}\output\PowerSync.Maui*.nupkg --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }}
+        run: dotnet nuget push ${{ github.workspace }}/output/PowerSync.Maui*.nupkg --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }}
