@@ -32,8 +32,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="PowerSync.Common.props" Pack="true" PackagePath="build\" />
-    <None Include="PowerSync.Common.props" Pack="true" PackagePath="buildTransitive\" />
+    <None Include="PowerSync.Common.targets" Pack="true" PackagePath="build\" />
+    <None Include="PowerSync.Common.targets" Pack="true" PackagePath="buildTransitive\" />
   </ItemGroup>
   
   <!-- Check allows us to skip for all MAUI targets-->
