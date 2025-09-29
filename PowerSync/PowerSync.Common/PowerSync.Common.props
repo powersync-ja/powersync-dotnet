@@ -1,0 +1,8 @@
+<Project>
+  <ItemGroup>
+    <!-- Automatically exclude native assets for Android targets -->
+    <PackageReference Update="PowerSync.Common" Condition="$(TargetFramework.Contains('android'))">
+      <ExcludeAssets>%(ExcludeAssets);native</ExcludeAssets>
+    </PackageReference>
+  </ItemGroup>
+</Project>

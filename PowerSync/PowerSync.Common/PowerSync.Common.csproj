@@ -30,6 +30,11 @@
     <PackageReference Include="Nito.AsyncEx" Version="5.1.2" />
     <PackageReference Include="System.Threading.Channels" Version="8.0.0" />
   </ItemGroup>
+
+  <ItemGroup>
+    <None Include="PowerSync.Common.props" Pack="true" PackagePath="build\" />
+    <None Include="PowerSync.Common.props" Pack="true" PackagePath="buildTransitive\" />
+  </ItemGroup>
   
   <!-- Check allows us to skip for all MAUI targets-->
   <!-- For monorepo-->

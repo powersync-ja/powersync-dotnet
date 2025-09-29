@@ -1,6 +1,6 @@
 # PowerSync.Common Changelog
 
-## 0.0.4-dev.1
+## 0.0.4-dev.2
 - Fixing build issues related to MAUI targets not resolving on install.
 
 ## 0.0.3-alpha.1
