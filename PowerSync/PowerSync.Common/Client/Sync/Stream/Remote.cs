@@ -30,6 +30,9 @@ public class RequestDetails
 
 public class Remote
 {
+
+    private const int STREAMING_POST_TIMEOUT_MS = 30_000;
+
     private readonly HttpClient httpClient;
     protected IPowerSyncBackendConnector connector;
 
@@ -148,11 +151,21 @@ public class Remote
         using var reader = new StreamReader(stream, Encoding.UTF8);
         string? line;
 
+        using var timeoutCts = new CancellationTokenSource();
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(options.CancellationToken, timeoutCts.Token);
+
+        linkedCts.Token.Register(() =>
+        {
+            stream.Close();
+        });
+
         while ((line = await reader.ReadLineAsync()) != null)
         {
+            timeoutCts.CancelAfter(TimeSpan.FromMilliseconds(STREAMING_POST_TIMEOUT_MS));
             yield return ParseStreamingSyncLine(JObject.Parse(line));
         }
     }
+
 
     public static StreamingSyncLine? ParseStreamingSyncLine(JObject json)
     {
