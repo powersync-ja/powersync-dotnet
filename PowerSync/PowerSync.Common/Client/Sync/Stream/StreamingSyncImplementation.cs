@@ -1,5 +1,6 @@
 namespace PowerSync.Common.Client.Sync.Stream;
 
+using System.Net.Sockets;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -285,7 +286,14 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
             }
             catch (Exception ex)
             {
-                logger.LogError("Caught exception in streaming sync: {message}", ex.Message);
+                var exMessage = ex.Message;
+                if (ex.InnerException != null && (ex.InnerException is ObjectDisposedException || ex.InnerException is SocketException))
+                {
+                    exMessage = "Stream closed or timed out -" + ex.InnerException.Message;
+                }
+
+
+                logger.LogError("Caught exception in streaming sync: {message}", exMessage);
 
                 // Either:
                 //  - A network request failed with a failed connection or not OKAY response code.
