@@ -30,17 +30,22 @@
     <PackageReference Include="Nito.AsyncEx" Version="5.1.2" />
     <PackageReference Include="System.Threading.Channels" Version="8.0.0" />
   </ItemGroup>
+
+  <ItemGroup>
+    <None Include="PowerSync.Common.targets" Pack="true" PackagePath="build\" />
+    <None Include="PowerSync.Common.targets" Pack="true" PackagePath="buildTransitive\" />
+  </ItemGroup>
   
   <!-- Check allows us to skip for all MAUI targets-->
   <!-- For monorepo-->
-  <ItemGroup Condition="!$(TargetFramework.Contains('-'))">
+  <ItemGroup Condition="!$(TargetFramework.EndsWith('-android')) AND !$(TargetFramework.EndsWith('-ios'))">
     <Content Include="runtimes\**\*.*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
 
   <!-- For releasing runtimes  -->
-  <ItemGroup Condition="!$(TargetFramework.Contains('-'))">
+  <ItemGroup Condition="!$(TargetFramework.EndsWith('-android')) AND !$(TargetFramework.EndsWith('-ios'))">
     <None Include="runtimes\**\*.*" Pack="true" PackagePath="runtimes\" />
   </ItemGroup>
   

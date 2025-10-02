@@ -1,5 +1,8 @@
 # PowerSync.Common Changelog
 
+## 0.0.4-alpha.1
+- Fixed MAUI issues related to extension loading when installing package outside of the monorepo. 
+
 ## 0.0.3-alpha.1
 - Minor changes to accommodate PowerSync.MAUI package extension.
 
