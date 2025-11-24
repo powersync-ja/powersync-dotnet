@@ -1,4 +1,4 @@
-namespace PowerSync.Common.Tests;
+namespace PowerSync.Common.IntegrationTests;
 
 using PowerSync.Common.DB.Schema;
 
