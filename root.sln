@@ -23,6 +23,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WPF", "demos\WPF\WPF.csproj
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PowerSync.Maui", "PowerSync\PowerSync.Maui\PowerSync.Maui.csproj", "{A4A91B9F-0C86-41CB-BEF0-C002819C43BE}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PowerSync.Common.IntegrationTests", "Tests\PowerSync\PowerSync.Common.IntegrationTests\PowerSync.Common.IntegrationTests.csproj", "{EB81D453-777D-40B5-A504-4144906ADBF4}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -105,6 +107,18 @@ Global
 		{A4A91B9F-0C86-41CB-BEF0-C002819C43BE}.Release|x64.Build.0 = Release|Any CPU
 		{A4A91B9F-0C86-41CB-BEF0-C002819C43BE}.Release|x86.ActiveCfg = Release|Any CPU
 		{A4A91B9F-0C86-41CB-BEF0-C002819C43BE}.Release|x86.Build.0 = Release|Any CPU
+		{EB81D453-777D-40B5-A504-4144906ADBF4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EB81D453-777D-40B5-A504-4144906ADBF4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EB81D453-777D-40B5-A504-4144906ADBF4}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{EB81D453-777D-40B5-A504-4144906ADBF4}.Debug|x64.Build.0 = Debug|Any CPU
+		{EB81D453-777D-40B5-A504-4144906ADBF4}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{EB81D453-777D-40B5-A504-4144906ADBF4}.Debug|x86.Build.0 = Debug|Any CPU
+		{EB81D453-777D-40B5-A504-4144906ADBF4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EB81D453-777D-40B5-A504-4144906ADBF4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EB81D453-777D-40B5-A504-4144906ADBF4}.Release|x64.ActiveCfg = Release|Any CPU
+		{EB81D453-777D-40B5-A504-4144906ADBF4}.Release|x64.Build.0 = Release|Any CPU
+		{EB81D453-777D-40B5-A504-4144906ADBF4}.Release|x86.ActiveCfg = Release|Any CPU
+		{EB81D453-777D-40B5-A504-4144906ADBF4}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -117,5 +131,6 @@ Global
 		{B8B2A9E2-FEC9-495B-B03E-23078E7B651D} = {9144195A-C68F-4B1E-A574-474EDD424D6C}
 		{AF297026-0BEA-4B8E-97C9-6540C6D52B36} = {9144195A-C68F-4B1E-A574-474EDD424D6C}
 		{A4A91B9F-0C86-41CB-BEF0-C002819C43BE} = {B1D87BA9-8812-4EFA-BBBE-1FF1EEEB5433}
+		{EB81D453-777D-40B5-A504-4144906ADBF4} = {C784FBE4-CC1E-4A0A-AE8E-6B818DD3724D}
 	EndGlobalSection
 EndGlobal
