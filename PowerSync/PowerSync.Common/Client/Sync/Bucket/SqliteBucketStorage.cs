@@ -111,7 +111,7 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
             foreach (var b in batch.Buckets)
             {
                 var result = await tx.Execute("INSERT INTO powersync_operations(op, data) VALUES(?, ?)",
-                    ["save", JsonConvert.SerializeObject(new { buckets = new[] { b.ToJSON() } })]);
+                    ["save", JsonConvert.SerializeObject(new { buckets = new[] { JsonConvert.DeserializeObject(b.ToJSON()) } })]);
                 logger.LogDebug("saveSyncData {message}", JsonConvert.SerializeObject(result));
                 count += b.Data.Length;
             }
