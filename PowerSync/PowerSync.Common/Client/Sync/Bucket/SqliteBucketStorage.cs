@@ -40,7 +40,7 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
         this.logger = logger ?? NullLogger.Instance; ;
         hasCompletedSync = false;
         pendingBucketDeletes = true;
-        tableNames = [];
+        tableNames = new HashSet<string>();
 
         updateCts = new CancellationTokenSource();
 
@@ -110,8 +110,10 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
             int count = 0;
             foreach (var b in batch.Buckets)
             {
+                var bucketJson = b.ToJSON();
+                var jsonData = $"{{\"buckets\":[{bucketJson}]}}";
                 var result = await tx.Execute("INSERT INTO powersync_operations(op, data) VALUES(?, ?)",
-                    ["save", JsonConvert.SerializeObject(new { buckets = new[] { JsonConvert.DeserializeObject(b.ToJSON()) } })]);
+                    ["save", jsonData]);
                 logger.LogDebug("saveSyncData {message}", JsonConvert.SerializeObject(result));
                 count += b.Data.Length;
             }
@@ -156,7 +158,7 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
         if (!validation.CheckpointValid)
         {
             logger.LogError("Checksums failed for {failures}", JsonConvert.SerializeObject(validation.CheckpointFailures));
-            foreach (var failedBucket in validation.CheckpointFailures ?? [])
+            foreach (var failedBucket in validation.CheckpointFailures ?? new string[0])
             {
                 await DeleteBucket(failedBucket);
             }
@@ -249,7 +251,7 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
             {
                 CheckpointValid = false,
                 Ready = false,
-                CheckpointFailures = resultDetail?.FailedBuckets?.ToArray() ?? []
+                CheckpointFailures = resultDetail?.FailedBuckets?.ToArray() ?? new string[0]
             };
         }
     }

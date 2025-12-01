@@ -19,7 +19,7 @@ public class SyncDataBucketJSON
     // public string? NextAfter { get; set; }
 
     [JsonProperty("data")]
-    public List<object> Data { get; set; } = [];
+    public List<object> Data { get; set; } = new List<object>();
 }
 
 public class SyncDataBucket(
@@ -37,7 +37,7 @@ public class SyncDataBucket(
                 .Select(obj => JsonConvert.DeserializeObject<OplogEntryJSON>(JsonConvert.SerializeObject(obj))!) // Convert object to JSON string, then deserialize
                 .Select(OplogEntry.FromRow)
                 .ToArray()
-            : [];
+            : new OplogEntry[0];
 
         return new SyncDataBucket(
             row.Bucket,
@@ -48,9 +48,18 @@ public class SyncDataBucket(
     public string ToJSON()
     {
         List<object> dataObjects = Data
-         .Select(entry => JsonConvert.DeserializeObject<object>(entry.ToJSON()))
-         .Where(obj => obj != null)
-         .ToList()!;
+         .Select(entry => new OplogEntryJSON
+         {
+             OpId = entry.OpId,
+             Op = entry.Op.ToJSON(),
+             Checksum = entry.Checksum,
+             Data = entry.Data != null ? JsonConvert.SerializeObject(entry.Data) : null,
+             ObjectType = entry.ObjectType,
+             ObjectId = entry.ObjectId,
+             Subkey = entry.Subkey
+         })
+         .Cast<object>()
+         .ToList();
 
         var jsonObject = new SyncDataBucketJSON
         {
