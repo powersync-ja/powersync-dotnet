@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
-
+using Newtonsoft.Json;
 using PowerSync.Common.Client;
 using PowerSync.Common.Client.Sync.Bucket;
 using PowerSync.Common.DB.Schema;
@@ -17,7 +17,7 @@ class TestData
         Op = new OpType(OpTypeEnum.PUT).ToJSON(),
         ObjectType = "assets",
         ObjectId = "O1",
-        Data = new { description = "bar" },
+        Data = JsonConvert.SerializeObject(new { description = "bar" }),
         Checksum = 1
     });
 
@@ -27,7 +27,7 @@ class TestData
         Op = new OpType(OpTypeEnum.PUT).ToJSON(),
         ObjectType = "assets",
         ObjectId = "O2",
-        Data = new { description = "bar" },
+        Data = JsonConvert.SerializeObject(new { description = "bar" }),
         Checksum = 2
     });
 
@@ -37,7 +37,7 @@ class TestData
         Op = new OpType(OpTypeEnum.PUT).ToJSON(),
         ObjectType = "assets",
         ObjectId = "O1",
-        Data = new { description = "bard" },
+        Data = JsonConvert.SerializeObject(new { description = "bard" }),
         Checksum = 3
     });
 
@@ -235,7 +235,7 @@ public class BucketStorageTests : IAsyncLifetime
             Subkey = "b",
             ObjectType = "assets",
             ObjectId = "O1",
-            Data = new { description = "B" },
+            Data = JsonConvert.SerializeObject(new { description = "B" }),
             Checksum = 4
         });
 
@@ -863,7 +863,7 @@ public class BucketStorageTests : IAsyncLifetime
                     ObjectType = "assets",
                     ObjectId = "O3",
                     Checksum = 5,
-                    Data = new { description = "server updated" }
+                    Data = JsonConvert.SerializeObject(new { description = "server updated" })
                 })
             ], false)
             ])
