@@ -8,6 +8,17 @@ using PowerSync.Common.DB.Crud;
 using PowerSync.Common.Utils;
 using Newtonsoft.Json;
 
+public static class PowerSyncControlCommand
+{
+    public const string PROCESS_TEXT_LINE = "line_text";
+    public const string PROCESS_BSON_LINE = "line_binary";
+    public const string STOP = "stop";
+    public const string START = "start";
+    public const string NOTIFY_TOKEN_REFRESHED = "refreshed_token";
+    public const string NOTIFY_CRUD_UPLOAD_COMPLETED = "completed_upload";
+    public const string UPDATE_SUBSCRIPTIONS = "update_subscriptions";
+}
+
 public class Checkpoint
 {
     [JsonProperty("last_op_id")]

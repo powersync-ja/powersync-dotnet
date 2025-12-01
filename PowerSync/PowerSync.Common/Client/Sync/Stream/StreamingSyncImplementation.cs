@@ -301,15 +301,15 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
         while (true)
         {
             UpdateSyncStatus(new SyncStatusOptions { Connecting = true });
-
+            var iterationResult = (StreamingSyncIterationResult?)null;
             try
             {
                 if (signal.Value.IsCancellationRequested)
                 {
                     break;
                 }
-                var iterationResult = await StreamingSyncIteration(nestedCts.Token, options);
-                if (!iterationResult.Retry)
+                iterationResult = await StreamingSyncIteration(nestedCts.Token, options);
+                if (!iterationResult.Retry.GetValueOrDefault(false))
                 {
 
                     // A sync error ocurred that we cannot recover from here.
@@ -345,12 +345,10 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                         DownloadError = ex
                     }
                 });
-
-                // On error, wait a little before retrying
-                await DelayRetry();
             }
             finally
             {
+                notifyCompletedUploads = null;
 
                 if (!signal.Value.IsCancellationRequested)
                 {
@@ -359,11 +357,18 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                     nestedCts = new CancellationTokenSource();
                 }
 
-                UpdateSyncStatus(new SyncStatusOptions
+
+                if (iterationResult != null && iterationResult.ImmediateRestart.GetValueOrDefault(false))
                 {
-                    Connected = false,
-                    Connecting = true // May be unnecessary
-                });
+                    UpdateSyncStatus(new SyncStatusOptions
+                    {
+                        Connected = false,
+                        Connecting = true // May be unnecessary
+                    });
+
+                    // On error, wait a little before retrying
+                    await DelayRetry();
+                }
             }
         }
 
@@ -377,7 +382,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
 
     protected record StreamingSyncIterationResult
     {
-        public bool Retry { get; init; }
+        public bool? Retry { get; init; }
 
         public bool? ImmediateRestart { get; init; }
     }
@@ -396,35 +401,24 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                     Params = options?.Params ?? DEFAULT_STREAM_CONNECTION_OPTIONS.Params,
                     ClientImplementation = options?.ClientImplementation ?? DEFAULT_STREAM_CONNECTION_OPTIONS.ClientImplementation
                 };
-                Console.WriteLine("Using sync client implementation: " + resolvedOptions.ClientImplementation);
 
                 if (resolvedOptions.ClientImplementation == SyncClientImplementation.RUST)
                 {
-                    // Use Rust-based sync implementation
-                    // var rustImpl = new RustStreamingSyncImplementation(Options);
-                    // return await rustImpl.RustSyncIteration(signal, resolvedOptions);
-
                     return await RustStreamingSyncIteration(signal, resolvedOptions);
                 }
                 else
                 {
-                    // Use legacy C#-based sync implementation
                     return await LegacyStreamingSyncIteration(signal, resolvedOptions);
                 }
             }
         });
     }
 
-    // protected async Task<StreamingSyncIterationResult> RustStreamingSyncIteration(StreamingSyncImplementationOptions options, CancellationToken signal, RequiredPowerSyncConnectionOptions resolvedOptions)
-    // {
-    //     // var rustImpl = new RustStreamingSyncImplementation(options);
-    //     // return await rustImpl.RustSyncIteration(signal, resolvedOptions);
-    //     throw new NotImplementedException("Rust streaming sync implementation is not yet implemented.");
-    // }
-
     protected async Task<StreamingSyncIterationResult> RustStreamingSyncIteration(CancellationToken? signal, RequiredPowerSyncConnectionOptions resolvedOptions)
     {
         Task? receivingLines = null;
+        var hideDisconnectOnRestart = false;
+
 
         var nestedCts = new CancellationTokenSource();
         signal?.Register(() => { nestedCts.Cancel(); });
@@ -451,18 +445,18 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
             while ((line = await reader.ReadLineAsync()) != null)
             {
                 logger.LogDebug("Parsing line for rust sync stream {message}", "xx");
-                await Control("line_text", line);
+                await Control(PowerSyncControlCommand.PROCESS_TEXT_LINE, line);
             }
         }
 
         async Task Stop()
         {
-            await Control("stop");
+            await Control(PowerSyncControlCommand.STOP);
         }
 
         async Task Control(string op, object? payload = null)
         {
-            logger.LogDebug("Control call {message}", op);
+            logger.LogTrace("Control call {message}", op);
 
             var rawResponse = await Options.Adapter.Control(op, payload);
             HandleInstructions(Instruction.ParseInstructions(rawResponse));
@@ -531,6 +525,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                     break;
                 case CloseSyncStream:
                     nestedCts.Cancel();
+                    hideDisconnectOnRestart = true;
                     logger.LogWarning("Closing stream");
                     break;
                 case FlushFileSystem:
@@ -546,8 +541,9 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
 
         try
         {
-            notifyCompletedUploads = () => { Task.Run(async () => await Control("completed_upload")); };
-            await Control("start", JsonConvert.SerializeObject(new { parameters = resolvedOptions.Params }));
+            await Control(PowerSyncControlCommand.START, JsonConvert.SerializeObject(new { parameters = resolvedOptions.Params }));
+            notifyCompletedUploads = () => { Task.Run(async () => await Control(PowerSyncControlCommand.NOTIFY_CRUD_UPLOAD_COMPLETED)); };
+
             if (receivingLines != null)
             {
                 await receivingLines;
@@ -559,7 +555,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
             await Stop();
         }
 
-        return new StreamingSyncIterationResult { Retry = true };
+        return new StreamingSyncIterationResult { ImmediateRestart = hideDisconnectOnRestart };
     }
 
     protected async Task<StreamingSyncIterationResult> LegacyStreamingSyncIteration(CancellationToken signal, RequiredPowerSyncConnectionOptions resolvedOptions)
