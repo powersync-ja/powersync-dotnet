@@ -130,7 +130,7 @@ public class BucketStorageTests : IAsyncLifetime
         var initialBucketStates = await bucketStorage.GetBucketStates();
         Assert.Empty(initialBucketStates);
 
-        await bucketStorage.SaveSyncData(new SyncDataBatch([new SyncDataBucket("bucket1", [TestData.putAsset1_1, TestData.putAsset2_2, TestData.putAsset1_3])]));
+        await bucketStorage.SaveSyncData(new SyncDataBatch([new SyncDataBucket("bucket1", [TestData.putAsset1_1, TestData.putAsset2_2, TestData.putAsset1_3], false)]));
 
         var bucketStates = await bucketStorage.GetBucketStates();
 
@@ -154,7 +154,7 @@ public class BucketStorageTests : IAsyncLifetime
     {
         await bucketStorage.SaveSyncData(
             new SyncDataBatch(
-            [new SyncDataBucket("bucket1", [TestData.putAsset1_3]), new SyncDataBucket("bucket2", [TestData.putAsset1_3])])
+            [new SyncDataBucket("bucket1", [TestData.putAsset1_3], false), new SyncDataBucket("bucket2", [TestData.putAsset1_3], false)])
         );
 
         await SyncLocalChecked(new Checkpoint
@@ -176,7 +176,7 @@ public class BucketStorageTests : IAsyncLifetime
 
         await bucketStorage.SaveSyncData(
             new SyncDataBatch(
-            [new SyncDataBucket("bucket1", [TestData.putAsset1_3]), new SyncDataBucket("bucket2", [TestData.putAsset1_1])])
+            [new SyncDataBucket("bucket1", [TestData.putAsset1_3], false), new SyncDataBucket("bucket2", [TestData.putAsset1_1], false)])
         );
 
         await SyncLocalChecked(new Checkpoint
@@ -193,7 +193,7 @@ public class BucketStorageTests : IAsyncLifetime
     {
         // When we have 1 PUT and 1 REMOVE, the object must be kept.);   
         await bucketStorage.SaveSyncData(
-            new SyncDataBatch([new SyncDataBucket("bucket1", [TestData.putAsset1_3]), new SyncDataBucket("bucket2", [TestData.putAsset1_3, TestData.removeAsset1_4])])
+            new SyncDataBatch([new SyncDataBucket("bucket1", [TestData.putAsset1_3], false), new SyncDataBucket("bucket2", [TestData.putAsset1_3, TestData.removeAsset1_4], false)])
         );
 
         await SyncLocalChecked(new Checkpoint
@@ -210,7 +210,7 @@ public class BucketStorageTests : IAsyncLifetime
     {
         // When we only have REMOVE left for an object, it must be deleted.
         await bucketStorage.SaveSyncData(
-            new SyncDataBatch([new SyncDataBucket("bucket1", [TestData.putAsset1_3, TestData.removeAsset1_5]), new SyncDataBucket("bucket2", [TestData.putAsset1_3, TestData.removeAsset1_4])])
+            new SyncDataBatch([new SyncDataBucket("bucket1", [TestData.putAsset1_3, TestData.removeAsset1_5], false), new SyncDataBucket("bucket2", [TestData.putAsset1_3, TestData.removeAsset1_4], false)])
         );
 
         await SyncLocalChecked(new Checkpoint
@@ -250,7 +250,7 @@ public class BucketStorageTests : IAsyncLifetime
         });
 
         await bucketStorage.SaveSyncData(
-            new SyncDataBatch([new SyncDataBucket("bucket1", [TestData.putAsset1_1, TestData.putAsset1_3, put4])])
+            new SyncDataBatch([new SyncDataBucket("bucket1", [TestData.putAsset1_1, TestData.putAsset1_3, put4], false)])
         );
 
         await SyncLocalChecked(new Checkpoint
@@ -262,7 +262,7 @@ public class BucketStorageTests : IAsyncLifetime
         var result = await db.GetAll<AssetResult>("SELECT id, description, make FROM assets WHERE id = 'O1'");
         Assert.Equal(new AssetResult("O1", "B", null), result[0]);
 
-        await bucketStorage.SaveSyncData(new SyncDataBatch([new SyncDataBucket("bucket1", [remove5])]));
+        await bucketStorage.SaveSyncData(new SyncDataBatch([new SyncDataBucket("bucket1", [remove5], false)]));
 
         await SyncLocalChecked(new Checkpoint
         {
@@ -278,7 +278,7 @@ public class BucketStorageTests : IAsyncLifetime
     {
         // Simple checksum validation
         await bucketStorage.SaveSyncData(
-            new SyncDataBatch([new SyncDataBucket("bucket1", [TestData.putAsset1_1, TestData.putAsset2_2, TestData.putAsset1_3])])
+            new SyncDataBatch([new SyncDataBucket("bucket1", [TestData.putAsset1_1, TestData.putAsset2_2, TestData.putAsset1_3], false)])
         );
 
         var result = await bucketStorage.SyncLocalDatabase(new Checkpoint
@@ -304,7 +304,7 @@ public class BucketStorageTests : IAsyncLifetime
     {
         await bucketStorage.SaveSyncData(
             new SyncDataBatch(
-            [new SyncDataBucket("bucket1", [TestData.putAsset1_3]), new SyncDataBucket("bucket2", [TestData.putAsset1_3])])
+            [new SyncDataBucket("bucket1", [TestData.putAsset1_3], false), new SyncDataBucket("bucket2", [TestData.putAsset1_3], false)])
         );
 
         await bucketStorage.RemoveBuckets(["bucket2"]);
@@ -335,7 +335,7 @@ public class BucketStorageTests : IAsyncLifetime
     {
         // Save some data
         await bucketStorage.SaveSyncData(
-            new SyncDataBatch([new SyncDataBucket("bucket1", [TestData.putAsset1_1])])
+            new SyncDataBatch([new SyncDataBucket("bucket1", [TestData.putAsset1_1], false)])
         );
 
         // Delete the bucket
@@ -343,7 +343,7 @@ public class BucketStorageTests : IAsyncLifetime
 
         // Save some data again
         await bucketStorage.SaveSyncData(
-            new SyncDataBatch([new SyncDataBucket("bucket1", [TestData.putAsset1_1, TestData.putAsset1_3])])
+            new SyncDataBatch([new SyncDataBucket("bucket1", [TestData.putAsset1_1, TestData.putAsset1_3], false)])
         );
 
         // Delete again
@@ -351,7 +351,7 @@ public class BucketStorageTests : IAsyncLifetime
 
         // Final save of data
         await bucketStorage.SaveSyncData(
-            new SyncDataBatch([new SyncDataBucket("bucket1", [TestData.putAsset1_1, TestData.putAsset1_3])])
+            new SyncDataBatch([new SyncDataBucket("bucket1", [TestData.putAsset1_1, TestData.putAsset1_3], false)])
         );
 
         // Check that the data is there
@@ -388,12 +388,12 @@ public class BucketStorageTests : IAsyncLifetime
                         Op = new OpType(OpTypeEnum.MOVE).ToJSON(),
                         Checksum = 1
                     })
-                ])
+                ], false)
             ])
         );
 
         await bucketStorage.SaveSyncData(
-            new SyncDataBatch([new SyncDataBucket("bucket1", [TestData.putAsset1_3])])
+            new SyncDataBatch([new SyncDataBucket("bucket1", [TestData.putAsset1_3], false)])
         );
 
         await SyncLocalChecked(new Checkpoint
@@ -412,7 +412,7 @@ public class BucketStorageTests : IAsyncLifetime
         await bucketStorage.SaveSyncData(
             new SyncDataBatch(
             [
-                new SyncDataBucket("bucket1", [TestData.putAsset1_1])
+                new SyncDataBucket("bucket1", [TestData.putAsset1_1], false)
             ])
         );
 
@@ -446,7 +446,7 @@ public class BucketStorageTests : IAsyncLifetime
                         ObjectId = TestData.putAsset2_2.ObjectId,
                         ObjectType = TestData.putAsset2_2.ObjectType
                     })
-                ])
+                ], false)
             ])
         );
 
@@ -478,7 +478,7 @@ public class BucketStorageTests : IAsyncLifetime
 
         await bucketStorage.SaveSyncData(
             new SyncDataBatch(
-            [new SyncDataBucket("bucket1", [TestData.putAsset1_1, TestData.putAsset2_2, TestData.putAsset1_3])])
+            [new SyncDataBucket("bucket1", [TestData.putAsset1_1, TestData.putAsset2_2, TestData.putAsset1_3], false)])
         );
 
         await SyncLocalChecked(new Checkpoint
@@ -524,7 +524,7 @@ public class BucketStorageTests : IAsyncLifetime
         await bucketStorage.SaveSyncData(
             new SyncDataBatch(
             [
-                new SyncDataBucket("bucket1", [TestData.putAsset1_1, TestData.putAsset2_2, TestData.putAsset1_3])
+                new SyncDataBucket("bucket1", [TestData.putAsset1_1, TestData.putAsset2_2, TestData.putAsset1_3], false)
             ])
         );
 
@@ -578,7 +578,7 @@ public class BucketStorageTests : IAsyncLifetime
         await bucketStorage.SaveSyncData(
             new SyncDataBatch(
             [
-                new SyncDataBucket("bucket1", [TestData.putAsset1_1, TestData.putAsset2_2, TestData.removeAsset1_4])
+                new SyncDataBucket("bucket1", [TestData.putAsset1_1, TestData.putAsset2_2, TestData.removeAsset1_4], false)
             ])
         );
 
@@ -613,7 +613,7 @@ public class BucketStorageTests : IAsyncLifetime
         await bucketStorage.SaveSyncData(
             new SyncDataBatch(
             [
-                new SyncDataBucket("bucket1", [TestData.putAsset1_1, TestData.putAsset2_2, TestData.putAsset1_3])
+                new SyncDataBucket("bucket1", [TestData.putAsset1_1, TestData.putAsset2_2, TestData.putAsset1_3], false)
             ])
         );
 
@@ -676,7 +676,7 @@ public class BucketStorageTests : IAsyncLifetime
         await bucketStorage.SaveSyncData(
             new SyncDataBatch(
             [
-            new SyncDataBucket("bucket1", Array.Empty<OplogEntry>())
+            new SyncDataBucket("bucket1", Array.Empty<OplogEntry>(), false)
             ])
         );
 
@@ -700,7 +700,7 @@ public class BucketStorageTests : IAsyncLifetime
         await bucketStorage.SaveSyncData(
             new SyncDataBatch(
             [
-                new SyncDataBucket("bucket1", [TestData.putAsset1_1, TestData.putAsset2_2, TestData.putAsset1_3])
+                new SyncDataBucket("bucket1", [TestData.putAsset1_1, TestData.putAsset2_2, TestData.putAsset1_3], false)
             ])
         );
 
@@ -743,7 +743,7 @@ public class BucketStorageTests : IAsyncLifetime
         await bucketStorage.SaveSyncData(
             new SyncDataBatch(
             [
-                new SyncDataBucket("bucket1", Array.Empty<OplogEntry>())
+                new SyncDataBucket("bucket1", Array.Empty<OplogEntry>(), false)
             ])
         );
 
@@ -769,7 +769,7 @@ public class BucketStorageTests : IAsyncLifetime
         await bucketStorage.SaveSyncData(
             new SyncDataBatch(
             [
-              new SyncDataBucket("bucket1", [TestData.putAsset1_1, TestData.putAsset2_2, TestData.putAsset1_3])
+              new SyncDataBucket("bucket1", [TestData.putAsset1_1, TestData.putAsset2_2, TestData.putAsset1_3], false)
             ])
         );
 
@@ -797,7 +797,7 @@ public class BucketStorageTests : IAsyncLifetime
         await bucketStorage.SaveSyncData(
             new SyncDataBatch(
             [
-            new SyncDataBucket("bucket1", [])
+            new SyncDataBucket("bucket1", [], false)
             ])
         );
 
@@ -826,7 +826,7 @@ public class BucketStorageTests : IAsyncLifetime
         await bucketStorage.SaveSyncData(
             new SyncDataBatch(
             [
-                new SyncDataBucket("bucket1", [TestData.putAsset1_1, TestData.putAsset2_2, TestData.putAsset1_3])
+                new SyncDataBucket("bucket1", [TestData.putAsset1_1, TestData.putAsset2_2, TestData.putAsset1_3], false)
             ])
         );
 
@@ -865,7 +865,7 @@ public class BucketStorageTests : IAsyncLifetime
                     Checksum = 5,
                     Data = new { description = "server updated" }
                 })
-            ])
+            ], false)
             ])
         );
 
@@ -889,7 +889,7 @@ public class BucketStorageTests : IAsyncLifetime
         await bucketStorage.SaveSyncData(
             new SyncDataBatch(
             [
-                new SyncDataBucket("bucket1", [TestData.putAsset1_1, TestData.putAsset2_2, TestData.putAsset1_3])
+                new SyncDataBucket("bucket1", [TestData.putAsset1_1, TestData.putAsset2_2, TestData.putAsset1_3], false)
             ])
         );
 
@@ -931,7 +931,7 @@ public class BucketStorageTests : IAsyncLifetime
         await bucketStorage.SaveSyncData(
             new SyncDataBatch(
             [
-                new SyncDataBucket("bucket1", [TestData.putAsset1_1, TestData.putAsset2_2, TestData.putAsset1_3])
+                new SyncDataBucket("bucket1", [TestData.putAsset1_1, TestData.putAsset2_2, TestData.putAsset1_3], false)
             ])
         );
 
@@ -974,7 +974,7 @@ public class BucketStorageTests : IAsyncLifetime
         await bucketStorage.SaveSyncData(
             new SyncDataBatch(
             [
-                new SyncDataBucket("bucket1", [TestData.putAsset1_1, TestData.putAsset2_2, TestData.putAsset1_3])
+                new SyncDataBucket("bucket1", [TestData.putAsset1_1, TestData.putAsset2_2, TestData.putAsset1_3], false)
             ])
         );
 

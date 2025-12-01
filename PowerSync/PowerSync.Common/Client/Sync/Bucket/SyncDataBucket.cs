@@ -9,14 +9,14 @@ public class SyncDataBucketJSON
     [JsonProperty("bucket")]
     public string Bucket { get; set; } = null!;
 
-    // [JsonProperty("has_more")]
-    // public bool? HasMore { get; set; }
+    [JsonProperty("has_more")]
+    public bool? HasMore { get; set; }
 
-    // [JsonProperty("after")]
-    // public string? After { get; set; }
+    [JsonProperty("after")]
+    public string? After { get; set; }
 
-    // [JsonProperty("next_after")]
-    // public string? NextAfter { get; set; }
+    [JsonProperty("next_after")]
+    public string? NextAfter { get; set; }
 
     [JsonProperty("data")]
     public List<object> Data { get; set; } = [];
@@ -24,11 +24,16 @@ public class SyncDataBucketJSON
 
 public class SyncDataBucket(
     string bucket,
-    OplogEntry[] data
-    )
+    OplogEntry[] data,
+    bool hasMore,
+    string? after = null,
+    string? nextAfter = null)
 {
     public string Bucket { get; private set; } = bucket;
     public OplogEntry[] Data { get; private set; } = data;
+    public bool HasMore { get; private set; } = hasMore;
+    public string? After { get; private set; } = after;
+    public string? NextAfter { get; private set; } = nextAfter;
 
     public static SyncDataBucket FromRow(SyncDataBucketJSON row)
     {
@@ -41,7 +46,10 @@ public class SyncDataBucket(
 
         return new SyncDataBucket(
             row.Bucket,
-            dataEntries
+            dataEntries,
+            row.HasMore ?? false,
+            row.After,
+            row.NextAfter
         );
     }
 
@@ -55,6 +63,9 @@ public class SyncDataBucket(
         var jsonObject = new SyncDataBucketJSON
         {
             Bucket = Bucket,
+            HasMore = HasMore,
+            After = After,
+            NextAfter = NextAfter,
             Data = dataObjects
         };
 
