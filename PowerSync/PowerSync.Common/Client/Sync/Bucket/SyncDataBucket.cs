@@ -24,17 +24,11 @@ public class SyncDataBucketJSON
 
 public class SyncDataBucket(
     string bucket,
-    OplogEntry[] data,
-    bool hasMore = false
-    // string? after = null,
-    // string? nextAfter = null
+    OplogEntry[] data
     )
 {
     public string Bucket { get; private set; } = bucket;
     public OplogEntry[] Data { get; private set; } = data;
-
-    // public string? After { get; private set; } = after;
-    // public string? NextAfter { get; private set; } = nextAfter;
 
     public static SyncDataBucket FromRow(SyncDataBucketJSON row)
     {
@@ -48,9 +42,6 @@ public class SyncDataBucket(
         return new SyncDataBucket(
             row.Bucket,
             dataEntries
-        // row.HasMore ?? false,
-        // row.After,
-        // row.NextAfter
         );
     }
 
@@ -64,9 +55,6 @@ public class SyncDataBucket(
         var jsonObject = new SyncDataBucketJSON
         {
             Bucket = Bucket,
-            // HasMore = HasMore,
-            // After = After,
-            // NextAfter = NextAfter,
             Data = dataObjects
         };
 

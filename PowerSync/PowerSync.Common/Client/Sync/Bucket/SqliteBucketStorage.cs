@@ -351,16 +351,18 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
 
             if (seqAfter != seqBefore)
             {
-                logger.LogDebug("[updateLocalTarget] seqAfter ({seqAfter}) != seqBefore ({seqBefore})", seqAfter, seqBefore);
+                logger.LogDebug("[updateLocalTarget] seqAfter ({seqAfter}) != seqBefore ({seqBefore})", seqAfter,
+                    seqBefore);
                 return false;
             }
 
             var response = await tx.Execute(
-               "UPDATE ps_buckets SET target_op = CAST(? as INTEGER) WHERE name='$local'",
-               [opId]
-           );
+                "UPDATE ps_buckets SET target_op = CAST(? as INTEGER) WHERE name='$local'",
+                [opId]
+            );
 
-            logger.LogDebug("[updateLocalTarget] Response from updating target_op: {response}", JsonConvert.SerializeObject(response));
+            logger.LogDebug("[updateLocalTarget] Response from updating target_op: {response}",
+                JsonConvert.SerializeObject(response));
             return true;
         });
     }
@@ -388,33 +390,33 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
         var last = all[all.Length - 1];
 
         return new CrudBatch(
-        Crud: all,
-        HaveMore: true,
-        CompleteCallback: async (string? writeCheckpoint) =>
-        {
-            await db.WriteTransaction(async tx =>
+            Crud: all,
+            HaveMore: true,
+            CompleteCallback: async (string? writeCheckpoint) =>
             {
-                await tx.Execute("DELETE FROM ps_crud WHERE id <= ?", [last.ClientId]);
-
-                if (!string.IsNullOrEmpty(writeCheckpoint))
+                await db.WriteTransaction(async tx =>
                 {
-                    var crudResult = await tx.GetAll<object>("SELECT 1 FROM ps_crud LIMIT 1");
-                    if (crudResult?.Length > 0)
+                    await tx.Execute("DELETE FROM ps_crud WHERE id <= ?", [last.ClientId]);
+
+                    if (!string.IsNullOrEmpty(writeCheckpoint))
+                    {
+                        var crudResult = await tx.GetAll<object>("SELECT 1 FROM ps_crud LIMIT 1");
+                        if (crudResult?.Length > 0)
+                        {
+                            await tx.Execute(
+                                "UPDATE ps_buckets SET target_op = CAST(? as INTEGER) WHERE name='$local'",
+                                [writeCheckpoint]);
+                        }
+                    }
+                    else
                     {
                         await tx.Execute(
                             "UPDATE ps_buckets SET target_op = CAST(? as INTEGER) WHERE name='$local'",
-                            [writeCheckpoint]);
+                            [GetMaxOpId()]);
                     }
-                }
-                else
-                {
-                    await tx.Execute(
-                        "UPDATE ps_buckets SET target_op = CAST(? as INTEGER) WHERE name='$local'",
-                        [GetMaxOpId()]);
-                }
-            });
-        }
-    );
+                });
+            }
+        );
     }
 
     public async Task<CrudEntry?> NextCrudItem()
@@ -433,5 +435,16 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
     {
         // No Op
         await Task.CompletedTask;
+    }
+
+    record ControlResult(string? r);
+
+    public async Task<string> Control(string op, object? payload = null)
+    {
+        return await db.WriteTransaction(async tx =>
+        {
+            var result = await tx.Get<ControlResult>("SELECT powersync_control(?, ?) AS r", [op, payload ?? ""]);
+            return result.r!;
+        });
     }
 }

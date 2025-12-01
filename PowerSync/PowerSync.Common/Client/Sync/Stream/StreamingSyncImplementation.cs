@@ -1,6 +1,7 @@
 namespace PowerSync.Common.Client.Sync.Stream;
 
 using System.Net.Sockets;
+using System.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -9,6 +10,30 @@ using Newtonsoft.Json;
 using PowerSync.Common.Client.Sync.Bucket;
 using PowerSync.Common.DB.Crud;
 using PowerSync.Common.Utils;
+
+
+
+public enum SyncClientImplementation
+{
+
+    /// <summary>
+    /// This implementation offloads the sync line decoding and handling into the PowerSync core extension.
+    ///
+    /// ## Compatibility warning
+    ///
+    /// The Rust sync client stores sync data in a format that is slightly different than the one used
+    /// by the old C# implementation. When adopting the RUST client on existing
+    /// databases, the PowerSync SDK will migrate the format automatically.
+    RUST,
+    /// <summary>
+    /// Decodes and handles sync lines received from the sync service in C#.
+    ///
+    /// This is the legacy option.
+    ///
+    /// The explicit choice to use the C#-based sync implementation will be removed from a future version of the SDK.
+    /// </summary>
+    C_SHARP
+}
 
 public class AdditionalConnectionOptions(int? retryDelayMs = null, int? crudUploadThrottleMs = null)
 {
@@ -48,17 +73,24 @@ public class StreamingSyncImplementationOptions : AdditionalConnectionOptions
     public ILogger? Logger { get; init; }
 }
 
-public class BaseConnectionOptions(Dictionary<string, object>? parameters = null)
+public class BaseConnectionOptions(Dictionary<string, object>? parameters = null, SyncClientImplementation? clientImplementation = null)
 {
     /// <summary>
     /// These parameters are passed to the sync rules and will be available under the `user_parameters` object.
     /// </summary>
     public Dictionary<string, object>? Params { get; set; } = parameters;
+
+    /// <summary>
+    /// Wehether to use the RUST or C# sync client implementation.
+    /// </summary>
+    public SyncClientImplementation? ClientImplementation { get; set; } = clientImplementation;
 }
 
 public class RequiredPowerSyncConnectionOptions : BaseConnectionOptions
 {
     public new Dictionary<string, object> Params { get; set; } = new();
+
+    public new SyncClientImplementation ClientImplementation { get; set; } = new();
 }
 
 public class StreamingSyncImplementationEvent
@@ -95,7 +127,8 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
 {
     public static RequiredPowerSyncConnectionOptions DEFAULT_STREAM_CONNECTION_OPTIONS = new()
     {
-        Params = []
+        Params = [],
+        ClientImplementation = SyncClientImplementation.RUST
     };
 
     public static readonly int DEFAULT_CRUD_UPLOAD_THROTTLE_MS = 1000;
@@ -108,7 +141,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
     private Task? streamingSyncTask;
     public Action TriggerCrudUpload { get; }
     private CancellationTokenSource? crudUpdateCts;
-    private readonly ILogger logger;
+    private Action? notifyCompletedUploads; private readonly ILogger logger;
 
     private readonly StreamingSyncLocks locks;
 
@@ -134,10 +167,12 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
 
         TriggerCrudUpload = () =>
         {
-            if (!SyncStatus.Connected || SyncStatus.DataFlowStatus.Uploading)
+            if (!SyncStatus.Connected)
             {
                 return;
             }
+
+            notifyCompletedUploads?.Invoke();
 
             Task.Run(async () => await InternalUploadAllCrud());
         };
@@ -343,7 +378,10 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
     protected record StreamingSyncIterationResult
     {
         public bool Retry { get; init; }
+
+        public bool? ImmediateRestart { get; init; }
     }
+
 
     protected async Task<StreamingSyncIterationResult> StreamingSyncIteration(CancellationToken signal, PowerSyncConnectionOptions? options)
     {
@@ -355,284 +393,451 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
             {
                 var resolvedOptions = new RequiredPowerSyncConnectionOptions
                 {
-                    Params = options?.Params ?? DEFAULT_STREAM_CONNECTION_OPTIONS.Params
+                    Params = options?.Params ?? DEFAULT_STREAM_CONNECTION_OPTIONS.Params,
+                    ClientImplementation = options?.ClientImplementation ?? DEFAULT_STREAM_CONNECTION_OPTIONS.ClientImplementation
                 };
+                Console.WriteLine("Using sync client implementation: " + resolvedOptions.ClientImplementation);
 
-                logger.LogDebug("Streaming sync iteration started");
-                Options.Adapter.StartSession();
-                var bucketEntries = await Options.Adapter.GetBucketStates();
-                var initialBuckets = new Dictionary<string, string>();
-
-                foreach (var entry in bucketEntries)
+                if (resolvedOptions.ClientImplementation == SyncClientImplementation.RUST)
                 {
-                    initialBuckets[entry.Bucket] = entry.OpId;
+                    // Use Rust-based sync implementation
+                    // var rustImpl = new RustStreamingSyncImplementation(Options);
+                    // return await rustImpl.RustSyncIteration(signal, resolvedOptions);
+
+                    return await RustStreamingSyncIteration(signal, resolvedOptions);
+                }
+                else
+                {
+                    // Use legacy C#-based sync implementation
+                    return await LegacyStreamingSyncIteration(signal, resolvedOptions);
+                }
+            }
+        });
+    }
+
+    // protected async Task<StreamingSyncIterationResult> RustStreamingSyncIteration(StreamingSyncImplementationOptions options, CancellationToken signal, RequiredPowerSyncConnectionOptions resolvedOptions)
+    // {
+    //     // var rustImpl = new RustStreamingSyncImplementation(options);
+    //     // return await rustImpl.RustSyncIteration(signal, resolvedOptions);
+    //     throw new NotImplementedException("Rust streaming sync implementation is not yet implemented.");
+    // }
+
+    protected async Task<StreamingSyncIterationResult> RustStreamingSyncIteration(CancellationToken? signal, RequiredPowerSyncConnectionOptions resolvedOptions)
+    {
+        Task? receivingLines = null;
+
+        var nestedCts = new CancellationTokenSource();
+        signal?.Register(() => { nestedCts.Cancel(); });
+
+        async Task Connect(EstablishSyncStream instruction)
+        {
+            var syncOptions = new SyncStreamOptions
+            {
+                Path = "/sync/stream",
+                CancellationToken = nestedCts.Token,
+                Data = instruction.Request
+            };
+
+            var stream = await Options.Remote.PostStreamRaw(syncOptions);
+            using var reader = new StreamReader(stream, Encoding.UTF8);
+
+            syncOptions.CancellationToken.Register(() =>
+            {
+                try { stream?.Close(); } catch { }
+            });
+
+            string? line;
+
+            while ((line = await reader.ReadLineAsync()) != null)
+            {
+                logger.LogDebug("Parsing line for rust sync stream {message}", "xx");
+                await Control("line_text", line);
+            }
+        }
+
+        async Task Stop()
+        {
+            await Control("stop");
+        }
+
+        async Task Control(string op, object? payload = null)
+        {
+            logger.LogDebug("Control call {message}", op);
+
+            var rawResponse = await Options.Adapter.Control(op, payload);
+            HandleInstructions(Instruction.ParseInstructions(rawResponse));
+        }
+
+        void HandleInstructions(Instruction[] instructions)
+        {
+            foreach (var instruction in instructions)
+            {
+                HandleInstruction(instruction);
+            }
+        }
+
+        void HandleInstruction(Instruction instruction)
+        {
+            switch (instruction)
+            {
+                case LogLine logLine:
+                    switch (logLine.Severity)
+                    {
+                        case "DEBUG":
+                            logger.LogDebug("{message}", logLine.Line);
+                            break;
+                        case "INFO":
+                            logger.LogInformation("{message}", logLine.Line);
+                            break;
+                        case "WARNING":
+                            logger.LogWarning("{message}", logLine.Line);
+                            break;
+                    }
+                    break;
+                case UpdateSyncStatus syncStatus:
+                    var info = syncStatus.Status;
+                    var coreCompleteSync =
+                        info.PriorityStatus.FirstOrDefault(s => s.Priority == SyncProgress.FULL_SYNC_PRIORITY);
+                    var completeSync = coreCompleteSync != null ? CoreStatusToSyncStatus(coreCompleteSync) : null;
+
+                    UpdateSyncStatus(new SyncStatusOptions
+                    {
+                        Connected = info.Connected,
+                        Connecting = info.Connecting,
+                        LastSyncedAt = completeSync?.LastSyncedAt,
+                        HasSynced = completeSync?.HasSynced,
+                        PriorityStatusEntries = info.PriorityStatus.Select(CoreStatusToSyncStatus).ToArray(),
+                        DataFlow = new SyncDataFlowStatus
+                        {
+                            Downloading = info.Downloading != null,
+                            DownloadProgress = info.Downloading?.Buckets
+                        }
+                    },
+                        new UpdateSyncStatusOptions
+                        {
+                            ClearDownloadError = true,
+                        }
+                    );
+                    break;
+                case EstablishSyncStream establishSyncStream:
+                    if (receivingLines != null)
+                    {
+                        throw new Exception("Unexpected request to establish sync stream, already connected");
+                    }
+                    receivingLines = Connect(establishSyncStream);
+                    break;
+                case FetchCredentials fetchCredentials:
+                    Options.Remote.InvalidateCredentials();
+                    break;
+                case CloseSyncStream:
+                    nestedCts.Cancel();
+                    logger.LogWarning("Closing stream");
+                    break;
+                case FlushFileSystem:
+                    // ignore
+                    break;
+                case DidCompleteSync:
+                    UpdateSyncStatus(
+                        new SyncStatusOptions { },
+                        new UpdateSyncStatusOptions { ClearDownloadError = true });
+                    break;
+            }
+        }
+
+        try
+        {
+            notifyCompletedUploads = () => { Task.Run(async () => await Control("completed_upload")); };
+            await Control("start", JsonConvert.SerializeObject(new { parameters = resolvedOptions.Params }));
+            if (receivingLines != null)
+            {
+                await receivingLines;
+            }
+        }
+        finally
+        {
+            notifyCompletedUploads = null;
+            await Stop();
+        }
+
+        return new StreamingSyncIterationResult { Retry = true };
+    }
+
+    protected async Task<StreamingSyncIterationResult> LegacyStreamingSyncIteration(CancellationToken signal, RequiredPowerSyncConnectionOptions resolvedOptions)
+    {
+        // There's also a warning explaining that the legacy client will be removed in the future
+        logger.LogWarning("The legacy sync client implementation is deprecated and will be removed in a future release.");
+        logger.LogDebug("Streaming sync iteration started");
+        Options.Adapter.StartSession();
+        var bucketEntries = await Options.Adapter.GetBucketStates();
+        var initialBuckets = new Dictionary<string, string>();
+
+        foreach (var entry in bucketEntries)
+        {
+            initialBuckets[entry.Bucket] = entry.OpId;
+        }
+
+        var req = initialBuckets
+            .Select(kvp => new BucketRequest
+            {
+                Name = kvp.Key,
+                After = kvp.Value
+            })
+            .ToList();
+
+        var targetCheckpoint = (Checkpoint?)null;
+        var validatedCheckpoint = (Checkpoint?)null;
+        var appliedCheckpoint = (Checkpoint?)null;
+
+        var bucketSet = new HashSet<string>(initialBuckets.Keys);
+
+        var clientId = await Options.Adapter.GetClientId();
+
+        logger.LogDebug("Requesting stream from server");
+
+        var syncOptions = new SyncStreamOptions
+        {
+            Path = "/sync/stream",
+            CancellationToken = signal,
+            Data = new StreamingSyncRequest
+            {
+                Buckets = req,
+                IncludeChecksum = true,
+                RawData = true,
+                Parameters = resolvedOptions.Params, // Replace with actual params
+                ClientId = clientId
+            }
+        };
+
+        var stream = Options.Remote.PostStream(syncOptions);
+        var first = true;
+        await foreach (var line in stream)
+        {
+            if (first)
+            {
+                first = false;
+                logger.LogDebug("Stream established. Processing events");
+            }
+
+            if (line == null)
+            {
+                logger.LogDebug("Stream has closed while waiting");
+                // The stream has closed while waiting
+                return new StreamingSyncIterationResult { Retry = true };
+            }
+
+            // A connection is active and messages are being received
+            if (!SyncStatus.Connected)
+            {
+                // There is a connection now
+                UpdateSyncStatus(new SyncStatusOptions
+                {
+                    Connected = true
+                });
+                TriggerCrudUpload();
+            }
+
+            if (line is StreamingSyncCheckpoint syncCheckpoint)
+            {
+                logger.LogDebug("Sync checkpoint: {message}", syncCheckpoint);
+
+                targetCheckpoint = syncCheckpoint.Checkpoint;
+                var bucketsToDelete = new HashSet<string>(bucketSet);
+                var newBuckets = new HashSet<string>();
+
+                foreach (var checksum in syncCheckpoint.Checkpoint.Buckets)
+                {
+                    newBuckets.Add(checksum.Bucket);
+                    bucketsToDelete.Remove(checksum.Bucket);
+                }
+                if (bucketsToDelete.Count > 0)
+                {
+                    logger.LogDebug("Removing buckets: {message}", string.Join(", ", bucketsToDelete));
                 }
 
-                var req = initialBuckets
-                    .Select(kvp => new BucketRequest
-                    {
-                        Name = kvp.Key,
-                        After = kvp.Value
-                    })
-                    .ToList();
+                bucketSet = newBuckets;
+                await Options.Adapter.RemoveBuckets([.. bucketsToDelete]);
+                await Options.Adapter.SetTargetCheckpoint(targetCheckpoint);
+            }
+            else if (line is StreamingSyncCheckpointComplete checkpointComplete)
+            {
+                logger.LogDebug("Checkpoint complete: {message}", targetCheckpoint);
 
-                var targetCheckpoint = (Checkpoint?)null;
-                var validatedCheckpoint = (Checkpoint?)null;
-                var appliedCheckpoint = (Checkpoint?)null;
+                var result = await Options.Adapter.SyncLocalDatabase(targetCheckpoint!);
 
-                var bucketSet = new HashSet<string>(initialBuckets.Keys);
-
-                var clientId = await Options.Adapter.GetClientId();
-
-                logger.LogDebug("Requesting stream from server");
-
-                var syncOptions = new SyncStreamOptions
+                if (!result.CheckpointValid)
                 {
-                    Path = "/sync/stream",
-                    CancellationToken = signal,
-                    Data = new StreamingSyncRequest
+                    // This means checksums failed. Start again with a new checkpoint.
+                    // TODO: better back-off
+                    await Task.Delay(50);
+                    return new StreamingSyncIterationResult { Retry = true };
+                }
+                else if (!result.Ready)
+                {
+                    // Checksums valid, but need more data for a consistent checkpoint.
+                    // Continue waiting.
+                    // Landing here the whole time
+                }
+                else
+                {
+                    appliedCheckpoint = targetCheckpoint;
+                    logger.LogDebug("Validated checkpoint: {message}", appliedCheckpoint);
+
+                    UpdateSyncStatus(new SyncStatusOptions
                     {
-                        Buckets = req,
-                        IncludeChecksum = true,
-                        RawData = true,
-                        Parameters = resolvedOptions.Params, // Replace with actual params
-                        ClientId = clientId
-                    }
+                        Connected = true,
+                        LastSyncedAt = DateTime.Now,
+                        DataFlow = new SyncDataFlowStatus
+                        {
+                            Downloading = false
+                        }
+                    }, new UpdateSyncStatusOptions
+                    {
+                        ClearDownloadError = true
+                    });
+
+                }
+
+                validatedCheckpoint = targetCheckpoint;
+            }
+            else if (line is StreamingSyncCheckpointDiff checkpointDiff)
+            {
+                // TODO: It may be faster to just keep track of the diff, instead of the entire checkpoint
+                if (targetCheckpoint == null)
+                {
+                    throw new Exception("Checkpoint diff without previous checkpoint");
+                }
+
+                var diff = checkpointDiff.CheckpointDiff;
+                var newBuckets = new Dictionary<string, BucketChecksum>();
+
+                foreach (var checksum in targetCheckpoint.Buckets)
+                {
+                    newBuckets[checksum.Bucket] = checksum;
+                }
+
+                foreach (var checksum in diff.UpdatedBuckets)
+                {
+                    newBuckets[checksum.Bucket] = checksum;
+                }
+
+                foreach (var bucket in diff.RemovedBuckets)
+                {
+                    newBuckets.Remove(bucket);
+                }
+
+                var newWriteCheckpoint = !string.IsNullOrEmpty(diff.WriteCheckpoint) ? diff.WriteCheckpoint : null;
+                var newCheckpoint = new Checkpoint
+                {
+                    LastOpId = diff.LastOpId,
+                    Buckets = [.. newBuckets.Values],
+                    WriteCheckpoint = newWriteCheckpoint
                 };
 
-                var stream = Options.Remote.PostStream(syncOptions);
-                var first = true;
-                await foreach (var line in stream)
+                targetCheckpoint = newCheckpoint;
+
+                bucketSet = [.. newBuckets.Keys];
+
+                var bucketsToDelete = diff.RemovedBuckets.ToArray();
+                if (bucketsToDelete.Length > 0)
                 {
-                    if (first)
+                    logger.LogDebug("Remove buckets: {message}", string.Join(", ", bucketsToDelete));
+                }
+
+                // Perform async operations
+                await Options.Adapter.RemoveBuckets(bucketsToDelete);
+                await Options.Adapter.SetTargetCheckpoint(targetCheckpoint);
+            }
+            else if (line is StreamingSyncDataJSON dataJSON)
+            {
+                UpdateSyncStatus(new SyncStatusOptions
+                {
+                    DataFlow = new SyncDataFlowStatus
                     {
-                        first = false;
-                        logger.LogDebug("Stream established. Processing events");
+                        Downloading = true
                     }
+                });
+                await Options.Adapter.SaveSyncData(new SyncDataBatch([SyncDataBucket.FromRow(dataJSON.Data)]));
+            }
+            else if (line is StreamingSyncKeepalive keepalive)
+            {
+                var remainingSeconds = keepalive.TokenExpiresIn;
+                if (remainingSeconds == 0)
+                {
+                    // Connection would be closed automatically right after this
+                    logger.LogDebug("Token expiring; reconnect");
+                    Options.Remote.InvalidateCredentials();
 
-                    if (line == null)
+                    // For a rare case where the backend connector does not update the token
+                    // (uses the same one), this should have some delay.
+                    //
+                    await DelayRetry();
+                    return new StreamingSyncIterationResult { Retry = true };
+                }
+                else if (remainingSeconds < 30)
+                {
+                    logger.LogDebug("Token will expire soon; reconnect");
+                    // Pre-emptively refresh the token
+                    Options.Remote.InvalidateCredentials();
+                    return new StreamingSyncIterationResult { Retry = true };
+                }
+                TriggerCrudUpload();
+            }
+            else
+            {
+                logger.LogDebug("Sync complete");
+
+                if (targetCheckpoint == appliedCheckpoint)
+                {
+                    UpdateSyncStatus(new SyncStatusOptions
                     {
-                        logger.LogDebug("Stream has closed while waiting");
-                        // The stream has closed while waiting
-                        return new StreamingSyncIterationResult { Retry = true };
+                        Connected = true,
+                        LastSyncedAt = DateTime.Now,
+                    },
+                    new UpdateSyncStatusOptions
+                    {
+                        ClearDownloadError = true
                     }
-
-                    // A connection is active and messages are being received
-                    if (!SyncStatus.Connected)
+                    );
+                }
+                else if (validatedCheckpoint == targetCheckpoint)
+                {
+                    var result = await Options.Adapter.SyncLocalDatabase(targetCheckpoint!);
+                    if (!result.CheckpointValid)
                     {
-                        // There is a connection now
-                        UpdateSyncStatus(new SyncStatusOptions
-                        {
-                            Connected = true
-                        });
-                        TriggerCrudUpload();
+                        // This means checksums failed. Start again with a new checkpoint.
+                        // TODO: better back-off
+                        await Task.Delay(50);
+                        return new StreamingSyncIterationResult { Retry = false };
                     }
-
-                    if (line is StreamingSyncCheckpoint syncCheckpoint)
+                    else if (!result.Ready)
                     {
-                        logger.LogDebug("Sync checkpoint: {message}", syncCheckpoint);
-
-                        targetCheckpoint = syncCheckpoint.Checkpoint;
-                        var bucketsToDelete = new HashSet<string>(bucketSet);
-                        var newBuckets = new HashSet<string>();
-
-                        foreach (var checksum in syncCheckpoint.Checkpoint.Buckets)
-                        {
-                            newBuckets.Add(checksum.Bucket);
-                            bucketsToDelete.Remove(checksum.Bucket);
-                        }
-                        if (bucketsToDelete.Count > 0)
-                        {
-                            logger.LogDebug("Removing buckets: {message}", string.Join(", ", bucketsToDelete));
-                        }
-
-                        bucketSet = newBuckets;
-                        await Options.Adapter.RemoveBuckets([.. bucketsToDelete]);
-                        await Options.Adapter.SetTargetCheckpoint(targetCheckpoint);
-                    }
-                    else if (line is StreamingSyncCheckpointComplete checkpointComplete)
-                    {
-                        logger.LogDebug("Checkpoint complete: {message}", targetCheckpoint);
-
-                        var result = await Options.Adapter.SyncLocalDatabase(targetCheckpoint!);
-
-                        if (!result.CheckpointValid)
-                        {
-                            // This means checksums failed. Start again with a new checkpoint.
-                            // TODO: better back-off
-                            await Task.Delay(50);
-                            return new StreamingSyncIterationResult { Retry = true };
-                        }
-                        else if (!result.Ready)
-                        {
-                            // Checksums valid, but need more data for a consistent checkpoint.
-                            // Continue waiting.
-                            // Landing here the whole time
-                        }
-                        else
-                        {
-                            appliedCheckpoint = targetCheckpoint;
-                            logger.LogDebug("Validated checkpoint: {message}", appliedCheckpoint);
-
-                            UpdateSyncStatus(new SyncStatusOptions
-                            {
-                                Connected = true,
-                                LastSyncedAt = DateTime.Now,
-                                DataFlow = new SyncDataFlowStatus
-                                {
-                                    Downloading = false
-                                }
-                            }, new UpdateSyncStatusOptions
-                            {
-                                ClearDownloadError = true
-                            });
-
-                        }
-
-                        validatedCheckpoint = targetCheckpoint;
-                    }
-                    else if (line is StreamingSyncCheckpointDiff checkpointDiff)
-                    {
-                        // TODO: It may be faster to just keep track of the diff, instead of the entire checkpoint
-                        if (targetCheckpoint == null)
-                        {
-                            throw new Exception("Checkpoint diff without previous checkpoint");
-                        }
-
-                        var diff = checkpointDiff.CheckpointDiff;
-                        var newBuckets = new Dictionary<string, BucketChecksum>();
-
-                        foreach (var checksum in targetCheckpoint.Buckets)
-                        {
-                            newBuckets[checksum.Bucket] = checksum;
-                        }
-
-                        foreach (var checksum in diff.UpdatedBuckets)
-                        {
-                            newBuckets[checksum.Bucket] = checksum;
-                        }
-
-                        foreach (var bucket in diff.RemovedBuckets)
-                        {
-                            newBuckets.Remove(bucket);
-                        }
-
-                        var newWriteCheckpoint = !string.IsNullOrEmpty(diff.WriteCheckpoint) ? diff.WriteCheckpoint : null;
-                        var newCheckpoint = new Checkpoint
-                        {
-                            LastOpId = diff.LastOpId,
-                            Buckets = [.. newBuckets.Values],
-                            WriteCheckpoint = newWriteCheckpoint
-                        };
-
-                        targetCheckpoint = newCheckpoint;
-
-                        bucketSet = [.. newBuckets.Keys];
-
-                        var bucketsToDelete = diff.RemovedBuckets.ToArray();
-                        if (bucketsToDelete.Length > 0)
-                        {
-                            logger.LogDebug("Remove buckets: {message}", string.Join(", ", bucketsToDelete));
-                        }
-
-                        // Perform async operations
-                        await Options.Adapter.RemoveBuckets(bucketsToDelete);
-                        await Options.Adapter.SetTargetCheckpoint(targetCheckpoint);
-                    }
-                    else if (line is StreamingSyncDataJSON dataJSON)
-                    {
-                        UpdateSyncStatus(new SyncStatusOptions
-                        {
-                            DataFlow = new SyncDataFlowStatus
-                            {
-                                Downloading = true
-                            }
-                        });
-                        await Options.Adapter.SaveSyncData(new SyncDataBatch([SyncDataBucket.FromRow(dataJSON.Data)]));
-                    }
-                    else if (line is StreamingSyncKeepalive keepalive)
-                    {
-                        var remainingSeconds = keepalive.TokenExpiresIn;
-                        if (remainingSeconds == 0)
-                        {
-                            // Connection would be closed automatically right after this
-                            logger.LogDebug("Token expiring; reconnect");
-                            Options.Remote.InvalidateCredentials();
-
-                            // For a rare case where the backend connector does not update the token
-                            // (uses the same one), this should have some delay.
-                            //
-                            await DelayRetry();
-                            return new StreamingSyncIterationResult { Retry = true };
-                        }
-                        else if (remainingSeconds < 30)
-                        {
-                            logger.LogDebug("Token will expire soon; reconnect");
-                            // Pre-emptively refresh the token
-                            Options.Remote.InvalidateCredentials();
-                            return new StreamingSyncIterationResult { Retry = true };
-                        }
-                        TriggerCrudUpload();
+                        // Checksums valid, but need more data for a consistent checkpoint.
+                        // Continue waiting.
                     }
                     else
                     {
-                        logger.LogDebug("Sync complete");
-
-                        if (targetCheckpoint == appliedCheckpoint)
+                        appliedCheckpoint = targetCheckpoint;
+                        UpdateSyncStatus(new SyncStatusOptions
                         {
-                            UpdateSyncStatus(new SyncStatusOptions
+                            Connected = true,
+                            LastSyncedAt = DateTime.Now,
+                            DataFlow = new SyncDataFlowStatus
                             {
-                                Connected = true,
-                                LastSyncedAt = DateTime.Now,
-                            },
-                            new UpdateSyncStatusOptions
-                            {
-                                ClearDownloadError = true
+                                Downloading = false,
                             }
-                            );
-                        }
-                        else if (validatedCheckpoint == targetCheckpoint)
+                        },
+                        new UpdateSyncStatusOptions
                         {
-                            var result = await Options.Adapter.SyncLocalDatabase(targetCheckpoint!);
-                            if (!result.CheckpointValid)
-                            {
-                                // This means checksums failed. Start again with a new checkpoint.
-                                // TODO: better back-off
-                                await Task.Delay(50);
-                                return new StreamingSyncIterationResult { Retry = false };
-                            }
-                            else if (!result.Ready)
-                            {
-                                // Checksums valid, but need more data for a consistent checkpoint.
-                                // Continue waiting.
-                            }
-                            else
-                            {
-                                appliedCheckpoint = targetCheckpoint;
-                                UpdateSyncStatus(new SyncStatusOptions
-                                {
-                                    Connected = true,
-                                    LastSyncedAt = DateTime.Now,
-                                    DataFlow = new SyncDataFlowStatus
-                                    {
-                                        Downloading = false,
-                                    }
-                                },
-                                new UpdateSyncStatusOptions
-                                {
-                                    ClearDownloadError = true
-                                });
-                            }
-                        }
+                            ClearDownloadError = true
+                        });
                     }
                 }
-
-                logger.LogDebug("Stream input empty");
-                // Connection closed. Likely due to auth issue.
-                return new StreamingSyncIterationResult { Retry = true };
             }
-        });
+        }
 
+        logger.LogDebug("Stream input empty");
+        // Connection closed. Likely due to auth issue.
+        return new StreamingSyncIterationResult { Retry = true };
     }
 
     public new void Close()
@@ -779,6 +984,16 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
 
         // Trigger this for all updates
         Emit(new StreamingSyncImplementationEvent { StatusUpdated = options });
+    }
+
+    private static DB.Crud.SyncPriorityStatus CoreStatusToSyncStatus(SyncPriorityStatus status)
+    {
+        return new DB.Crud.SyncPriorityStatus
+        {
+            Priority = status.Priority,
+            HasSynced = status.HasSynced ?? null,
+            LastSyncedAt = status?.LastSyncedAt != null ? new DateTime(status!.LastSyncedAt) : null
+        };
     }
 
     private async Task DelayRetry()

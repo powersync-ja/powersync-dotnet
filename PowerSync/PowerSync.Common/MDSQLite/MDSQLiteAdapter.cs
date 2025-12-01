@@ -155,18 +155,18 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
         throw new NotImplementedException();
     }
 
-    public async Task<T> Get<T>(string sql, params object[]? parameters)
+    public async Task<T> Get<T>(string sql, object[]? parameters = null)
     {
         return await ReadLock((ctx) => ctx.Get<T>(sql, parameters));
         ;
     }
 
-    public async Task<T[]> GetAll<T>(string sql, params object[]? parameters)
+    public async Task<T[]> GetAll<T>(string sql, object[]? parameters = null)
     {
         return await ReadLock((ctx) => ctx.GetAll<T>(sql, parameters));
     }
 
-    public async Task<T?> GetOptional<T>(string sql, params object[]? parameters)
+    public async Task<T?> GetOptional<T>(string sql, object[]? parameters = null)
     {
         return await ReadLock((ctx) => ctx.GetOptional<T>(sql, parameters));
     }
@@ -307,17 +307,17 @@ public class MDSQLiteTransaction(MDSQLiteConnection connection) : ITransaction
         return connection.Execute(query, parameters);
     }
 
-    public Task<T> Get<T>(string sql, params object[]? parameters)
+    public Task<T> Get<T>(string sql, object[]? parameters = null)
     {
         return connection.Get<T>(sql, parameters);
     }
 
-    public Task<T[]> GetAll<T>(string sql, params object[]? parameters)
+    public Task<T[]> GetAll<T>(string sql, object[]? parameters = null)
     {
         return connection.GetAll<T>(sql, parameters);
     }
 
-    public Task<T?> GetOptional<T>(string sql, params object[]? parameters)
+    public Task<T?> GetOptional<T>(string sql, object[]? parameters = null)
     {
         return connection.GetOptional<T>(sql, parameters);
     }

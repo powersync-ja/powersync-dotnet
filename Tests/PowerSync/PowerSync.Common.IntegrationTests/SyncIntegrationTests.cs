@@ -1,15 +1,16 @@
-﻿using Newtonsoft.Json;
+using Newtonsoft.Json;
 using PowerSync.Common.Client;
 using System.Data.Common;
 using System.Diagnostics;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using PowerSync.Common.Client.Sync.Stream;
 
 
 namespace PowerSync.Common.IntegrationTests;
 
 [Trait("Category", "Integration")]
-public class SyncTests : IAsyncLifetime
+public class SyncIntegrationTests : IAsyncLifetime
 {
     private record ListResult(string id, string name, string owner_id, string created_at);
 
@@ -46,7 +47,10 @@ public class SyncTests : IAsyncLifetime
         Console.WriteLine($"Using User ID: {userId}");
         try
         {
-            await db.Connect(connector);
+            await db.Connect(connector, new PowerSyncConnectionOptions
+            {
+                ClientImplementation = SyncClientImplementation.C_SHARP,
+            });
             await db.WaitForFirstSync();
         }
         catch (Exception ex)
@@ -239,6 +243,12 @@ public class IntegrationFactAttribute : FactAttribute
         if (Environment.GetEnvironmentVariable("RUN_INTEGRATION_TESTS") != "true")
         {
             Skip = "Integration tests are disabled. Set RUN_INTEGRATION_TESTS=true to run.";
+        }
+
+        // Set default timeout if not already set
+        if (Timeout == 0)
+        {
+            Timeout = 5000; // 30 seconds default for all integration tests
         }
     }
 }
