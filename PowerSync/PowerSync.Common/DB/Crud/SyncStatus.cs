@@ -2,6 +2,7 @@ namespace PowerSync.Common.DB.Crud;
 
 using PowerSync.Common.Client.Sync.Stream;
 using Newtonsoft.Json;
+using Microsoft.Extensions.Options;
 
 public class SyncDataFlowStatus
 {
@@ -13,14 +14,14 @@ public class SyncDataFlowStatus
     /// Error during downloading (including connecting).
     /// Cleared on the next successful data download.
     /// </summary>
-    [JsonProperty("downloadError")]
+    [JsonIgnore]
     public Exception? DownloadError { get; set; } = null;
 
     /// <summary>
     /// Error during uploading.
     /// Cleared on the next successful upload.
     /// </summary>
-    [JsonProperty("uploadError")]
+    [JsonIgnore]
     public Exception? UploadError { get; set; } = null;
 
 
@@ -151,9 +152,14 @@ public class SyncStatus(SyncStatusOptions options)
         };
     }
 
+    private string SerializeObject()
+    {
+        return JsonConvert.SerializeObject(new { Options = Options, UploadErrorMessage = Options.DataFlow?.UploadError?.Message, DownloadErrorMessage = DataFlowStatus.DownloadError?.Message });
+    }
+
     public bool IsEqual(SyncStatus status)
     {
-        return JsonConvert.SerializeObject(Options) == JsonConvert.SerializeObject(status.Options);
+        return this.SerializeObject() == status.SerializeObject();
     }
 
     public string GetMessage()
@@ -165,7 +171,7 @@ public class SyncStatus(SyncStatusOptions options)
 
     public string ToJSON()
     {
-        return JsonConvert.SerializeObject(this);
+        return SerializeObject();
     }
 
     private static int ComparePriorities(SyncPriorityStatus a, SyncPriorityStatus b)

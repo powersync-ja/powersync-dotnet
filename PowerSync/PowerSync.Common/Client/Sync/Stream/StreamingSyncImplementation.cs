@@ -294,23 +294,29 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
             });
         });
 
-        /// This loops runs until [retry] is false or the abort signal is set to aborted.
-        /// Aborting the nestedCts will:
-        /// - Abort any pending fetch requests
-        /// - Close any sync stream ReadableStreams (which will also close any established network requests)
+        // This loops runs until [retry] is false or the abort signal is set to aborted.
+        // Aborting the nestedCts will:
+        // - Abort any pending fetch requests
+        // - Close any sync stream ReadableStreams (which will also close any established network requests)
         while (true)
         {
+            Console.WriteLine(1);
             UpdateSyncStatus(new SyncStatusOptions { Connecting = true });
+            Console.WriteLine(2);
             var iterationResult = (StreamingSyncIterationResult?)null;
             try
             {
+                Console.WriteLine(3);
                 if (signal.Value.IsCancellationRequested)
                 {
+                    Console.WriteLine("BREAKINGNNNNG");
                     break;
                 }
+                Console.WriteLine(4);
                 iterationResult = await StreamingSyncIteration(nestedCts.Token, options);
-                if (!iterationResult.Retry.GetValueOrDefault(false))
+                if (!iterationResult.Retry)
                 {
+                    Console.WriteLine(5);
 
                     // A sync error ocurred that we cannot recover from here.
                     // This loop must terminate.
@@ -318,6 +324,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                     break;
                 }
                 // Continue immediately
+                Console.WriteLine(6);
             }
             catch (Exception ex)
             {
@@ -327,9 +334,9 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                     exMessage = "Stream closed or timed out -" + ex.InnerException.Message;
                 }
 
-
+                Console.WriteLine(7);
                 logger.LogError("Caught exception in streaming sync: {message}", exMessage);
-
+                Console.WriteLine(8);
                 // Either:
                 //  - A network request failed with a failed connection or not OKAY response code.
                 //  - There was a sync processing error.
@@ -345,9 +352,14 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                         DownloadError = ex
                     }
                 });
+
+                Console.WriteLine(9);
+                await DelayRetry();
+                Console.WriteLine(10);
             }
             finally
             {
+                Console.WriteLine(11);
                 notifyCompletedUploads = null;
 
                 if (!signal.Value.IsCancellationRequested)
@@ -358,17 +370,18 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                 }
 
 
-                if (iterationResult != null && iterationResult.ImmediateRestart.GetValueOrDefault(false))
+                // if (iterationResult != null && iterationResult.ImmediateRestart.GetValueOrDefault(false))
+                // {
+                Console.WriteLine(12);
+                UpdateSyncStatus(new SyncStatusOptions
                 {
-                    UpdateSyncStatus(new SyncStatusOptions
-                    {
-                        Connected = false,
-                        Connecting = true // May be unnecessary
-                    });
+                    Connected = false,
+                    Connecting = true // May be unnecessary
+                });
 
-                    // On error, wait a little before retrying
-                    await DelayRetry();
-                }
+                // On error, wait a little before retrying
+
+                // }
             }
         }
 
@@ -382,7 +395,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
 
     protected record StreamingSyncIterationResult
     {
-        public bool? Retry { get; init; }
+        public bool Retry { get; init; }
 
         public bool? ImmediateRestart { get; init; }
     }
@@ -956,30 +969,37 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
     );
     protected void UpdateSyncStatus(SyncStatusOptions options, UpdateSyncStatusOptions? updateOptions = null)
     {
-        var updatedStatus = new SyncStatus(new SyncStatusOptions
+        try
         {
-            Connected = options.Connected ?? SyncStatus.Connected,
-            Connecting = !options.Connected.GetValueOrDefault() && (options.Connecting ?? SyncStatus.Connecting),
-            LastSyncedAt = options.LastSyncedAt ?? SyncStatus.LastSyncedAt,
-            DataFlow = new SyncDataFlowStatus
+            var updatedStatus = new SyncStatus(new SyncStatusOptions
             {
-                Uploading = options.DataFlow?.Uploading ?? SyncStatus.DataFlowStatus.Uploading,
-                Downloading = options.DataFlow?.Downloading ?? SyncStatus.DataFlowStatus.Downloading,
-                DownloadError = updateOptions?.ClearDownloadError == true ? null : options.DataFlow?.DownloadError ?? SyncStatus.DataFlowStatus.DownloadError,
-                UploadError = updateOptions?.ClearUploadError == true ? null : options.DataFlow?.UploadError ?? SyncStatus.DataFlowStatus.UploadError,
+                Connected = options.Connected ?? SyncStatus.Connected,
+                Connecting = !options.Connected.GetValueOrDefault() && (options.Connecting ?? SyncStatus.Connecting),
+                LastSyncedAt = options.LastSyncedAt ?? SyncStatus.LastSyncedAt,
+                DataFlow = new SyncDataFlowStatus
+                {
+                    Uploading = options.DataFlow?.Uploading ?? SyncStatus.DataFlowStatus.Uploading,
+                    Downloading = options.DataFlow?.Downloading ?? SyncStatus.DataFlowStatus.Downloading,
+                    DownloadError = updateOptions?.ClearDownloadError == true ? null : options.DataFlow?.DownloadError ?? SyncStatus.DataFlowStatus.DownloadError,
+                    UploadError = updateOptions?.ClearUploadError == true ? null : options.DataFlow?.UploadError ?? SyncStatus.DataFlowStatus.UploadError,
+                }
+            });
+
+            if (!SyncStatus.Equals(updatedStatus))
+            {
+                SyncStatus = updatedStatus;
+                logger.LogDebug("[Sync status updated]: {message}", updatedStatus.ToJSON());
+                // Only trigger this if there was a change
+                Emit(new StreamingSyncImplementationEvent { StatusChanged = updatedStatus });
             }
-        });
 
-        if (!SyncStatus.Equals(updatedStatus))
-        {
-            SyncStatus = updatedStatus;
-            logger.LogDebug("[Sync status updated]: {message}", updatedStatus.ToJSON());
-            // Only trigger this if there was a change
-            Emit(new StreamingSyncImplementationEvent { StatusChanged = updatedStatus });
+            // Trigger this for all updates
+            Emit(new StreamingSyncImplementationEvent { StatusUpdated = options });
         }
-
-        // Trigger this for all updates
-        Emit(new StreamingSyncImplementationEvent { StatusUpdated = options });
+        catch (Exception ex)
+        {
+            logger.LogError("Error updating sync status: {message}", ex.Message);
+        }
     }
 
     private static DB.Crud.SyncPriorityStatus CoreStatusToSyncStatus(SyncPriorityStatus status)
