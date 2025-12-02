@@ -300,31 +300,17 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
         // - Close any sync stream ReadableStreams (which will also close any established network requests)
         while (true)
         {
-            Console.WriteLine(1);
             UpdateSyncStatus(new SyncStatusOptions { Connecting = true });
-            Console.WriteLine(2);
             var iterationResult = (StreamingSyncIterationResult?)null;
+            var shouldDelayRetry = true;
+
             try
             {
-                Console.WriteLine(3);
                 if (signal.Value.IsCancellationRequested)
                 {
-                    Console.WriteLine("BREAKINGNNNNG");
                     break;
                 }
-                Console.WriteLine(4);
                 iterationResult = await StreamingSyncIteration(nestedCts.Token, options);
-                if (!iterationResult.Retry)
-                {
-                    Console.WriteLine(5);
-
-                    // A sync error ocurred that we cannot recover from here.
-                    // This loop must terminate.
-                    // The nestedCts will close any open network requests and streams below.
-                    break;
-                }
-                // Continue immediately
-                Console.WriteLine(6);
             }
             catch (Exception ex)
             {
@@ -334,15 +320,20 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                     exMessage = "Stream closed or timed out -" + ex.InnerException.Message;
                 }
 
-                Console.WriteLine(7);
-                logger.LogError("Caught exception in streaming sync: {message}", exMessage);
-                Console.WriteLine(8);
                 // Either:
                 //  - A network request failed with a failed connection or not OKAY response code.
                 //  - There was a sync processing error.
                 // This loop will retry.
                 // The nested abort controller will cleanup any open network requests and streams.
-                // The WebRemote should only abort pending fetch requests or close active Readable streams.
+                if (nestedCts.IsCancellationRequested)
+                {
+                    logger.LogWarning("Caught exception in streaming sync: {message}", exMessage);
+                    shouldDelayRetry = false;
+                }
+                else
+                {
+                    logger.LogError("Caught exception in streaming sync: {message}", exMessage);
+                }
 
                 UpdateSyncStatus(new SyncStatusOptions
                 {
@@ -352,14 +343,9 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                         DownloadError = ex
                     }
                 });
-
-                Console.WriteLine(9);
-                await DelayRetry();
-                Console.WriteLine(10);
             }
             finally
             {
-                Console.WriteLine(11);
                 notifyCompletedUploads = null;
 
                 if (!signal.Value.IsCancellationRequested)
@@ -369,19 +355,21 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                     nestedCts = new CancellationTokenSource();
                 }
 
-
-                // if (iterationResult != null && iterationResult.ImmediateRestart.GetValueOrDefault(false))
-                // {
-                Console.WriteLine(12);
-                UpdateSyncStatus(new SyncStatusOptions
+                if (iterationResult != null && (iterationResult.ImmediateRestart != true && iterationResult.LegacyRetry != true))
                 {
-                    Connected = false,
-                    Connecting = true // May be unnecessary
-                });
 
-                // On error, wait a little before retrying
+                    UpdateSyncStatus(new SyncStatusOptions
+                    {
+                        Connected = false,
+                        Connecting = true
+                    });
 
-                // }
+                    // On error, wait a little before retrying
+                    if (shouldDelayRetry)
+                    {
+                        await DelayRetry();
+                    }
+                }
             }
         }
 
@@ -395,7 +383,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
 
     protected record StreamingSyncIterationResult
     {
-        public bool Retry { get; init; }
+        public bool? LegacyRetry { get; init; }
 
         public bool? ImmediateRestart { get; init; }
     }
@@ -631,7 +619,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
             {
                 logger.LogDebug("Stream has closed while waiting");
                 // The stream has closed while waiting
-                return new StreamingSyncIterationResult { Retry = true };
+                return new StreamingSyncIterationResult { LegacyRetry = true };
             }
 
             // A connection is active and messages are being received
@@ -678,7 +666,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                     // This means checksums failed. Start again with a new checkpoint.
                     // TODO: better back-off
                     await Task.Delay(50);
-                    return new StreamingSyncIterationResult { Retry = true };
+                    return new StreamingSyncIterationResult { LegacyRetry = true };
                 }
                 else if (!result.Ready)
                 {
@@ -780,14 +768,14 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                     // (uses the same one), this should have some delay.
                     //
                     await DelayRetry();
-                    return new StreamingSyncIterationResult { Retry = true };
+                    return new StreamingSyncIterationResult { LegacyRetry = true };
                 }
                 else if (remainingSeconds < 30)
                 {
                     logger.LogDebug("Token will expire soon; reconnect");
                     // Pre-emptively refresh the token
                     Options.Remote.InvalidateCredentials();
-                    return new StreamingSyncIterationResult { Retry = true };
+                    return new StreamingSyncIterationResult { LegacyRetry = true };
                 }
                 TriggerCrudUpload();
             }
@@ -816,7 +804,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                         // This means checksums failed. Start again with a new checkpoint.
                         // TODO: better back-off
                         await Task.Delay(50);
-                        return new StreamingSyncIterationResult { Retry = false };
+                        return new StreamingSyncIterationResult { LegacyRetry = false };
                     }
                     else if (!result.Ready)
                     {
@@ -846,7 +834,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
 
         logger.LogDebug("Stream input empty");
         // Connection closed. Likely due to auth issue.
-        return new StreamingSyncIterationResult { Retry = true };
+        return new StreamingSyncIterationResult { LegacyRetry = true };
     }
 
     public new void Close()
