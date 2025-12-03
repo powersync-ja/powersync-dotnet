@@ -35,11 +35,6 @@ public class DBAdapterSource(IDBAdapter Adapter) : IDatabaseSource
     public IDBAdapter Adapter { get; init; } = Adapter;
 }
 
-public class OpenFactorySource(ISQLOpenFactory Factory) : IDatabaseSource
-{
-    public ISQLOpenFactory Factory { get; init; } = Factory;
-}
-
 public class PowerSyncDatabaseOptions() : BasePowerSyncDatabaseOptions()
 {
     /// <summary> 
@@ -113,9 +108,9 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         {
             Database = adapterSource.Adapter;
         }
-        else if (options.Database is OpenFactorySource factorySource)
+        else if (options.Database is ISQLOpenFactory factorySource)
         {
-            Database = factorySource.Factory.OpenDatabase();
+            Database = factorySource.OpenDatabase();
         }
         else if (options.Database is SQLOpenOptions openOptions)
         {
@@ -158,7 +153,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
 
         await isReadyTask;
     }
-    
+
     public class PrioritySyncRequest
     {
         public CancellationToken? Token { get; set; }
@@ -176,7 +171,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
     /// <returns>A task which will complete once the first full sync has completed.</returns>
     public async Task WaitForFirstSync(PrioritySyncRequest? request = null)
     {
-        var priority =  request?.Priority ?? null;
+        var priority = request?.Priority ?? null;
         var cancellationToken = request?.Token ?? null;
 
         bool StatusMatches(SyncStatus status)
@@ -200,7 +195,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         {
             foreach (var update in Listen(cts.Token))
             {
-                if  (update.StatusChanged != null && StatusMatches(update.StatusChanged!))
+                if (update.StatusChanged != null && StatusMatches(update.StatusChanged!))
                 {
                     cts.Cancel();
                     tcs.SetResult(true);
@@ -295,7 +290,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
             PriorityStatusEntries = priorityStatuses.ToArray(),
             LastSyncedAt = lastCompleteSync,
         });
-        
+
         if (!updatedStatus.IsEqual(CurrentStatus))
         {
             CurrentStatus = updatedStatus;

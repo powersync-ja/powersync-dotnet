@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.0;net6.0;net8.0;net9.0</TargetFrameworks>
+    <TargetFrameworks>netstandard2.0;net6.0;net8.0;net9.0;net8.0-ios;net8.0-android</TargetFrameworks>
     <LangVersion>12</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -19,6 +19,7 @@
     <PackageIcon>icon.png</PackageIcon>
     <NoWarn>NU5100</NoWarn>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <DefaultItemExcludes>$(DefaultItemExcludes);runtimes/**/*.*;</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>
@@ -30,19 +31,24 @@
     <PackageReference Include="System.Threading.Channels" Version="8.0.0" />
   </ItemGroup>
 
-  <!-- For monorepo, test if we can remove this in monorepo -->
   <ItemGroup>
+    <None Include="PowerSync.Common.targets" Pack="true" PackagePath="build\" />
+    <None Include="PowerSync.Common.targets" Pack="true" PackagePath="buildTransitive\" />
+  </ItemGroup>
+  
+  <!-- Check allows us to skip for all MAUI targets-->
+  <!-- For monorepo-->
+  <ItemGroup Condition="!$(TargetFramework.EndsWith('-android')) AND !$(TargetFramework.EndsWith('-ios'))">
     <Content Include="runtimes\**\*.*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
 
   <!-- For releasing runtimes  -->
-  <ItemGroup>
+  <ItemGroup Condition="!$(TargetFramework.EndsWith('-android')) AND !$(TargetFramework.EndsWith('-ios'))">
     <None Include="runtimes\**\*.*" Pack="true" PackagePath="runtimes\" />
   </ItemGroup>
-
-
+  
   <ItemGroup>
     <None Include="..\..\icon.png" Pack="true" PackagePath=""/>
     <None Include="README.md" Pack="true" PackagePath=""/>

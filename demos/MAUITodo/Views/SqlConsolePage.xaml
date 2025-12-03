@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="MAUITodo.Views.SqlConsolePage"
+             Title="SQL Console">
+    <Grid RowDefinitions="Auto,*" Padding="20">
+        <VerticalStackLayout Grid.Row="0" Spacing="10">
+            <Entry x:Name="QueryEntry" 
+                   Placeholder="Enter SQL query..."
+                   Text="SELECT * FROM lists"
+                   Completed="OnQuerySubmitted"/>
+            <Button Text="Execute Query" 
+                    Clicked="OnQuerySubmitted"
+                    HorizontalOptions="Start"/>
+        </VerticalStackLayout>
+        
+        <StackLayout Grid.Row="1" Spacing="10">
+            <Label x:Name="Headers" Text="" />
+            <Label x:Name="Results" Text="" />
+        </StackLayout>
+    </Grid>
+</ContentPage> 

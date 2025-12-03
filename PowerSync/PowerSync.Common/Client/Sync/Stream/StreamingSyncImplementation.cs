@@ -3,6 +3,7 @@ using Newtonsoft.Json.Linq;
 
 namespace PowerSync.Common.Client.Sync.Stream;
 
+using System.Net.Sockets;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Newtonsoft.Json;
@@ -285,8 +286,15 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
             }
             catch (Exception ex)
             {
-                logger.LogError("Caught exception in streaming sync: {message}", ex.Message);
-                Console.WriteLine(ex.StackTrace);
+                var exMessage = ex.Message;
+                if (ex.InnerException != null && (ex.InnerException is ObjectDisposedException || ex.InnerException is SocketException))
+                {
+                    exMessage = "Stream closed or timed out -" + ex.InnerException.Message;
+                }
+
+
+                logger.LogError("Caught exception in streaming sync: {message}", exMessage);
+
                 // Either:
                 //  - A network request failed with a failed connection or not OKAY response code.
                 //  - There was a sync processing error.
@@ -351,7 +359,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
             }
         });
     }
-    
+
     private async Task SyncIteration(CancellationToken? signal, RequiredPowerSyncConnectionOptions resolvedOptions)
     {
         Task? receivingLines = null;
@@ -370,11 +378,12 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
 
             var stream = await Options.Remote.PostStreamRaw(syncOptions);
             using var reader = new StreamReader(stream, Encoding.UTF8);
-            
-            syncOptions.CancellationToken.Register(() => {
+
+            syncOptions.CancellationToken.Register(() =>
+            {
                 try { stream?.Close(); } catch { }
             });
-            
+
             string? line;
 
             while ((line = await reader.ReadLineAsync()) != null)
@@ -430,18 +439,18 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                     var completeSync = coreCompleteSync != null ? CoreStatusToSyncStatus(coreCompleteSync) : null;
 
                     UpdateSyncStatus(new SyncStatusOptions
+                    {
+                        Connected = info.Connected,
+                        Connecting = info.Connecting,
+                        LastSyncedAt = completeSync?.LastSyncedAt,
+                        HasSynced = completeSync?.HasSynced,
+                        PriorityStatusEntries = info.PriorityStatus.Select(CoreStatusToSyncStatus).ToArray(),
+                        DataFlow = new SyncDataFlowStatus
                         {
-                            Connected = info.Connected,
-                            Connecting = info.Connecting,
-                            LastSyncedAt = completeSync?.LastSyncedAt,
-                            HasSynced = completeSync?.HasSynced,
-                            PriorityStatusEntries = info.PriorityStatus.Select(CoreStatusToSyncStatus).ToArray(),
-                            DataFlow = new SyncDataFlowStatus
-                            {
-                                Downloading = info.Downloading != null,
-                                DownloadProgress = info.Downloading?.Buckets
-                            }
-                        },
+                            Downloading = info.Downloading != null,
+                            DownloadProgress = info.Downloading?.Buckets
+                        }
+                    },
                         new UpdateSyncStatusOptions
                         {
                             ClearDownloadError = true,
@@ -546,8 +555,8 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                             checkedCrudItem = nextCrudItem;
                             await Options.UploadCrud();
                             UpdateSyncStatus(new SyncStatusOptions
-                                {
-                                },
+                            {
+                            },
                                 new UpdateSyncStatusOptions
                                 {
                                     ClearUploadError = true
@@ -587,7 +596,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                     finally
                     {
                         UpdateSyncStatus(new SyncStatusOptions
-                            { DataFlow = new SyncDataFlowStatus { Uploading = false } });
+                        { DataFlow = new SyncDataFlowStatus { Uploading = false } });
                     }
                 }
 

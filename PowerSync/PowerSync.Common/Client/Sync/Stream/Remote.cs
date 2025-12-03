@@ -14,7 +14,7 @@ using Newtonsoft.Json;
 public class SyncStreamOptions
 {
     public string Path { get; set; } = "";
-    
+
     public StreamingSyncRequest Data { get; set; } = new();
     public Dictionary<string, string> Headers { get; set; } = new();
 
@@ -23,6 +23,9 @@ public class SyncStreamOptions
 
 public class Remote
 {
+
+    private const int STREAMING_POST_TIMEOUT_MS = 30_000;
+
     private readonly HttpClient httpClient;
     protected IPowerSyncBackendConnector connector;
 
@@ -113,34 +116,37 @@ public class Remote
         var responseData = await response.Content.ReadAsStringAsync();
         return JsonConvert.DeserializeObject<T>(responseData)!;
     }
-    
-     /// <summary>
-    /// Posts to the stream endpoint and returns a raw NDJSON stream that can be read line by line.
-    /// </summary>
-    public async Task<Stream> PostStreamRaw(SyncStreamOptions options)
+
+    public static StreamingSyncLine? ParseStreamingSyncLine(JObject json)
     {
-         var requestMessage = await BuildRequest(HttpMethod.Post, options.Path, options.Data, options.Headers);
-         var response = await httpClient.SendAsync(requestMessage, HttpCompletionOption.ResponseHeadersRead, options.CancellationToken);
-
-        if (response.Content == null)
+        // Determine the type based on available keys
+        if (json.ContainsKey("checkpoint"))
         {
-            throw new HttpRequestException($"HTTP {response.StatusCode}: No content");
+            return json.ToObject<StreamingSyncCheckpoint>();
         }
-        
-        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized) {
-            InvalidateCredentials();
-        }
-
-        if (!response.IsSuccessStatusCode)
+        else if (json.ContainsKey("checkpoint_diff"))
         {
-            var errorText = await response.Content.ReadAsStringAsync();
-            throw new HttpRequestException($"HTTP {response.StatusCode}: {errorText}");
+            return json.ToObject<StreamingSyncCheckpointDiff>();
         }
-
-        return await response.Content.ReadAsStreamAsync();
+        else if (json.ContainsKey("checkpoint_complete"))
+        {
+            return json.ToObject<StreamingSyncCheckpointComplete>();
+        }
+        else if (json.ContainsKey("data"))
+        {
+            return json.ToObject<StreamingSyncDataJSON>();
+        }
+        else if (json.ContainsKey("token_expires_in"))
+        {
+            return json.ToObject<StreamingSyncKeepalive>();
+        }
+        else
+        {
+            return null;
+        }
     }
 
-  
+
     private async Task<HttpRequestMessage> BuildRequest(HttpMethod method, string path, object? data = null, Dictionary<string, string>? additionalHeaders = null)
     {
         var credentials = await GetCredentials();

@@ -9,18 +9,24 @@ public class SyncDataFlowStatus
 
     [JsonProperty("uploading")] public bool Uploading { get; set; } = false;
 
+    [JsonProperty("downloadError")]
+    public string? DownloadErrorMessage => DownloadError?.Message;
+
+    [JsonProperty("uploadError")]
+    public string? UploadErrorMessage => UploadError?.Message;
+
     /// <summary>
     /// Error during downloading (including connecting).
     /// Cleared on the next successful data download.
     /// </summary>
-    [JsonProperty("downloadError")]
+    [JsonIgnore]
     public Exception? DownloadError { get; set; } = null;
 
     /// <summary>
     /// Error during uploading.
     /// Cleared on the next successful upload.
     /// </summary>
-    [JsonProperty("uploadError")]
+    [JsonIgnore]
     public Exception? UploadError { get; set; } = null;
 
 
@@ -159,8 +165,7 @@ public class SyncStatus(SyncStatusOptions options)
     public string GetMessage()
     {
         var dataFlow = DataFlowStatus;
-        return
-            $"SyncStatus<connected: {Connected} connecting: {Connecting} lastSyncedAt: {LastSyncedAt} hasSynced: {HasSynced}. Downloading: {dataFlow.Downloading}. Uploading: {dataFlow.Uploading}. UploadError: ${dataFlow.UploadError}, DownloadError?: ${dataFlow.DownloadError}>";
+        return $"SyncStatus<connected: {Connected} connecting: {Connecting} lastSyncedAt: {LastSyncedAt} hasSynced: {HasSynced}. Downloading: {dataFlow.Downloading}. Uploading: {dataFlow.Uploading}. UploadError: {dataFlow.UploadError}, DownloadError?: {dataFlow.DownloadError}>";
     }
 
     public string ToJSON()

@@ -15,7 +15,7 @@ public class SQLOpenOptions : IDatabaseSource
     public string? DbLocation { get; set; }
 }
 
-public interface ISQLOpenFactory
+public interface ISQLOpenFactory: IDatabaseSource
 {
     /// <summary>
     /// Opens a connection adapter to a SQLite Database.

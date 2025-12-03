@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="MAUITodo.Views.ListsPage"
+             Title="Todo Lists">
+    <ContentPage.ToolbarItems>
+        <ToolbarItem x:Name="WifiStatusItem"
+                     Order="Primary" 
+                     Priority="0"/>
+    </ContentPage.ToolbarItems>
+
+    <Grid RowDefinitions="Auto,*">
+        <Button Text="New List" 
+                Clicked="OnAddClicked"
+                Margin="10"
+                HorizontalOptions="End"/>
+        
+        <CollectionView Grid.Row="1"
+                        x:Name="ListsCollection"
+                        SelectionMode="Single"
+                        SelectionChanged="OnListSelected">
+            <CollectionView.ItemTemplate>
+                <DataTemplate>
+                    <Grid Padding="10">
+                        <Grid Padding="10" 
+                              BackgroundColor="White"
+                              ColumnDefinitions="*,Auto">
+                            <Grid.Shadow>
+                                <Shadow Brush="Gray" Offset="1,1" Radius="3" Opacity="0.3"/>
+                            </Grid.Shadow>
+                            <Label Text="{Binding Name}"
+                                   FontSize="16"
+                                   VerticalOptions="Center"/>
+                            <Button Grid.Column="1"
+                                    Text="Delete"
+                                    Clicked="OnDeleteClicked"
+                                    CommandParameter="{Binding .}"/>
+                        </Grid>
+                    </Grid>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+    </Grid>
+</ContentPage> 
