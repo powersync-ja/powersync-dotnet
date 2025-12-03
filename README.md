@@ -106,13 +106,13 @@ dotnet test -v n --framework net8.0 --filter "test-file-pattern"
 
 ### Integration Tests
 Integration tests in `PowerSync.Common.IntegrationTests` are intended to run against the [self-host nodejs demo](https://github.com/powersync-ja/self-host-demo/tree/main/demos/nodejs). 
-The integration tests are disabled by default, define the following environment variable to let them run.
+The integration tests are disabled by default, define the following environment variable when running the tests.
 
 ```bash
 RUN_INTEGRATION_TESTS=true dotnet test -v n --framework net8.0
 ```
 
-Run integration tests exclusively.
+Only run integration tests, without any unit tests.
 
 ```bash
 RUN_INTEGRATION_TESTS=true dotnet test -v n --framework net8.0 --filter "Category=Integration"

@@ -81,7 +81,7 @@ public class BaseConnectionOptions(Dictionary<string, object>? parameters = null
     public Dictionary<string, object>? Params { get; set; } = parameters;
 
     /// <summary>
-    /// Wehether to use the RUST or C# sync client implementation.
+    /// Whether to use the RUST or C# sync client implementation.
     /// </summary>
     public SyncClientImplementation? ClientImplementation { get; set; } = clientImplementation;
 }
@@ -561,7 +561,6 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
 
     protected async Task<StreamingSyncIterationResult> LegacyStreamingSyncIteration(CancellationToken signal, RequiredPowerSyncConnectionOptions resolvedOptions)
     {
-        // There's also a warning explaining that the legacy client will be removed in the future
         logger.LogWarning("The legacy sync client implementation is deprecated and will be removed in a future release.");
         logger.LogDebug("Streaming sync iteration started");
         Options.Adapter.StartSession();
@@ -600,7 +599,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                 Buckets = req,
                 IncludeChecksum = true,
                 RawData = true,
-                Parameters = resolvedOptions.Params, // Replace with actual params
+                Parameters = resolvedOptions.Params,
                 ClientId = clientId
             }
         };
@@ -664,7 +663,6 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                 if (!result.CheckpointValid)
                 {
                     // This means checksums failed. Start again with a new checkpoint.
-                    // TODO: better back-off
                     await Task.Delay(50);
                     return new StreamingSyncIterationResult { LegacyRetry = true };
                 }
@@ -802,7 +800,6 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                     if (!result.CheckpointValid)
                     {
                         // This means checksums failed. Start again with a new checkpoint.
-                        // TODO: better back-off
                         await Task.Delay(50);
                         return new StreamingSyncIterationResult { LegacyRetry = false };
                     }

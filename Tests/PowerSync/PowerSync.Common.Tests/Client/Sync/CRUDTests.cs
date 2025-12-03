@@ -127,8 +127,6 @@ public class CRUDTests : IAsyncLifetime
             { "description", "test2" }
         });
 
-        Console.WriteLine(JsonConvert.SerializeObject(tx.Crud.First()));
-        Console.WriteLine(JsonConvert.SerializeObject(expectedCrudEntry));
         Assert.True(tx.Crud.First().Equals(expectedCrudEntry));
     }
 

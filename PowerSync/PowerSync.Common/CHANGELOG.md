@@ -1,5 +1,8 @@
 # PowerSync.Common Changelog
 
+## 0.0.5-alpha.1
+- Using the latest (0.4.9) version of the core extension, it introduces support for the Rust Sync implementation and also makes it the default - users can still opt out and use the legacy C# sync implementation as option when calling `connect()`.
+
 ## 0.0.4-alpha.1
 - Fixed MAUI issues related to extension loading when installing package outside of the monorepo. 
 

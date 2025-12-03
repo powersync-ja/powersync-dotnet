@@ -248,7 +248,7 @@ public class IntegrationFactAttribute : FactAttribute
         // Set default timeout if not already set
         if (Timeout == 0)
         {
-            Timeout = 5000; // 30 seconds default for all integration tests
+            Timeout = 5000; // 5 seconds default for all integration tests
         }
     }
 }
