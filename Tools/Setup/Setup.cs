@@ -52,10 +52,10 @@ public class PowerSyncSetup
     {
         return new Dictionary<string, RuntimeConfig>
         {
-            { "osx-x64", new RuntimeConfig("libpowersync_x64.dylib", "libpowersync.dylib") },
-            { "osx-arm64", new RuntimeConfig("libpowersync_aarch64.dylib", "libpowersync.dylib") },
-            { "linux-x64", new RuntimeConfig("libpowersync_x64.so", "libpowersync.so") },
-            { "linux-arm64", new RuntimeConfig("libpowersync_aarch64.so", "libpowersync.so") },
+            { "osx-x64", new RuntimeConfig("libpowersync_x64.macos.dylib", "libpowersync.dylib") },
+            { "osx-arm64", new RuntimeConfig("libpowersync_aarch64.macos.dylib", "libpowersync.dylib") },
+            { "linux-x64", new RuntimeConfig("libpowersync_x64.linux.so", "libpowersync.so") },
+            { "linux-arm64", new RuntimeConfig("libpowersync_aarch64.linux.so", "libpowersync.so") },
             { "win-x64", new RuntimeConfig("powersync_x64.dll", "powersync.dll") }
         };
     }
