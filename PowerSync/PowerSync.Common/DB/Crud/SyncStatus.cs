@@ -33,7 +33,7 @@ public class SyncDataFlowStatus
 
 public class SyncPriorityStatus
 {
-    [JsonProperty("uploading")] public int Priority { get; set; }
+    [JsonProperty("priority")] public int Priority { get; set; }
 
     [JsonProperty("lastSyncedAt")] public DateTime? LastSyncedAt { get; set; }
 

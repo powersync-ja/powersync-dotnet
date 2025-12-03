@@ -443,7 +443,7 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
     {
         return await db.WriteTransaction(async tx =>
         {
-            var result = await tx.Get<ControlResult>("SELECT powersync_control(?, ?) AS r", [op, payload ?? ""]);
+            var result = await tx.Get<ControlResult>("SELECT powersync_control(?, ?) AS r", [op, payload]);
             return result.r!;
         });
     }

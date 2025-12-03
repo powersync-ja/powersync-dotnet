@@ -141,6 +141,8 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
     private Task? streamingSyncTask;
     public Action TriggerCrudUpload { get; }
     private CancellationTokenSource? crudUpdateCts;
+
+    private bool isUploadingCrud;
     private Action? notifyCompletedUploads; private readonly ILogger logger;
 
     private readonly StreamingSyncLocks locks;
@@ -162,19 +164,24 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
 
         locks = new StreamingSyncLocks();
         logger = options.Logger ?? NullLogger.Instance;
+        isUploadingCrud = false;
 
         CancellationTokenSource = null;
 
         TriggerCrudUpload = () =>
         {
-            if (!SyncStatus.Connected)
+            if (!SyncStatus.Connected || isUploadingCrud)
             {
                 return;
             }
 
-            notifyCompletedUploads?.Invoke();
-
-            Task.Run(async () => await InternalUploadAllCrud());
+            isUploadingCrud = true;
+            Task.Run(async () =>
+            {
+                await InternalUploadAllCrud();
+                notifyCompletedUploads?.Invoke();
+                isUploadingCrud = false;
+            });
         };
     }
 

@@ -49,7 +49,7 @@ public class SyncIntegrationTests : IAsyncLifetime
         {
             await db.Connect(connector, new PowerSyncConnectionOptions
             {
-                ClientImplementation = SyncClientImplementation.C_SHARP,
+                ClientImplementation = SyncClientImplementation.RUST,
             });
             await db.WaitForFirstSync();
         }
