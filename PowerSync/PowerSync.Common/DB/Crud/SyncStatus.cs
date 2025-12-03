@@ -173,10 +173,4 @@ public class SyncStatus(SyncStatusOptions options)
     {
         return SerializeObject();
     }
-
-    private static int ComparePriorities(SyncPriorityStatus a, SyncPriorityStatus b)
-    {
-        // Lower numbers = higher priority
-        return a.Priority.CompareTo(b.Priority);
-    }
 }
