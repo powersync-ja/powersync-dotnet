@@ -314,7 +314,7 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
         }
 
         var rs = await db.GetAll<SequenceResult>(
-            "SELECT seq FROM sqlite_sequence WHERE name = 'ps_crud'"
+            "SELECT seq FROM main.sqlite_sequence WHERE name = 'ps_crud'"
         );
 
         if (rs.Length == 0)
@@ -338,7 +338,7 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
             }
 
             var rsAfter = await tx.GetAll<SequenceResult>(
-                "SELECT seq FROM sqlite_sequence WHERE name = 'ps_crud'"
+                "SELECT seq FROM main.sqlite_sequence WHERE name = 'ps_crud'"
             );
 
             if (rsAfter.Length == 0)
