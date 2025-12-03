@@ -2,6 +2,7 @@ namespace PowerSync.Common.Client.Sync.Stream;
 
 using System.Net.Sockets;
 using System.Text;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -425,7 +426,8 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
     protected async Task<StreamingSyncIterationResult> RustStreamingSyncIteration(CancellationToken? signal, RequiredPowerSyncConnectionOptions resolvedOptions)
     {
         Task? receivingLines = null;
-        var hideDisconnectOnRestart = false;
+        bool hadSyncLine = false;
+        bool hideDisconnectOnRestart = false;
 
 
         var nestedCts = new CancellationTokenSource();
@@ -448,12 +450,23 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                 try { stream?.Close(); } catch { }
             });
 
-            string? line;
+            UpdateSyncStatus(new SyncStatusOptions
+            {
+                Connected = true
+            });
 
+            string? line;
             while ((line = await reader.ReadLineAsync()) != null)
             {
-                logger.LogDebug("Parsing line for rust sync stream {message}", "xx");
                 await Control(PowerSyncControlCommand.PROCESS_TEXT_LINE, line);
+
+                // Triggers a local CRUD upload when the first sync line has been received.
+                // This allows uploading local changes that have been made while offline or disconnected.
+                if (!hadSyncLine)
+                {
+                    TriggerCrudUpload();
+                    hadSyncLine = true;
+                }
             }
         }
 
@@ -464,21 +477,20 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
 
         async Task Control(string op, object? payload = null)
         {
-            logger.LogTrace("Control call {message}", op);
-
             var rawResponse = await Options.Adapter.Control(op, payload);
+            logger.LogTrace("powersync_control {op}, {payload}, {rawResponse}", op, payload, rawResponse);
             HandleInstructions(Instruction.ParseInstructions(rawResponse));
         }
 
-        void HandleInstructions(Instruction[] instructions)
+        async void HandleInstructions(Instruction[] instructions)
         {
             foreach (var instruction in instructions)
             {
-                HandleInstruction(instruction);
+                await HandleInstruction(instruction);
             }
         }
 
-        void HandleInstruction(Instruction instruction)
+        async Task HandleInstruction(Instruction instruction)
         {
             switch (instruction)
             {
@@ -529,7 +541,26 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                     receivingLines = Connect(establishSyncStream);
                     break;
                 case FetchCredentials fetchCredentials:
-                    Options.Remote.InvalidateCredentials();
+                    if (fetchCredentials.DidExpire)
+                    {
+                        Options.Remote.InvalidateCredentials();
+                    }
+                    else
+                    {
+                        Options.Remote.InvalidateCredentials();
+
+                        // Restart iteration after the credentials have been refreshed.
+                        try
+                        {
+                            await Options.Remote.FetchCredentials();
+                            await Control(PowerSyncControlCommand.NOTIFY_TOKEN_REFRESHED);
+                        }
+                        catch (Exception err)
+                        {
+                            logger.LogWarning("Could not prefetch credentials: {message}", err.Message);
+                        }
+
+                    }
                     break;
                 case CloseSyncStream:
                     nestedCts.Cancel();
@@ -550,7 +581,17 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
         try
         {
             await Control(PowerSyncControlCommand.START, JsonConvert.SerializeObject(new { parameters = resolvedOptions.Params }));
-            notifyCompletedUploads = () => { Task.Run(async () => await Control(PowerSyncControlCommand.NOTIFY_CRUD_UPLOAD_COMPLETED)); };
+
+            notifyCompletedUploads = () =>
+            {
+                Task.Run(async () =>
+                {
+                    if (!nestedCts.IsCancellationRequested)
+                    {
+                        await Control(PowerSyncControlCommand.NOTIFY_CRUD_UPLOAD_COMPLETED);
+                    }
+                });
+            };
 
             if (receivingLines != null)
             {
