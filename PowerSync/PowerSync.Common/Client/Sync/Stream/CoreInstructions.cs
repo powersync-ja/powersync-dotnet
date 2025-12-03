@@ -1,8 +1,7 @@
 using Newtonsoft.Json.Linq;
+using Newtonsoft.Json;
 
 namespace PowerSync.Common.Client.Sync.Stream;
-
-using Newtonsoft.Json;
 
 /// <summary>
 /// An internal instruction emitted by the sync client in the core extension in response to the
@@ -15,7 +14,6 @@ public abstract class Instruction
     {
         var jsonArray = JArray.Parse(rawResponse);
         List<Instruction> instructions = [];
-        
         foreach (JObject item in jsonArray)
         {
             var instruction = ParseInstruction(item);
@@ -25,7 +23,6 @@ public abstract class Instruction
             }
             instructions.Add(instruction);
         }
-        
         return instructions.ToArray();
     }
 
@@ -45,12 +42,11 @@ public abstract class Instruction
             return new FlushFileSystem();
         if (json.ContainsKey("DidCompleteSync"))
             return new DidCompleteSync();
-      
         throw new JsonSerializationException("Unknown Instruction type.");
     }
 }
 
-public class LogLine: Instruction
+public class LogLine : Instruction
 {
     [JsonProperty("severity")]
     public string Severity { get; set; } = null!;  // "DEBUG", "INFO", "WARNING"
@@ -59,13 +55,13 @@ public class LogLine: Instruction
     public string Line { get; set; } = null!;
 }
 
-public class EstablishSyncStream: Instruction
+public class EstablishSyncStream : Instruction
 {
     [JsonProperty("request")]
     public StreamingSyncRequest Request { get; set; } = null!;
 }
 
-public class UpdateSyncStatus: Instruction
+public class UpdateSyncStatus : Instruction
 {
     [JsonProperty("status")]
     public CoreSyncStatus Status { get; set; } = null!;
@@ -119,7 +115,7 @@ public class BucketProgress
     public int TargetCount { get; set; }
 }
 
-public class FetchCredentials: Instruction
+public class FetchCredentials : Instruction
 {
     [JsonProperty("did_expire")]
     public bool DidExpire { get; set; }

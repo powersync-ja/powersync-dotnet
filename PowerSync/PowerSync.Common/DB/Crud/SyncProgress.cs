@@ -21,7 +21,6 @@ public class SyncProgress : ProgressWithOperations
 {
     public static readonly int FULL_SYNC_PRIORITY = 2147483647;
     protected Dictionary<string, BucketProgress> InternalProgress { get; }
-    
     public SyncProgress(Dictionary<string, BucketProgress> progress)
     {
         this.InternalProgress = progress;

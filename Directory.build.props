@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project>
+    <PropertyGroup>
+        <MSBuildWarningsAsMessages>$(MSBuildWarningsAsMessages);NETSDK1202</MSBuildWarningsAsMessages>
+    </PropertyGroup>
     <ItemGroup>
         <Compile Include="$(MSBuildThisFileDirectory)IsExternalInit.cs" Visible="false" />
     </ItemGroup>

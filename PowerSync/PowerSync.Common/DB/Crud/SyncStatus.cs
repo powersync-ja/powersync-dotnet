@@ -2,18 +2,13 @@ namespace PowerSync.Common.DB.Crud;
 
 using PowerSync.Common.Client.Sync.Stream;
 using Newtonsoft.Json;
+using Microsoft.Extensions.Options;
 
 public class SyncDataFlowStatus
 {
     [JsonProperty("downloading")] public bool Downloading { get; set; } = false;
 
     [JsonProperty("uploading")] public bool Uploading { get; set; } = false;
-
-    [JsonProperty("downloadError")]
-    public string? DownloadErrorMessage => DownloadError?.Message;
-
-    [JsonProperty("uploadError")]
-    public string? UploadErrorMessage => UploadError?.Message;
 
     /// <summary>
     /// Error during downloading (including connecting).
@@ -38,7 +33,7 @@ public class SyncDataFlowStatus
 
 public class SyncPriorityStatus
 {
-    [JsonProperty("uploading")] public int Priority { get; set; }
+    [JsonProperty("priority")] public int Priority { get; set; }
 
     [JsonProperty("lastSyncedAt")] public DateTime? LastSyncedAt { get; set; }
 
@@ -157,20 +152,26 @@ public class SyncStatus(SyncStatusOptions options)
         };
     }
 
+    private string SerializeObject()
+    {
+        return JsonConvert.SerializeObject(new { Options = Options, UploadErrorMessage = Options.DataFlow?.UploadError?.Message, DownloadErrorMessage = DataFlowStatus.DownloadError?.Message });
+    }
+
     public bool IsEqual(SyncStatus status)
     {
-        return JsonConvert.SerializeObject(Options) == JsonConvert.SerializeObject(status.Options);
+        return this.SerializeObject() == status.SerializeObject();
     }
 
     public string GetMessage()
     {
         var dataFlow = DataFlowStatus;
-        return $"SyncStatus<connected: {Connected} connecting: {Connecting} lastSyncedAt: {LastSyncedAt} hasSynced: {HasSynced}. Downloading: {dataFlow.Downloading}. Uploading: {dataFlow.Uploading}. UploadError: {dataFlow.UploadError}, DownloadError?: {dataFlow.DownloadError}>";
+        return
+            $"SyncStatus<connected: {Connected} connecting: {Connecting} lastSyncedAt: {LastSyncedAt} hasSynced: {HasSynced}. Downloading: {dataFlow.Downloading}. Uploading: {dataFlow.Uploading}. UploadError: ${dataFlow.UploadError}, DownloadError?: ${dataFlow.DownloadError}>";
     }
 
     public string ToJSON()
     {
-        return JsonConvert.SerializeObject(this);
+        return SerializeObject();
     }
 
     private static int ComparePriorities(SyncPriorityStatus a, SyncPriorityStatus b)
