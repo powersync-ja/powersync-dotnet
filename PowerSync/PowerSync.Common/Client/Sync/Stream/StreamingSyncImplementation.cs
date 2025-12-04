@@ -396,6 +396,12 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
         public bool? ImmediateRestart { get; init; }
     }
 
+    protected record EnqueuedCommand
+    {
+        public string Command { get; init; } = null!;
+        public object? Payload { get; init; }
+    }
+
 
     protected async Task<StreamingSyncIterationResult> StreamingSyncIteration(CancellationToken signal, PowerSyncConnectionOptions? options)
     {
@@ -423,12 +429,14 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
         });
     }
 
+
     protected async Task<StreamingSyncIterationResult> RustStreamingSyncIteration(CancellationToken? signal, RequiredPowerSyncConnectionOptions resolvedOptions)
     {
         Task? receivingLines = null;
         bool hadSyncLine = false;
         bool hideDisconnectOnRestart = false;
 
+        var controlInvocations = (EventStream<EnqueuedCommand>)null!;
 
         var nestedCts = new CancellationTokenSource();
         signal?.Register(() => { nestedCts.Cancel(); });
@@ -442,31 +450,51 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                 Data = instruction.Request
             };
 
-            var stream = await Options.Remote.PostStreamRaw(syncOptions);
-            using var reader = new StreamReader(stream, Encoding.UTF8);
-
-            syncOptions.CancellationToken.Register(() =>
+            controlInvocations = new EventStream<EnqueuedCommand>();
+            try
             {
-                try { stream?.Close(); } catch { }
-            });
-
-            UpdateSyncStatus(new SyncStatusOptions
-            {
-                Connected = true
-            });
-
-            string? line;
-            while ((line = await reader.ReadLineAsync()) != null)
-            {
-                await Control(PowerSyncControlCommand.PROCESS_TEXT_LINE, line);
-
-                // Triggers a local CRUD upload when the first sync line has been received.
-                // This allows uploading local changes that have been made while offline or disconnected.
-                if (!hadSyncLine)
+                controlInvocations?.RunListenerAsync(async (line) =>
                 {
-                    TriggerCrudUpload();
-                    hadSyncLine = true;
+                    await Control(line.Command, line.Payload);
+
+                    // Triggers a local CRUD upload when the first sync line has been received.
+                    // This allows uploading local changes that have been made while offline or disconnected.
+                    if (!hadSyncLine)
+                    {
+                        TriggerCrudUpload();
+                        hadSyncLine = true;
+                    }
+                });
+
+                var stream = await Options.Remote.PostStreamRaw(syncOptions);
+                using var reader = new StreamReader(stream, Encoding.UTF8);
+
+                syncOptions.CancellationToken.Register(() =>
+                {
+                    try { stream?.Close(); } catch { }
+                });
+
+                UpdateSyncStatus(new SyncStatusOptions
+                {
+                    Connected = true
+                });
+
+                string? line;
+                while ((line = await reader.ReadLineAsync()) != null)
+                {
+                    controlInvocations?.Emit(new EnqueuedCommand
+                    {
+                        Command = PowerSyncControlCommand.PROCESS_TEXT_LINE,
+                        Payload = line
+                    });
+
                 }
+            }
+            finally
+            {
+                var activeInstructions = controlInvocations;
+                controlInvocations = null;
+                activeInstructions?.Close();
             }
         }
 
@@ -553,7 +581,10 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                         try
                         {
                             await Options.Remote.FetchCredentials();
-                            await Control(PowerSyncControlCommand.NOTIFY_TOKEN_REFRESHED);
+                            controlInvocations?.Emit(new EnqueuedCommand
+                            {
+                                Command = PowerSyncControlCommand.NOTIFY_TOKEN_REFRESHED
+                            });
                         }
                         catch (Exception err)
                         {
@@ -586,9 +617,12 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
             {
                 Task.Run(async () =>
                 {
-                    if (!nestedCts.IsCancellationRequested)
+                    if (controlInvocations != null && !controlInvocations.Closed)
                     {
-                        await Control(PowerSyncControlCommand.NOTIFY_CRUD_UPLOAD_COMPLETED);
+                        controlInvocations?.Emit(new EnqueuedCommand
+                        {
+                            Command = PowerSyncControlCommand.NOTIFY_CRUD_UPLOAD_COMPLETED
+                        });
                     }
                 });
             };
