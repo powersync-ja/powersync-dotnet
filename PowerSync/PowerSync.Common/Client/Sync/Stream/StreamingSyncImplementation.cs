@@ -1043,10 +1043,12 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                 Connected = options.Connected ?? SyncStatus.Connected,
                 Connecting = !options.Connected.GetValueOrDefault() && (options.Connecting ?? SyncStatus.Connecting),
                 LastSyncedAt = options.LastSyncedAt ?? SyncStatus.LastSyncedAt,
+                PriorityStatusEntries = options.PriorityStatusEntries ?? SyncStatus.PriorityStatusEntries,
                 DataFlow = new SyncDataFlowStatus
                 {
                     Uploading = options.DataFlow?.Uploading ?? SyncStatus.DataFlowStatus.Uploading,
                     Downloading = options.DataFlow?.Downloading ?? SyncStatus.DataFlowStatus.Downloading,
+                    DownloadProgress = options.DataFlow?.DownloadProgress ?? SyncStatus.DataFlowStatus.DownloadProgress
                     DownloadError = updateOptions?.ClearDownloadError == true ? null : options.DataFlow?.DownloadError ?? SyncStatus.DataFlowStatus.DownloadError,
                     UploadError = updateOptions?.ClearUploadError == true ? null : options.DataFlow?.UploadError ?? SyncStatus.DataFlowStatus.UploadError,
                 }
@@ -1087,6 +1089,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
         }
     }
 }
+
 
 enum LockType
 {

@@ -156,9 +156,36 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         await isReadyTask;
     }
 
-    public async Task WaitForFirstSync(CancellationToken? cancellationToken = null)
+    public class PrioritySyncRequest
     {
-        if (CurrentStatus.HasSynced == true)
+        public CancellationToken? Token { get; set; }
+        public int? Priority { get; set; }
+    }
+
+    /// <summary>
+    /// Wait for the first sync operation to complete.
+    /// </summary>
+    /// <param name="request">
+    /// An object providing a cancellation token and a priority target.
+    /// When a priority target is set, the task may complete when all buckets with the given (or higher)
+    /// priorities have been synchronized. This can be earlier than a complete sync.
+    /// </param>
+    /// <returns>A task which will complete once the first full sync has completed.</returns>
+    public async Task WaitForFirstSync(PrioritySyncRequest? request = null)
+    {
+        var priority = request?.Priority ?? null;
+        var cancellationToken = request?.Token ?? null;
+
+        bool StatusMatches(SyncStatus status)
+        {
+            if (priority == null)
+            {
+                return status.HasSynced == true;
+            }
+            return status.StatusForPriority(priority.Value).HasSynced == true;
+        }
+
+        if (StatusMatches(CurrentStatus))
         {
             return;
         }
@@ -166,11 +193,11 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         var tcs = new TaskCompletionSource<bool>();
         var cts = new CancellationTokenSource();
 
-        var _ = Task.Run(() =>
+        _ = Task.Run(() =>
         {
             foreach (var update in Listen(cts.Token))
             {
-                if (update.StatusChanged?.HasSynced == true)
+                if (update.StatusChanged != null && StatusMatches(update.StatusChanged!))
                 {
                     cts.Cancel();
                     tcs.SetResult(true);
@@ -227,7 +254,22 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         }
     }
 
-    private record LastSyncedResult(int? priority, string? last_synced_at);
+    //   protected async resolveOfflineSyncStatus() {
+    //     const result = await this.database.get<{ r: string }>('SELECT powersync_offline_sync_status() as r');
+    //     const parsed = JSON.parse(result.r) as CoreSyncStatus;
+
+    //     const updatedStatus = new SyncStatus({
+    //       ...this.currentStatus.toJSON(),
+    //       ...coreStatusToJs(parsed)
+    //     });
+
+    //     if (!updatedStatus.isEqual(this.currentStatus)) {
+    //       this.currentStatus = updatedStatus;
+    //       this.iterateListeners((l) => l.statusChanged?.(this.currentStatus));
+    //     }
+    //   }
+    // TODO DELETE
+    private record LastSyncedResult(int priority, string? last_synced_at);
 
     protected async Task UpdateHasSynced()
     {
@@ -236,6 +278,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         );
 
         DateTime? lastCompleteSync = null;
+        List<DB.Crud.SyncPriorityStatus> priorityStatuses = [];
 
         // TODO: Will be altered/extended when reporting individual sync priority statuses is supported 
         foreach (var result in results)
@@ -261,6 +304,8 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
             Emit(new PowerSyncDBEvent { StatusChanged = CurrentStatus });
         }
     }
+
+
 
     /// <summary> 
     /// Replace the schema with a new version. This is for advanced use cases - typically the schema should just be specified once in the constructor.

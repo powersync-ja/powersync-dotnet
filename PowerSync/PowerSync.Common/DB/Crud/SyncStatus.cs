@@ -100,7 +100,7 @@ public class SyncStatus(SyncStatusOptions options)
     /// </summary>
     public SyncPriorityStatus[] PriorityStatusEntries =>
         (Options.PriorityStatusEntries ?? [])
-        .OrderBy(entry => entry.Priority)
+        .OrderBy(x => x, Comparer<SyncPriorityStatus>.Create(ComparePriorities))
         .ToArray();
 
     /// <summary>
@@ -154,7 +154,7 @@ public class SyncStatus(SyncStatusOptions options)
 
     private string SerializeObject()
     {
-        return JsonConvert.SerializeObject(new { Options = Options, UploadErrorMessage = Options.DataFlow?.UploadError?.Message, DownloadErrorMessage = DataFlowStatus.DownloadError?.Message });
+        return JsonConvert.SerializeObject(new { Options, UploadErrorMessage = Options.DataFlow?.UploadError?.Message, DownloadErrorMessage = DataFlowStatus.DownloadError?.Message });
     }
 
     public bool IsEqual(SyncStatus status)
@@ -172,5 +172,10 @@ public class SyncStatus(SyncStatusOptions options)
     public string ToJSON()
     {
         return SerializeObject();
+    }
+
+    private static int ComparePriorities(SyncPriorityStatus a, SyncPriorityStatus b)
+    {
+        return b.Priority - a.Priority; // Reverse because higher priorities have lower numbers
     }
 }
