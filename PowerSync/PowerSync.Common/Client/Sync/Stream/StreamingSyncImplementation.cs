@@ -615,7 +615,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
 
             notifyCompletedUploads = () =>
             {
-                Task.Run(async () =>
+                Task.Run(() =>
                 {
                     if (controlInvocations != null && !controlInvocations.Closed)
                     {
