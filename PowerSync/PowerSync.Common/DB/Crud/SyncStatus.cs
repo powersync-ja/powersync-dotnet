@@ -152,6 +152,27 @@ public class SyncStatus(SyncStatusOptions options)
         };
     }
 
+    /// <summary>
+    /// Creates an updated SyncStatus by merging the current status with the provided updated status.
+    /// </summary>
+    public SyncStatus CreateUpdatedStatus(SyncStatus updatedStatus)
+    {
+        var updatedOptions = updatedStatus.Options;
+        var currentOptions = Options;
+
+        var parsedOptions = new SyncStatusOptions
+        {
+            Connected = updatedOptions.Connected ?? currentOptions.Connected,
+            Connecting = updatedOptions.Connecting ?? currentOptions.Connecting,
+            LastSyncedAt = updatedOptions.LastSyncedAt ?? currentOptions.LastSyncedAt,
+            HasSynced = updatedOptions.HasSynced ?? currentOptions.HasSynced,
+            PriorityStatusEntries = updatedOptions.PriorityStatusEntries ?? currentOptions.PriorityStatusEntries,
+            DataFlow = updatedOptions.DataFlow ?? currentOptions.DataFlow,
+        };
+
+        return new SyncStatus(parsedOptions);
+    }
+
     private string SerializeObject()
     {
         return JsonConvert.SerializeObject(new { Options, UploadErrorMessage = Options.DataFlow?.UploadError?.Message, DownloadErrorMessage = DataFlowStatus.DownloadError?.Message });

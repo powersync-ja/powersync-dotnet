@@ -219,7 +219,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         await BucketStorageAdapter.Init();
         await LoadVersion();
         await UpdateSchema(schema);
-        await UpdateHasSynced();
+        await ResolveOfflineSyncStatus();
         await Database.Execute("PRAGMA RECURSIVE_TRIGGERS=TRUE");
         Ready = true;
         Emit(new PowerSyncDBEvent { Initialized = true });
@@ -243,69 +243,32 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         catch (Exception e)
         {
             throw new Exception(
-                $"Unsupported PowerSync extension version. Need >=0.2.0 <1.0.0, got: {sdkVersion}. Details: {e.Message}"
+                $"Unsupported PowerSync extension version. Need >=0.4.10 <1.0.0, got: {sdkVersion}. Details: {e.Message}"
             );
         }
 
-        // Validate version is >= 0.2.0 and < 1.0.0
-        if (versionInts[0] != 0 || versionInts[1] < 2 || versionInts[2] < 0)
+        // Validate version is >= 0.4.10 and < 1.0.0
+        if (versionInts[0] != 0 || versionInts[1] < 4 || (versionInts[1] == 4 && versionInts[2] < 10))
         {
-            throw new Exception($"Unsupported PowerSync extension version. Need >=0.2.0 <1.0.0, got: {sdkVersion}");
+            throw new Exception($"Unsupported PowerSync extension version. Need >=0.4.10 <1.0.0, got: {sdkVersion}");
         }
     }
 
-    //   protected async resolveOfflineSyncStatus() {
-    //     const result = await this.database.get<{ r: string }>('SELECT powersync_offline_sync_status() as r');
-    //     const parsed = JSON.parse(result.r) as CoreSyncStatus;
-
-    //     const updatedStatus = new SyncStatus({
-    //       ...this.currentStatus.toJSON(),
-    //       ...coreStatusToJs(parsed)
-    //     });
-
-    //     if (!updatedStatus.isEqual(this.currentStatus)) {
-    //       this.currentStatus = updatedStatus;
-    //       this.iterateListeners((l) => l.statusChanged?.(this.currentStatus));
-    //     }
-    //   }
-    // TODO DELETE
-    private record LastSyncedResult(int priority, string? last_synced_at);
-
-    protected async Task UpdateHasSynced()
+    private record OfflineSyncStatusResult(string r);
+    protected async Task ResolveOfflineSyncStatus()
     {
-        var results = await Database.GetAll<LastSyncedResult>(
-            "SELECT priority, last_synced_at FROM ps_sync_state ORDER BY priority DESC"
-        );
+        var result = await Database.Get<OfflineSyncStatusResult>("SELECT powersync_offline_sync_status() as r");
+        var parsed = JsonConvert.DeserializeObject<CoreSyncStatus>(result.r);
 
-        DateTime? lastCompleteSync = null;
-        List<DB.Crud.SyncPriorityStatus> priorityStatuses = [];
+        var parsedSyncStatus = CoreInstructionHelpers.CoreStatusToSyncStatus(parsed!);
+        var updatedStatus = CurrentStatus.CreateUpdatedStatus(parsedSyncStatus);
 
-        // TODO: Will be altered/extended when reporting individual sync priority statuses is supported 
-        foreach (var result in results)
+        if (!updatedStatus.IsEqual(CurrentStatus))
         {
-            var parsedDate = DateTime.Parse(result.last_synced_at + "Z");
-
-            if (result.priority == FULL_SYNC_PRIORITY)
-            {
-                // This lowest-possible priority represents a complete sync.
-                lastCompleteSync = parsedDate;
-            }
-        }
-
-        var hasSynced = lastCompleteSync != null;
-        if (hasSynced != CurrentStatus.HasSynced)
-        {
-            CurrentStatus = new SyncStatus(new SyncStatusOptions(CurrentStatus.Options)
-            {
-                HasSynced = hasSynced,
-                LastSyncedAt = lastCompleteSync,
-            });
-
+            CurrentStatus = updatedStatus;
             Emit(new PowerSyncDBEvent { StatusChanged = CurrentStatus });
         }
     }
-
-
 
     /// <summary> 
     /// Replace the schema with a new version. This is for advanced use cases - typically the schema should just be specified once in the constructor.

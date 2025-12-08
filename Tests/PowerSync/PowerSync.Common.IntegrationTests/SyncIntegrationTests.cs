@@ -42,8 +42,6 @@ public class SyncIntegrationTests : IAsyncLifetime
         await db.Init();
         var connector = new NodeConnector(userId);
 
-        await ClearAllData();
-
         Console.WriteLine($"Using User ID: {userId}");
         try
         {

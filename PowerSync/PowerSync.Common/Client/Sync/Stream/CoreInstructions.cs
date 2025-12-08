@@ -142,7 +142,12 @@ public class CoreInstructionHelpers
         };
     }
 
-    public static DB.Crud.SyncStatusOptions CoreStatusToSyncStatus(CoreSyncStatus status)
+    public static DB.Crud.SyncStatus CoreStatusToSyncStatus(CoreSyncStatus status)
+    {
+        return new DB.Crud.SyncStatus(CoreStatusToSyncStatusOptions(status));
+    }
+
+    public static DB.Crud.SyncStatusOptions CoreStatusToSyncStatusOptions(CoreSyncStatus status)
     {
         var coreCompleteSync =
             status.PriorityStatus.FirstOrDefault(s => s.Priority == SyncProgress.FULL_SYNC_PRIORITY);

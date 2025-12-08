@@ -537,7 +537,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                     }
                     break;
                 case UpdateSyncStatus syncStatus:
-                    UpdateSyncStatus(CoreInstructionHelpers.CoreStatusToSyncStatus(syncStatus.Status));
+                    UpdateSyncStatus(CoreInstructionHelpers.CoreStatusToSyncStatusOptions(syncStatus.Status));
                     break;
                 case EstablishSyncStream establishSyncStream:
                     if (receivingLines != null)
