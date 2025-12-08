@@ -60,11 +60,11 @@ public interface IPowerSyncDatabase : IEventStream<PowerSyncDBEvent>
 
     Task<NonQueryResult> Execute(string query, object[]? parameters = null);
 
-    Task<T[]> GetAll<T>(string sql, params object[]? parameters);
+    Task<T[]> GetAll<T>(string sql, object[]? parameters = null);
 
-    Task<T?> GetOptional<T>(string sql, params object[]? parameters);
+    Task<T?> GetOptional<T>(string sql, object[]? parameters = null);
 
-    Task<T> Get<T>(string sql, params object[]? parameters);
+    Task<T> Get<T>(string sql, object[]? parameters = null);
 
     Task<T> ReadLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null);
 
@@ -88,7 +88,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
     private static readonly int DEFAULT_WATCH_THROTTLE_MS = 30;
     private static readonly Regex POWERSYNC_TABLE_MATCH = new Regex(@"(^ps_data__|^ps_data_local__)", RegexOptions.Compiled);
 
-    public bool Closed;
+    public new bool Closed;
     public bool Ready;
 
     protected Task isReadyTask;
@@ -236,7 +236,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         );
 
         DateTime? lastCompleteSync = null;
-        
+
         // TODO: Will be altered/extended when reporting individual sync priority statuses is supported 
         foreach (var result in results)
         {

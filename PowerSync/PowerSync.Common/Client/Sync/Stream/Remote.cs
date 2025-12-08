@@ -124,6 +124,37 @@ public class Remote
         return JsonConvert.DeserializeObject<T>(responseData)!;
     }
 
+    /// <summary>
+    /// Posts to the stream endpoint and returns a raw NDJSON stream that can be read line by line.
+    /// </summary>
+    public async Task<Stream> PostStreamRaw(SyncStreamOptions options)
+    {
+        var requestMessage = await BuildRequest(HttpMethod.Post, options.Path, options.Data, options.Headers);
+        var response = await httpClient.SendAsync(requestMessage, HttpCompletionOption.ResponseHeadersRead, options.CancellationToken);
+
+        if (response.Content == null)
+        {
+            throw new HttpRequestException($"HTTP {response.StatusCode}: No content");
+        }
+
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            InvalidateCredentials();
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorText = await response.Content.ReadAsStringAsync();
+            throw new HttpRequestException($"HTTP {response.StatusCode}: {errorText}");
+        }
+
+        return await response.Content.ReadAsStreamAsync();
+    }
+
+
+    /// <summary>  
+    /// Originally used for the C# streaming sync implementation.
+    /// </summary>
     public async IAsyncEnumerable<StreamingSyncLine?> PostStream(SyncStreamOptions options)
     {
         using var requestMessage = await BuildRequest(HttpMethod.Post, options.Path, options.Data, options.Headers);

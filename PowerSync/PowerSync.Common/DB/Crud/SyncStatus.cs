@@ -1,21 +1,15 @@
 namespace PowerSync.Common.DB.Crud;
 
+using PowerSync.Common.Client.Sync.Stream;
 using Newtonsoft.Json;
+using Microsoft.Extensions.Options;
 
 public class SyncDataFlowStatus
 {
-    [JsonProperty("downloading")]
-    public bool Downloading { get; set; } = false;
+    [JsonProperty("downloading")] public bool Downloading { get; set; } = false;
 
-    [JsonProperty("uploading")]
-    public bool Uploading { get; set; } = false;
+    [JsonProperty("uploading")] public bool Uploading { get; set; } = false;
 
-    [JsonProperty("downloadError")]
-    public string? DownloadErrorMessage => DownloadError?.Message;
-
-    [JsonProperty("uploadError")]
-    public string? UploadErrorMessage => UploadError?.Message;
-    
     /// <summary>
     /// Error during downloading (including connecting).
     /// Cleared on the next successful data download.
@@ -29,11 +23,28 @@ public class SyncDataFlowStatus
     /// </summary>
     [JsonIgnore]
     public Exception? UploadError { get; set; } = null;
+
+
+    /// <summary>
+    /// Internal information about how far we are downloading operations in buckets.
+    /// </summary>
+    public Dictionary<string, BucketProgress>? DownloadProgress { get; set; } = null;
+}
+
+public class SyncPriorityStatus
+{
+    [JsonProperty("priority")] public int Priority { get; set; }
+
+    [JsonProperty("lastSyncedAt")] public DateTime? LastSyncedAt { get; set; }
+
+    [JsonProperty("hasSynced")] public bool? HasSynced { get; set; }
 }
 
 public class SyncStatusOptions
 {
-    public SyncStatusOptions() { }
+    public SyncStatusOptions()
+    {
+    }
 
     public SyncStatusOptions(SyncStatusOptions options)
     {
@@ -42,22 +53,21 @@ public class SyncStatusOptions
         DataFlow = options.DataFlow;
         LastSyncedAt = options.LastSyncedAt;
         HasSynced = options.HasSynced;
+        PriorityStatusEntries = options.PriorityStatusEntries;
     }
 
-    [JsonProperty("connected")]
-    public bool? Connected { get; set; }
+    [JsonProperty("connected")] public bool? Connected { get; set; }
 
-    [JsonProperty("connecting")]
-    public bool? Connecting { get; set; }
+    [JsonProperty("connecting")] public bool? Connecting { get; set; }
 
-    [JsonProperty("dataFlow")]
-    public SyncDataFlowStatus? DataFlow { get; set; }
+    [JsonProperty("dataFlow")] public SyncDataFlowStatus? DataFlow { get; set; }
 
-    [JsonProperty("lastSyncedAt")]
-    public DateTime? LastSyncedAt { get; set; }
+    [JsonProperty("lastSyncedAt")] public DateTime? LastSyncedAt { get; set; }
 
-    [JsonProperty("hasSynced")]
-    public bool? HasSynced { get; set; }
+    [JsonProperty("hasSynced")] public bool? HasSynced { get; set; }
+
+    [JsonProperty("priorityStatusEntries")]
+    public SyncPriorityStatus[]? PriorityStatusEntries { get; set; }
 }
 
 public class SyncStatus(SyncStatusOptions options)
@@ -85,19 +95,82 @@ public class SyncStatus(SyncStatusOptions options)
     /// </summary>
     public SyncDataFlowStatus DataFlowStatus => Options.DataFlow ?? new SyncDataFlowStatus();
 
+    /// <summary>
+    /// Provides sync status information for all bucket priorities, sorted by priority (highest first).
+    /// </summary>
+    public SyncPriorityStatus[] PriorityStatusEntries =>
+        (Options.PriorityStatusEntries ?? [])
+        .OrderBy(entry => entry.Priority)
+        .ToArray();
+
+    /// <summary>
+    /// A realtime progress report on how many operations have been downloaded and
+    /// how many are necessary in total to complete the next sync iteration.
+    /// </summary>
+    public SyncProgress? DownloadProgress()
+    {
+        var internalProgress = Options.DataFlow?.DownloadProgress;
+        if (internalProgress == null)
+        {
+            return null;
+        }
+
+        return new SyncProgress(internalProgress);
+    }
+
+    /// <summary>
+    /// Reports the sync status (a pair of HasSynced and LastSyncedAt fields)
+    /// for a specific bucket priority level.
+    ///
+    /// When buckets with different priorities are declared, PowerSync may choose to synchronize higher-priority
+    /// buckets first. When a consistent view over all buckets for all priorities up until the given priority is
+    /// reached, PowerSync makes data from those buckets available before lower-priority buckets have finished
+    /// syncing.
+    ///
+    /// This method returns the status for the requested priority or the next higher priority level that has
+    /// status information available. This is because when PowerSync makes data for a given priority available,
+    /// all buckets in higher-priorities are guaranteed to be consistent with that checkpoint.
+    /// For example, if PowerSync just finished synchronizing buckets in priority level 3, calling this method
+    /// with a priority of 1 may return information for priority level 3.
+    /// </summary>
+    public SyncPriorityStatus StatusForPriority(int priority)
+    {
+        foreach (var known in PriorityStatusEntries)
+        {
+            if (known.Priority >= priority)
+            {
+                return known;
+            }
+        }
+
+        // Fallback if no matching or higher-priority entry is found
+        return new SyncPriorityStatus
+        {
+            Priority = priority,
+            LastSyncedAt = LastSyncedAt,
+            HasSynced = HasSynced
+        };
+    }
+
+    private string SerializeObject()
+    {
+        return JsonConvert.SerializeObject(new { Options = Options, UploadErrorMessage = Options.DataFlow?.UploadError?.Message, DownloadErrorMessage = DataFlowStatus.DownloadError?.Message });
+    }
+
     public bool IsEqual(SyncStatus status)
     {
-        return JsonConvert.SerializeObject(Options) == JsonConvert.SerializeObject(status.Options);
+        return this.SerializeObject() == status.SerializeObject();
     }
 
     public string GetMessage()
     {
         var dataFlow = DataFlowStatus;
-        return $"SyncStatus<connected: {Connected} connecting: {Connecting} lastSyncedAt: {LastSyncedAt} hasSynced: {HasSynced}. Downloading: {dataFlow.Downloading}. Uploading: {dataFlow.Uploading}. UploadError: {dataFlow.UploadError}, DownloadError?: {dataFlow.DownloadError}>";
+        return
+            $"SyncStatus<connected: {Connected} connecting: {Connecting} lastSyncedAt: {LastSyncedAt} hasSynced: {HasSynced}. Downloading: {dataFlow.Downloading}. Uploading: {dataFlow.Uploading}. UploadError: ${dataFlow.UploadError}, DownloadError?: ${dataFlow.DownloadError}>";
     }
 
     public string ToJSON()
     {
-        return JsonConvert.SerializeObject(this);
+        return SerializeObject();
     }
 }

@@ -142,7 +142,7 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvent>, ILockContext
             var row = new Dictionary<string, object>();
             for (int i = 0; i < reader.FieldCount; i++)
             {
-                row[reader.GetName(i)] = reader.IsDBNull(i) ? null : reader.GetValue(i);
+                row[reader.GetName(i)] = reader.IsDBNull(i) ? null! : reader.GetValue(i);
             }
             rows.Add(row);
         }

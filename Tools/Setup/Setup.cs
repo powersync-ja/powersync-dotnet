@@ -7,10 +7,11 @@ using System.IO.Compression;
 
 public class PowerSyncSetup
 {
-    private const string VERSION = "0.3.14";
+    private const string VERSION = "0.4.9";
+
     private const string GITHUB_BASE_URL = $"https://github.com/powersync-ja/powersync-sqlite-core/releases/download/v{VERSION}";
-    private const string MAVEN_BASE_URL = $"https://repo1.maven.org/maven2/co/powersync/powersync-sqlite-core/{VERSION}";
-    
+    private const string MAVEN_BASE_URL = $"https://repo1.maven.org/maven2/com/powersync/powersync-sqlite-core/{VERSION}";
+
     private readonly HttpClient _httpClient;
     private readonly string _basePath;
 
@@ -37,7 +38,7 @@ public class PowerSyncSetup
     public async Task SetupDesktop()
     {
         Console.WriteLine("Setting up Desktop libraries...");
-        
+
         var runtimeConfigs = GetDesktopRuntimeConfigs();
         var commonPath = Path.Combine(_basePath, "PowerSync.Common");
 
@@ -51,10 +52,10 @@ public class PowerSyncSetup
     {
         return new Dictionary<string, RuntimeConfig>
         {
-            { "osx-x64", new RuntimeConfig("libpowersync_x64.dylib", "libpowersync.dylib") },
-            { "osx-arm64", new RuntimeConfig("libpowersync_aarch64.dylib", "libpowersync.dylib") },
-            { "linux-x64", new RuntimeConfig("libpowersync_x64.so", "libpowersync.so") },
-            { "linux-arm64", new RuntimeConfig("libpowersync_aarch64.so", "libpowersync.so") },
+            { "osx-x64", new RuntimeConfig("libpowersync_x64.macos.dylib", "libpowersync.dylib") },
+            { "osx-arm64", new RuntimeConfig("libpowersync_aarch64.macos.dylib", "libpowersync.dylib") },
+            { "linux-x64", new RuntimeConfig("libpowersync_x64.linux.so", "libpowersync.so") },
+            { "linux-arm64", new RuntimeConfig("libpowersync_aarch64.linux.so", "libpowersync.so") },
             { "win-x64", new RuntimeConfig("powersync_x64.dll", "powersync.dll") }
         };
     }
@@ -63,19 +64,19 @@ public class PowerSyncSetup
     {
         var (rid, config) = runtimeConfig;
         var nativeDir = Path.Combine(basePath, "runtimes", rid, "native");
-        
+
         try
         {
             Directory.CreateDirectory(nativeDir);
-            
+
             var downloadPath = Path.Combine(nativeDir, config.OriginalFileName);
             var finalPath = Path.Combine(nativeDir, config.FinalFileName);
-            
+
             var downloadUrl = $"{GITHUB_BASE_URL}/{config.OriginalFileName}";
-            
+
             await DownloadFile(downloadUrl, downloadPath);
             File.Move(downloadPath, finalPath, overwrite: true);
-            
+
             Console.WriteLine($"✓ {rid}: {config.OriginalFileName} → {config.FinalFileName}");
         }
         catch (Exception ex)
@@ -87,7 +88,7 @@ public class PowerSyncSetup
     public async Task SetupMauiIos()
     {
         Console.WriteLine("Setting up MAUI iOS libraries...");
-        
+
         var nativeDir = Path.Combine(_basePath, "PowerSync.Maui", "Platforms", "iOS", "NativeLibs");
         var config = new ArchiveConfig(
             "powersync-sqlite-core.xcframework.zip",
@@ -100,20 +101,20 @@ public class PowerSyncSetup
     public async Task SetupMauiAndroid()
     {
         Console.WriteLine("Setting up MAUI Android libraries...");
-        
+
         var nativeDir = Path.Combine(_basePath, "PowerSync.Maui", "Platforms", "Android", "jniLibs");
         var aarFileName = $"powersync-sqlite-core-{VERSION}.aar";
-        
+
         try
         {
             Directory.CreateDirectory(nativeDir);
-            
+
             var aarPath = Path.Combine(nativeDir, aarFileName);
             var downloadUrl = $"{MAVEN_BASE_URL}/{aarFileName}";
-            
+
             await DownloadFile(downloadUrl, aarPath);
             ExtractAarNativeLibraries(aarPath, nativeDir);
-            
+
             Console.WriteLine($"✓ Android: Extracted native libraries from {aarFileName}");
         }
         catch (Exception ex)
@@ -125,7 +126,7 @@ public class PowerSyncSetup
     private void ExtractAarNativeLibraries(string aarPath, string nativeDir)
     {
         var extractedDir = Path.Combine(nativeDir, "temp_extracted");
-        
+
         try
         {
             // Clean up any existing extraction
@@ -169,20 +170,20 @@ public class PowerSyncSetup
         try
         {
             Directory.CreateDirectory(nativeDir);
-            
+
             var downloadPath = Path.Combine(nativeDir, config.ArchiveFileName);
             var extractedPath = Path.Combine(nativeDir, config.ExtractedName);
             var downloadUrl = $"{baseUrl}/{config.ArchiveFileName}";
-            
+
             await DownloadFile(downloadUrl, downloadPath);
-            
+
             // Clean up existing extraction
             if (Directory.Exists(extractedPath))
                 Directory.Delete(extractedPath, recursive: true);
-            
+
             ZipFile.ExtractToDirectory(downloadPath, nativeDir);
             File.Delete(downloadPath);
-            
+
             Console.WriteLine($"✓ Extracted {config.ArchiveFileName} → {config.ExtractedName}");
         }
         catch (Exception ex)
@@ -196,7 +197,7 @@ public class PowerSyncSetup
         Console.WriteLine($"📥 Downloading: {Path.GetFileName(outputPath)}");
 
         using var response = await _httpClient.GetAsync(url);
-        
+
         if (!response.IsSuccessStatusCode)
         {
             throw new HttpRequestException($"Download failed: {response.StatusCode} {response.ReasonPhrase}");
@@ -223,7 +224,7 @@ public class PowerSyncSetup
             }
         }
     }
-   
+
     private record RuntimeConfig(string OriginalFileName, string FinalFileName);
     private record ArchiveConfig(string ArchiveFileName, string ExtractedName);
 }

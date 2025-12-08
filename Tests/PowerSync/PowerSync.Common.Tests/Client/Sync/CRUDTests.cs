@@ -45,8 +45,8 @@ public class CRUDTests : IAsyncLifetime
             JsonConvert.SerializeObject(new
             {
                 op = "PUT",
-                type = "assets",
                 id = testId,
+                type = "assets",
                 data = new { description = "test" }
             }),
             crudEntry.Data
@@ -80,8 +80,8 @@ public class CRUDTests : IAsyncLifetime
             JsonConvert.SerializeObject(new
             {
                 op = "PUT",
-                type = "assets",
                 id = testId,
+                type = "assets",
                 data = new { description = "test2" }
             }),
             crudEntry.Data
@@ -112,8 +112,8 @@ public class CRUDTests : IAsyncLifetime
             JsonConvert.SerializeObject(new
             {
                 op = "PATCH",
-                type = "assets",
                 id = testId,
+                type = "assets",
                 data = new { description = "test2" }
             }),
             crudEntry.Data
@@ -144,8 +144,8 @@ public class CRUDTests : IAsyncLifetime
             JsonConvert.SerializeObject(new
             {
                 op = "DELETE",
+                id = testId,
                 type = "assets",
-                id = testId
             }),
             crudEntry.Data
         );
@@ -234,8 +234,8 @@ public class CRUDTests : IAsyncLifetime
             JsonConvert.SerializeObject(new
             {
                 op = "PUT",
-                type = "assets",
                 id = testId,
+                type = "assets",
                 data = new { quantity = bigNumber }
             }),
             crudEntry.Data
@@ -267,8 +267,8 @@ public class CRUDTests : IAsyncLifetime
             JsonConvert.SerializeObject(new
             {
                 op = "PUT",
-                type = "assets",
                 id = testId,
+                type = "assets",
                 data = new { quantity = bigNumber.ToString() }
             }),
             crudEntry.Data
@@ -287,8 +287,8 @@ public class CRUDTests : IAsyncLifetime
             JsonConvert.SerializeObject(new
             {
                 op = "PATCH",
-                type = "assets",
                 id = testId,
+                type = "assets",
                 data = new { description = "updated", quantity = bigNumber + 1 }
             }),
             crudEntry.Data

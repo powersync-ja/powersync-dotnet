@@ -25,6 +25,8 @@ public interface IEventStream<T>
 public class EventStream<T> : IEventStream<T>
 {
 
+    public bool Closed = false;
+
     // Closest implementation to a ConcurrentSet<T> in .Net
     private readonly ConcurrentDictionary<Channel<T>, byte> subscribers = new();
 
@@ -158,6 +160,7 @@ public class EventStream<T> : IEventStream<T>
             subscriber.Writer.TryComplete();
             RemoveSubscriber(subscriber);
         }
+        Closed = true;
     }
 
     private void RemoveSubscriber(Channel<T> channel)
