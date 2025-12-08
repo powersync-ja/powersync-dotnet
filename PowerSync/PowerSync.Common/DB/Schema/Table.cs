@@ -15,9 +15,9 @@ public class TableOptions(
 {
     public Dictionary<string, List<string>> Indexes { get; set; } = indexes ?? [];
 
-    public bool LocalOnly { get; } = localOnly ?? false;
+    public bool LocalOnly { get; set; } = localOnly ?? false;
 
-    public bool InsertOnly { get; } = insertOnly ?? false;
+    public bool InsertOnly { get; set; } = insertOnly ?? false;
 
     public string? ViewName { get; } = viewName;
 

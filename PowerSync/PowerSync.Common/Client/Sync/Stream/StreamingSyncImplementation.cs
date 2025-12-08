@@ -537,29 +537,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                     }
                     break;
                 case UpdateSyncStatus syncStatus:
-                    var info = syncStatus.Status;
-                    var coreCompleteSync =
-                        info.PriorityStatus.FirstOrDefault(s => s.Priority == SyncProgress.FULL_SYNC_PRIORITY);
-                    var completeSync = coreCompleteSync != null ? CoreStatusToSyncStatus(coreCompleteSync) : null;
-
-                    UpdateSyncStatus(new SyncStatusOptions
-                    {
-                        Connected = info.Connected,
-                        Connecting = info.Connecting,
-                        LastSyncedAt = completeSync?.LastSyncedAt,
-                        HasSynced = completeSync?.HasSynced,
-                        PriorityStatusEntries = info.PriorityStatus.Select(CoreStatusToSyncStatus).ToArray(),
-                        DataFlow = new SyncDataFlowStatus
-                        {
-                            Downloading = info.Downloading != null,
-                            DownloadProgress = info.Downloading?.Buckets
-                        }
-                    },
-                        new UpdateSyncStatusOptions
-                        {
-                            ClearDownloadError = true,
-                        }
-                    );
+                    UpdateSyncStatus(CoreInstructionHelpers.CoreStatusToSyncStatus(syncStatus.Status));
                     break;
                 case EstablishSyncStream establishSyncStream:
                     if (receivingLines != null)
@@ -1048,7 +1026,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                 {
                     Uploading = options.DataFlow?.Uploading ?? SyncStatus.DataFlowStatus.Uploading,
                     Downloading = options.DataFlow?.Downloading ?? SyncStatus.DataFlowStatus.Downloading,
-                    DownloadProgress = options.DataFlow?.DownloadProgress ?? SyncStatus.DataFlowStatus.DownloadProgress
+                    DownloadProgress = options.DataFlow?.DownloadProgress ?? SyncStatus.DataFlowStatus.DownloadProgress,
                     DownloadError = updateOptions?.ClearDownloadError == true ? null : options.DataFlow?.DownloadError ?? SyncStatus.DataFlowStatus.DownloadError,
                     UploadError = updateOptions?.ClearUploadError == true ? null : options.DataFlow?.UploadError ?? SyncStatus.DataFlowStatus.UploadError,
                 }
@@ -1069,16 +1047,6 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
         {
             logger.LogError("Error updating sync status: {message}", ex.Message);
         }
-    }
-
-    private static DB.Crud.SyncPriorityStatus CoreStatusToSyncStatus(SyncPriorityStatus status)
-    {
-        return new DB.Crud.SyncPriorityStatus
-        {
-            Priority = status.Priority,
-            HasSynced = status.HasSynced ?? null,
-            LastSyncedAt = status?.LastSyncedAt != null ? new DateTime(status!.LastSyncedAt) : null
-        };
     }
 
     private async Task DelayRetry()
