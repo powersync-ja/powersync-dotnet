@@ -66,8 +66,13 @@ public class StreamingSyncImplementationOptions : AdditionalConnectionOptions
     public ILogger? Logger { get; init; }
 }
 
-public class BaseConnectionOptions(Dictionary<string, object>? parameters = null, SyncClientImplementation? clientImplementation = null)
+public class BaseConnectionOptions(Dictionary<string, object>? parameters = null, SyncClientImplementation? clientImplementation = null, Dictionary<string, string>? appMetadata = null)
 {
+    /// <summary>
+    /// A set of metadata to be included in service logs.
+    /// </summary>
+    public Dictionary<string, string>? AppMetadata { get; set; } = appMetadata;
+
     /// <summary>
     /// These parameters are passed to the sync rules and will be available under the `user_parameters` object.
     /// </summary>
@@ -81,6 +86,9 @@ public class BaseConnectionOptions(Dictionary<string, object>? parameters = null
 
 public class RequiredPowerSyncConnectionOptions : BaseConnectionOptions
 {
+
+    public new Dictionary<string, string> AppMetadata { get; set; } = new();
+
     public new Dictionary<string, object> Params { get; set; } = new();
 
     public new SyncClientImplementation ClientImplementation { get; set; } = new();
@@ -120,6 +128,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
 {
     public static RequiredPowerSyncConnectionOptions DEFAULT_STREAM_CONNECTION_OPTIONS = new()
     {
+        AppMetadata = [],
         Params = [],
         ClientImplementation = SyncClientImplementation.RUST
     };
@@ -405,6 +414,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
             {
                 var resolvedOptions = new RequiredPowerSyncConnectionOptions
                 {
+                    AppMetadata = options?.AppMetadata ?? DEFAULT_STREAM_CONNECTION_OPTIONS.AppMetadata,
                     Params = options?.Params ?? DEFAULT_STREAM_CONNECTION_OPTIONS.Params,
                     ClientImplementation = options?.ClientImplementation ?? DEFAULT_STREAM_CONNECTION_OPTIONS.ClientImplementation
                 };
@@ -581,7 +591,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
 
         try
         {
-            await Control(PowerSyncControlCommand.START, JsonConvert.SerializeObject(new { parameters = resolvedOptions.Params }));
+            await Control(PowerSyncControlCommand.START, JsonConvert.SerializeObject(new { parameters = resolvedOptions.Params, app_metadata = resolvedOptions.AppMetadata }));
 
             notifyCompletedUploads = () =>
             {

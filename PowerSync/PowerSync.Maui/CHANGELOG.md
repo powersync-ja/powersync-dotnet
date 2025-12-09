@@ -1,5 +1,9 @@
 # PowerSync.Maui Changelog
 
+## 0.0.4-alpha.1
+- Upstream PowerSync.Common version bump
+- Added ability to specify `AppMetadata` sync/stream requests (see Common changelog).
+
 ## 0.0.3-alpha.1
 - Upstream PowerSync.Common version bump
 - Using the latest (0.4.9) version of the core extension, it introduces support for the Rust Sync implementation and also makes it the default - users can still opt out and use the legacy C# sync implementation as option when calling `connect()`.
