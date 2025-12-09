@@ -12,7 +12,6 @@ db.Connect(connector, new PowerSync.Common.Client.Sync.Stream.PowerSyncConnectio
     AppMetadata = new Dictionary<string, string>
     {
         { "app_version", myAppVersion },
-
     }
 });
 ```

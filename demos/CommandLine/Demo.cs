@@ -103,7 +103,6 @@ class Demo
             AppMetadata = new Dictionary<string, string>
             {
                 { "app_version", GetAppVersion() },
-
             }
         });
         await db.WaitForFirstSync();
