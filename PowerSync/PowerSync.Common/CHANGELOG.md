@@ -1,5 +1,22 @@
 # PowerSync.Common Changelog
 
+## 0.0.6-alpha.1
+- Added ability to specify `AppMetadata` for sync/stream requests.
+
+Note: This requires a PowerSync service version `>=1.17.0` in order for logs to display metadata.
+
+```csharp
+db.Connect(connector, new PowerSync.Common.Client.Sync.Stream.PowerSyncConnectionOptions
+{
+    // This will be included in PowerSync service logs
+    AppMetadata = new Dictionary<string, string>
+    {
+        { "app_version", myAppVersion },
+
+    }
+});
+```
+
 ## 0.0.5-alpha.1
 - Using the latest (0.4.9) version of the core extension, it introduces support for the Rust Sync implementation and also makes it the default - users can still opt out and use the legacy C# sync implementation as option when calling `connect()`.
 

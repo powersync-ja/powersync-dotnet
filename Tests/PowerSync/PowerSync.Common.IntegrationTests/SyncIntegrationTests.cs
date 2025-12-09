@@ -50,6 +50,11 @@ public class SyncIntegrationTests : IAsyncLifetime
             await db.Connect(connector, new PowerSyncConnectionOptions
             {
                 ClientImplementation = SyncClientImplementation.RUST,
+                AppMetadata = new Dictionary<string, string>
+                {
+                    { "app_version", "1.0.0-integration-tests" },
+                    { "environment", "integration-tests" }
+                }
             });
             await db.WaitForFirstSync();
         }
