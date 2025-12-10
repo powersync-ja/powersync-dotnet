@@ -218,8 +218,66 @@ public class SyncIntegrationTests : IAsyncLifetime
         await backendInsertWatch.Task;
     }
 
+
+    /// <summary>
+    /// Helper that requires manual setup of the data to verify that download progress updates are working.
+    /// Ensure backend has 5000+ entries, then run this test to see progress updates in the console. 
+    /// </summary>
+    // [IntegrationFact(Timeout = 10000)]
+    // public async Task InitialSyncDownloadProgressTest()
+    // {
+    //     ILoggerFactory loggerFactory = LoggerFactory.Create(builder =>
+    //     {
+    //         builder.AddConsole();
+    //         builder.SetMinimumLevel(LogLevel.Information);
+    //     });
+
+    //     var logger = loggerFactory.CreateLogger("PowerSyncLogger");
+
+    //     nodeClient = new NodeClient(userId);
+    //     db = new PowerSyncDatabase(new PowerSyncDatabaseOptions
+    //     {
+    //         Database = new SQLOpenOptions { DbFilename = "powersync-sync-progress-tests.db" },
+    //         Schema = TestSchema.PowerSyncSchema,
+    //         Logger = logger
+
+    //     });
+    //     await db.Init();
+    //     await db.DisconnectAndClear();
+
+
+    //     var clearListener = db.RunListener((update) =>
+    //     {
+    //         if (update.StatusChanged != null)
+    //         {
+    //             try
+    //             {
+    //                 Console.WriteLine("Total: " + update.StatusChanged.DownloadProgress()?.TotalOperations + " Downloaded: " + update.StatusChanged.DownloadProgress()?.DownloadedOperations);
+    //                 Console.WriteLine("Synced: " + Math.Round((decimal)(update.StatusChanged.DownloadProgress()?.DownloadedFraction * 100)) + "%");
+
+    //             }
+    //             catch (Exception ex)
+    //             {
+    //                 Console.WriteLine("Exception reading DownloadProgress: " + ex);
+    //             }
+    //         }
+    //     });
+
+    //     var connector = new NodeConnector(userId);
+    //     await db.Connect(connector);
+    //     await db.WaitForFirstSync();
+
+    //     clearListener.Dispose();
+    //     await db.DisconnectAndClear();
+    //     await db.Close();
+    // }
+
     private async Task ClearAllData()
     {
+        if (db.Closed)
+        {
+            return;
+        }
         // Inefficient but simple way to clear all data, avoiding payload limitations
         var results = await db.GetAll<ListResult>("select * from lists");
         foreach (var item in results)
