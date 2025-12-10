@@ -9,7 +9,7 @@ public class TableOptions(
     bool? insertOnly = null,
     string? viewName = null,
     bool? trackMetadata = null,
-    TrackPreviousOptions? trackPreviousOptions = null,
+    TrackPreviousOptions? trackPreviousValues = null,
     bool? ignoreEmptyUpdates = null
 )
 {
@@ -25,18 +25,18 @@ public class TableOptions(
     /// Whether to add a hidden `_metadata` column that will be enabled for updates to attach custom
     /// information about writes that will be reported through [CrudEntry.metadata].
     /// </summary>
-    public bool TrackMetadata { get; } = trackMetadata ?? false;
+    public bool TrackMetadata { get; set; } = trackMetadata ?? false;
 
     /// <summary>
     /// When set to a non-null value, track old values of columns
     /// </summary>
-    public TrackPreviousOptions? TrackPreviousOptions { get; } = trackPreviousOptions ?? null;
+    public TrackPreviousOptions? TrackPreviousValues { get; set; } = trackPreviousValues ?? null;
 
     /// <summary>
     /// Whether an `UPDATE` statement that doesn't change any values should be ignored when creating
     /// CRUD entries.
     /// </summary>
-    public bool IgnoreEmptyUpdates { get; } = ignoreEmptyUpdates ?? false;
+    public bool IgnoreEmptyUpdates { get; set; } = ignoreEmptyUpdates ?? false;
 }
 
 /// <summary>
@@ -53,8 +53,7 @@ public class TrackPreviousOptions
     public List<string>? Columns { get; set; }
 
     /// <summary>
-    /// Whether to only include old values when they were changed by an update, instead of always
-    /// including all old values,
+    /// When enabled, only include values that have actually been changed by an update.
     /// </summary>
     [JsonProperty("onlyWhenChanged")]
     public bool? OnlyWhenChanged { get; set; }
@@ -117,7 +116,7 @@ public class Table
             throw new Exception("Can't include metadata for local-only tables.");
         }
 
-        if (Options.TrackPreviousOptions != null && Options.LocalOnly)
+        if (Options.TrackPreviousValues != null && Options.LocalOnly)
         {
             throw new Exception("Can't include old values for local-only tables.");
         }
@@ -161,7 +160,7 @@ public class Table
 
     public string ToJSON(string Name = "")
     {
-        var trackPrevious = Options.TrackPreviousOptions;
+        var trackPrevious = Options.TrackPreviousValues;
 
         var jsonObject = new
         {

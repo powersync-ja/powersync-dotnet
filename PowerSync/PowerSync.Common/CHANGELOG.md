@@ -1,5 +1,11 @@
 # PowerSync.Common Changelog
 
+## 0.0.6-alpha.1
+- Add `trackPreviousValues` option on `TableOptions` which sets `CrudEntry.PreviousValues` to previous values on updates.
+- Add `trackMetadata` option on `TableOptions` which adds a `_metadata` column that can be used for updates. The configured metadata is available through `CrudEntry.Metadata`.
+- Add `ignoreEmptyUpdates` option on `TableOptions` which skips creating CRUD entries for updates that don't change any values.
+
+
 ## 0.0.5-alpha.1
 - Using the latest (0.4.9) version of the core extension, it introduces support for the Rust Sync implementation and also makes it the default - users can still opt out and use the legacy C# sync implementation as option when calling `connect()`.
 
