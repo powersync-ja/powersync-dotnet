@@ -1,8 +1,4 @@
-using Newtonsoft.Json;
 using PowerSync.Common.Client;
-using System.Data.Common;
-using System.Diagnostics;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using PowerSync.Common.Client.Sync.Stream;
 
@@ -13,6 +9,8 @@ namespace PowerSync.Common.IntegrationTests;
 public class SyncIntegrationTests : IAsyncLifetime
 {
     private record ListResult(string id, string name, string owner_id, string created_at);
+
+    private record TodoResult(string id, string list_id, string content, string owner_id, string created_at);
 
     private string userId = Uuid();
 
@@ -253,7 +251,7 @@ public class SyncIntegrationTests : IAsyncLifetime
     //             try
     //             {
     //                 Console.WriteLine("Total: " + update.StatusChanged.DownloadProgress()?.TotalOperations + " Downloaded: " + update.StatusChanged.DownloadProgress()?.DownloadedOperations);
-    //                 Console.WriteLine("Synced: " + Math.Round((decimal)(update.StatusChanged.DownloadProgress()?.DownloadedFraction * 100)) + "%");
+    //                 Console.WriteLine("Synced: " + Math.Round((decimal)((update.StatusChanged.DownloadProgress()?.DownloadedFraction ?? 0) * 100)) + "%");
 
     //             }
     //             catch (Exception ex)
@@ -266,6 +264,7 @@ public class SyncIntegrationTests : IAsyncLifetime
     //     var connector = new NodeConnector(userId);
     //     await db.Connect(connector);
     //     await db.WaitForFirstSync();
+
 
     //     clearListener.Dispose();
     //     await db.DisconnectAndClear();

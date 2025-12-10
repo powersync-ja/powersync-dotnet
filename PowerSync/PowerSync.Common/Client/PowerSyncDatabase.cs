@@ -80,8 +80,6 @@ public interface IPowerSyncDatabase : IEventStream<PowerSyncDBEvent>
 
 public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDatabase
 {
-    private static readonly int FULL_SYNC_PRIORITY = 2147483647;
-
     public IDBAdapter Database;
     private Schema schema;
 
