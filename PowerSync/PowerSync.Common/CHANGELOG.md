@@ -1,7 +1,7 @@
 # PowerSync.Common Changelog
 
 ## 0.0.6-alpha.1
-- Updated to the lastest version (0.4.10) of the core extension.
+- Updated to the latest version (0.4.10) of the core extension.
 - Dropping support for the legacy C# sync implementation.
 - Add `trackPreviousValues` option on `TableOptions` which sets `CrudEntry.PreviousValues` to previous values on updates.
 - Add `trackMetadata` option on `TableOptions` which adds a `_metadata` column that can be used for updates. The configured metadata is available through `CrudEntry.Metadata`.
