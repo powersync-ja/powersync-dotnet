@@ -138,7 +138,7 @@ public class CoreInstructionHelpers
         {
             Priority = status.Priority,
             HasSynced = status.HasSynced ?? null,
-            LastSyncedAt = status?.LastSyncedAt != null ? new DateTime(status!.LastSyncedAt) : null
+            LastSyncedAt = status?.LastSyncedAt != null ? DateTimeOffset.FromUnixTimeSeconds(status!.LastSyncedAt).DateTime : null
         };
     }
 

@@ -48,28 +48,6 @@ public class CrudEntryDataJSON
     public string? Metadata { get; set; }
 }
 
-public class CrudEntryOutputJSON
-{
-    [JsonProperty("op_id")]
-    public int OpId { get; set; }
-
-    [JsonProperty("op")]
-    public UpdateType Op { get; set; }
-
-    [JsonProperty("type")]
-    public string Type { get; set; } = null!;
-
-    [JsonProperty("id")]
-    public string Id { get; set; } = null!;
-
-    [JsonProperty("tx_id")]
-    public long? TransactionId { get; set; }
-
-    [JsonProperty("data")]
-    public Dictionary<string, object>? Data { get; set; }
-}
-
-
 public class CrudEntry(
     int clientId,
     UpdateType op,
@@ -84,6 +62,7 @@ public class CrudEntry(
     public int ClientId { get; private set; } = clientId;
     public string Id { get; private set; } = id;
     public UpdateType Op { get; private set; } = op;
+
     public Dictionary<string, object>? OpData { get; private set; } = opData;
     public string Table { get; private set; } = table;
     public long? TransactionId { get; private set; } = transactionId;
