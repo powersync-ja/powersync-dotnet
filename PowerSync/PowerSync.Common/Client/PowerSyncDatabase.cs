@@ -241,14 +241,14 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         catch (Exception e)
         {
             throw new Exception(
-                $"Unsupported PowerSync extension version. Need >=0.4.10 <1.0.0, got: {sdkVersion}. Details: {e.Message}"
+                $"Unsupported PowerSync extension version. Need >=0.4.5 <1.0.0, got: {sdkVersion}. Details: {e.Message}"
             );
         }
 
-        // Validate version is >= 0.4.10 and < 1.0.0
-        if (versionInts[0] != 0 || versionInts[1] < 4 || (versionInts[1] == 4 && versionInts[2] < 10))
+        // Validate version is >= 0.4.5 and < 1.0.0
+        if (versionInts[0] != 0 || versionInts[1] < 4 || (versionInts[1] == 4 && versionInts[2] < 5))
         {
-            throw new Exception($"Unsupported PowerSync extension version. Need >=0.4.10 <1.0.0, got: {sdkVersion}");
+            throw new Exception($"Unsupported PowerSync extension version. Need >=0.4.5 <1.0.0, got: {sdkVersion}");
         }
     }
 

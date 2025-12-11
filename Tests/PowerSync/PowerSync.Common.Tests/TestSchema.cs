@@ -40,7 +40,7 @@ public class TestSchema
         return new Schema(new Dictionary<string, Table>
         {
             { "assets", customAssets },
-            // { "customers", Customers }
+            { "customers", Customers }
         });
     }
 }
