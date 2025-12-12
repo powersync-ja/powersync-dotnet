@@ -43,10 +43,7 @@ public class SyncIntegrationTests : IAsyncLifetime
         Console.WriteLine($"Using User ID: {userId}");
         try
         {
-            await db.Connect(connector, new PowerSyncConnectionOptions
-            {
-                ClientImplementation = SyncClientImplementation.RUST,
-            });
+            await db.Connect(connector);
             await db.WaitForFirstSync();
         }
         catch (Exception ex)

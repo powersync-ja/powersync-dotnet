@@ -12,22 +12,6 @@ using PowerSync.Common.Client.Sync.Bucket;
 using PowerSync.Common.DB.Crud;
 using PowerSync.Common.Utils;
 
-
-
-public enum SyncClientImplementation
-{
-
-    /// <summary>
-    /// This implementation offloads the sync line decoding and handling into the PowerSync core extension.
-    ///
-    /// ## Compatibility warning
-    ///
-    /// The Rust sync client stores sync data in a format that is slightly different than the one used
-    /// by the old C# implementation. When adopting the RUST client on existing
-    /// databases, the PowerSync SDK will migrate the format automatically.
-    RUST
-}
-
 public class AdditionalConnectionOptions(int? retryDelayMs = null, int? crudUploadThrottleMs = null)
 {
     /// <summary>
@@ -66,24 +50,17 @@ public class StreamingSyncImplementationOptions : AdditionalConnectionOptions
     public ILogger? Logger { get; init; }
 }
 
-public class BaseConnectionOptions(Dictionary<string, object>? parameters = null, SyncClientImplementation? clientImplementation = null)
+public class BaseConnectionOptions(Dictionary<string, object>? parameters = null)
 {
     /// <summary>
     /// These parameters are passed to the sync rules and will be available under the `user_parameters` object.
     /// </summary>
     public Dictionary<string, object>? Params { get; set; } = parameters;
-
-    /// <summary>
-    /// Whether to use the RUST or C# sync client implementation.
-    /// </summary>
-    public SyncClientImplementation? ClientImplementation { get; set; } = clientImplementation;
 }
 
 public class RequiredPowerSyncConnectionOptions : BaseConnectionOptions
 {
     public new Dictionary<string, object> Params { get; set; } = new();
-
-    public new SyncClientImplementation ClientImplementation { get; set; } = new();
 }
 
 public class StreamingSyncImplementationEvent
@@ -121,7 +98,6 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
     public static RequiredPowerSyncConnectionOptions DEFAULT_STREAM_CONNECTION_OPTIONS = new()
     {
         Params = [],
-        ClientImplementation = SyncClientImplementation.RUST
     };
 
     public static readonly int DEFAULT_CRUD_UPLOAD_THROTTLE_MS = 1000;
@@ -406,17 +382,10 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                 var resolvedOptions = new RequiredPowerSyncConnectionOptions
                 {
                     Params = options?.Params ?? DEFAULT_STREAM_CONNECTION_OPTIONS.Params,
-                    ClientImplementation = options?.ClientImplementation ?? DEFAULT_STREAM_CONNECTION_OPTIONS.ClientImplementation
                 };
 
-                if (resolvedOptions.ClientImplementation == SyncClientImplementation.RUST)
-                {
-                    return await RustStreamingSyncIteration(signal, resolvedOptions);
-                }
-                else
-                {
-                    throw new NotImplementedException("C_SHARP sync client implementation is no longer supported.");
-                }
+
+                return await RustStreamingSyncIteration(signal, resolvedOptions);
             }
         });
     }
