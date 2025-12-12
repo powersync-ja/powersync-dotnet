@@ -692,6 +692,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                 IncludeChecksum = true,
                 RawData = true,
                 Parameters = resolvedOptions.Params,
+                AppMetadata = resolvedOptions.AppMetadata,
                 ClientId = clientId
             }
         };
