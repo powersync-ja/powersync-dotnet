@@ -3,10 +3,13 @@ namespace CommandLine;
 using CommandLine.Helpers;
 using CommandLine.Models.Supabase;
 using CommandLine.Utils;
+
 using Newtonsoft.Json;
+
 using PowerSync.Common.Client;
 using PowerSync.Common.Client.Connection;
 using PowerSync.Common.DB.Crud;
+
 using Supabase;
 using Supabase.Gotrue;
 using Supabase.Postgrest.Exceptions;

@@ -20,7 +20,7 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvent>, ILockContext
 {
 
     public SqliteConnection Db;
-    private List<UpdateNotification> updateBuffer;
+    private readonly List<UpdateNotification> updateBuffer;
     public MDSQLiteConnection(MDSQLiteConnectionOptions options)
     {
         Db = options.Database;

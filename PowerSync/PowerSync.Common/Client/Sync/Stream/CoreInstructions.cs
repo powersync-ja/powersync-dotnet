@@ -1,5 +1,5 @@
-using Newtonsoft.Json.Linq;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace PowerSync.Common.Client.Sync.Stream;
 

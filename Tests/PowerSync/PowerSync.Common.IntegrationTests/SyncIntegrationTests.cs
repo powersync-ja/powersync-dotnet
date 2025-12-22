@@ -1,9 +1,12 @@
-using Newtonsoft.Json;
-using PowerSync.Common.Client;
 using System.Data.Common;
 using System.Diagnostics;
 using System.Threading.Tasks;
+
 using Microsoft.Extensions.Logging;
+
+using Newtonsoft.Json;
+
+using PowerSync.Common.Client;
 using PowerSync.Common.Client.Sync.Stream;
 
 
@@ -14,7 +17,7 @@ public class SyncIntegrationTests : IAsyncLifetime
 {
     private record ListResult(string id, string name, string owner_id, string created_at);
 
-    private string userId = Uuid();
+    private readonly string userId = Uuid();
 
     private NodeClient nodeClient = default!;
 

@@ -1,8 +1,10 @@
 namespace PowerSync.Common.DB.Crud;
 
-using PowerSync.Common.Client.Sync.Stream;
-using Newtonsoft.Json;
 using Microsoft.Extensions.Options;
+
+using Newtonsoft.Json;
+
+using PowerSync.Common.Client.Sync.Stream;
 
 public class SyncDataFlowStatus
 {

@@ -1,8 +1,10 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using MAUITodo.Models;
+
+using Microsoft.Extensions.Logging;
+
 using PowerSync.Common.Client;
 using PowerSync.Common.MDSQLite;
 using PowerSync.Maui.SQLite;
-using MAUITodo.Models;
 
 namespace MAUITodo.Data;
 

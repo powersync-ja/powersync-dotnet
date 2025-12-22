@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+
 using PowerSync.Common.Client;
 
 namespace PowersyncDotnetTodoList.ViewModels

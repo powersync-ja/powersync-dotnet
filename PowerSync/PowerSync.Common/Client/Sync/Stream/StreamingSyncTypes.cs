@@ -1,8 +1,9 @@
 namespace PowerSync.Common.Client.Sync.Stream;
 
+using Newtonsoft.Json;
+
 using PowerSync.Common.Client.Sync.Bucket;
 using PowerSync.Common.DB.Crud;
-using Newtonsoft.Json;
 
 public class ContinueCheckpointRequest
 {

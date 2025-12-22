@@ -4,7 +4,9 @@ using System.Threading.Tasks;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
+
 using Newtonsoft.Json;
+
 using PowerSync.Common.Client;
 using PowerSync.Common.Client.Sync.Bucket;
 using PowerSync.Common.DB.Schema;

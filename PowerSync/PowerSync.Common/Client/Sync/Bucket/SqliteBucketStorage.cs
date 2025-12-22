@@ -28,9 +28,9 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
     private static readonly int COMPACT_OPERATION_INTERVAL = 1000;
     private int compactCounter = COMPACT_OPERATION_INTERVAL;
 
-    private ILogger logger;
+    private readonly ILogger logger;
 
-    private CancellationTokenSource updateCts;
+    private readonly CancellationTokenSource updateCts;
 
     private record ExistingTableRowsResult(string name);
 

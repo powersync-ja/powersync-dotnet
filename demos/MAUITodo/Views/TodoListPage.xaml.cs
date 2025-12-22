@@ -1,6 +1,7 @@
-﻿using PowerSync.Common.Client;
-using MAUITodo.Data;
+﻿using MAUITodo.Data;
 using MAUITodo.Models;
+
+using PowerSync.Common.Client;
 
 namespace MAUITodo.Views;
 
@@ -100,4 +101,3 @@ public partial class TodoListPage
         }
     }
 }
-

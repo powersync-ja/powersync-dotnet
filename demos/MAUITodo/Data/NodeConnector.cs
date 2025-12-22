@@ -1,5 +1,6 @@
 ﻿using System.Text;
 using System.Text.Json;
+
 using PowerSync.Common.Client;
 using PowerSync.Common.Client.Connection;
 using PowerSync.Common.DB.Crud;
