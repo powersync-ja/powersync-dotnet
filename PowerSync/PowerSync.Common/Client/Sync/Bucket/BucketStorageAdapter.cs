@@ -2,6 +2,7 @@
 namespace PowerSync.Common.Client.Sync.Bucket;
 
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 
 using PowerSync.Common.DB.Crud;
@@ -54,12 +55,18 @@ public class SyncLocalDatabaseResult
     public override bool Equals(object? obj)
     {
         if (obj is not SyncLocalDatabaseResult other) return false;
-        return JsonConvert.SerializeObject(this) == JsonConvert.SerializeObject(other);
+        return Ready == other.Ready
+            && CheckpointValid == other.CheckpointValid
+            && CompareUtils.ArraysEqual(CheckpointFailures, other.CheckpointFailures);
     }
 
     public override int GetHashCode()
     {
-        return JsonConvert.SerializeObject(this).GetHashCode();
+        return HashCode.Combine(
+            Ready,
+            CheckpointValid,
+            HashUtils.GetHashCodeArray(CheckpointFailures)
+        );
     }
 }
 
