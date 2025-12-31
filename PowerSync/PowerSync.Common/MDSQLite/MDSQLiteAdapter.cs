@@ -144,29 +144,29 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
         readConnection?.Close();
     }
 
-    public async Task<NonQueryResult> Execute(string query, object[]? parameters = null)
+    public async Task<NonQueryResult> Execute(string query, object?[]? parameters = null)
     {
         return await WriteLock((ctx) => ctx.Execute(query, parameters));
     }
 
-    public Task<QueryResult> ExecuteBatch(string query, object[][]? parameters = null)
+    public Task<QueryResult> ExecuteBatch(string query, object?[][]? parameters = null)
     {
         // https://learn.microsoft.com/en-gb/dotnet/standard/data/sqlite/batching
         throw new NotImplementedException();
     }
 
-    public async Task<T> Get<T>(string sql, object[]? parameters = null)
+    public async Task<T> Get<T>(string sql, object?[]? parameters = null)
     {
         return await ReadLock((ctx) => ctx.Get<T>(sql, parameters));
         ;
     }
 
-    public async Task<T[]> GetAll<T>(string sql, object[]? parameters = null)
+    public async Task<T[]> GetAll<T>(string sql, object?[]? parameters = null)
     {
         return await ReadLock((ctx) => ctx.GetAll<T>(sql, parameters));
     }
 
-    public async Task<T?> GetOptional<T>(string sql, object[]? parameters = null)
+    public async Task<T?> GetOptional<T>(string sql, object?[]? parameters = null)
     {
         return await ReadLock((ctx) => ctx.GetOptional<T>(sql, parameters));
     }
@@ -302,22 +302,22 @@ public class MDSQLiteTransaction(MDSQLiteConnection connection) : ITransaction
         await connection.Execute("ROLLBACK");
     }
 
-    public Task<NonQueryResult> Execute(string query, object[]? parameters = null)
+    public Task<NonQueryResult> Execute(string query, object?[]? parameters = null)
     {
         return connection.Execute(query, parameters);
     }
 
-    public Task<T> Get<T>(string sql, object[]? parameters = null)
+    public Task<T> Get<T>(string sql, object?[]? parameters = null)
     {
         return connection.Get<T>(sql, parameters);
     }
 
-    public Task<T[]> GetAll<T>(string sql, object[]? parameters = null)
+    public Task<T[]> GetAll<T>(string sql, object?[]? parameters = null)
     {
         return connection.GetAll<T>(sql, parameters);
     }
 
-    public Task<T?> GetOptional<T>(string sql, object[]? parameters = null)
+    public Task<T?> GetOptional<T>(string sql, object?[]? parameters = null)
     {
         return connection.GetOptional<T>(sql, parameters);
     }

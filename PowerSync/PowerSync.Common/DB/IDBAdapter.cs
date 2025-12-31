@@ -30,19 +30,19 @@ public class QueryResult
 public interface IDBGetUtils
 {
     // Execute a read-only query and return results.
-    Task<T[]> GetAll<T>(string sql, params object[]? parameters);
+    Task<T[]> GetAll<T>(string sql, params object?[]? parameters);
 
     // Execute a read-only query and return the first result, or null if the ResultSet is empty.
-    Task<T?> GetOptional<T>(string sql, params object[]? parameters);
+    Task<T?> GetOptional<T>(string sql, params object?[]? parameters);
 
     // Execute a read-only query and return the first result, error if the ResultSet is empty.
-    Task<T> Get<T>(string sql, params object[]? parameters);
+    Task<T> Get<T>(string sql, params object?[]? parameters);
 }
 
 public interface ILockContext : IDBGetUtils
 {
     // Execute a single write statement.
-    Task<NonQueryResult> Execute(string query, object[]? parameters = null);
+    Task<NonQueryResult> Execute(string query, object?[]? parameters = null);
 }
 
 public interface ITransaction : ILockContext
@@ -117,7 +117,7 @@ public interface IDBAdapter : IEventStream<DBAdapterEvent>, ILockContext
     /// <summary>
     /// Execute a batch of write statements.
     /// </summary>
-    Task<QueryResult> ExecuteBatch(string query, object[][]? parameters = null);
+    Task<QueryResult> ExecuteBatch(string query, object?[][]? parameters = null);
 
     /// <summary>
     /// The name of the adapter.

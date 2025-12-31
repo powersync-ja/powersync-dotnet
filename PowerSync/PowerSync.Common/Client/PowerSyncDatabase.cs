@@ -58,13 +58,13 @@ public interface IPowerSyncDatabase : IEventStream<PowerSyncDBEvent>
 
     public Task<CrudTransaction?> GetNextCrudTransaction();
 
-    Task<NonQueryResult> Execute(string query, object[]? parameters = null);
+    Task<NonQueryResult> Execute(string query, object?[]? parameters = null);
 
-    Task<T[]> GetAll<T>(string sql, object[]? parameters = null);
+    Task<T[]> GetAll<T>(string sql, object?[]? parameters = null);
 
-    Task<T?> GetOptional<T>(string sql, object[]? parameters = null);
+    Task<T?> GetOptional<T>(string sql, object?[]? parameters = null);
 
-    Task<T> Get<T>(string sql, object[]? parameters = null);
+    Task<T> Get<T>(string sql, object?[]? parameters = null);
 
     Task<T> ReadLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null);
 
@@ -543,24 +543,24 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         return await BucketStorageAdapter.GetClientId();
     }
 
-    public async Task<NonQueryResult> Execute(string query, object[]? parameters = null)
+    public async Task<NonQueryResult> Execute(string query, object?[]? parameters = null)
     {
         await WaitForReady();
         return await Database.Execute(query, parameters);
     }
 
-    public async Task<T[]> GetAll<T>(string query, object[]? parameters = null)
+    public async Task<T[]> GetAll<T>(string query, object?[]? parameters = null)
     {
         await WaitForReady();
         return await Database.GetAll<T>(query, parameters);
     }
 
-    public async Task<T?> GetOptional<T>(string query, object[]? parameters = null)
+    public async Task<T?> GetOptional<T>(string query, object?[]? parameters = null)
     {
         await WaitForReady();
         return await Database.GetOptional<T>(query, parameters);
     }
-    public async Task<T> Get<T>(string query, object[]? parameters = null)
+    public async Task<T> Get<T>(string query, object?[]? parameters = null)
     {
         await WaitForReady();
         return await Database.Get<T>(query, parameters);
@@ -608,7 +608,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
     /// Use <see cref="SQLWatchOptions.ThrottleMs"/> to specify the minimum interval between queries.
     /// Source tables are automatically detected using <c>EXPLAIN QUERY PLAN</c>.
     /// </summary>
-    public Task Watch<T>(string query, object[]? parameters, WatchHandler<T> handler, SQLWatchOptions? options = null)
+    public Task Watch<T>(string query, object?[]? parameters, WatchHandler<T> handler, SQLWatchOptions? options = null)
     {
         var tcs = new TaskCompletionSource<bool>();
         Task.Run(async () =>
@@ -652,7 +652,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
 
     private record ExplainedResult(string opcode, int p2, int p3);
     private record TableSelectResult(string tbl_name);
-    public async Task<string[]> ResolveTables(string sql, object[]? parameters = null, SQLWatchOptions? options = null)
+    public async Task<string[]> ResolveTables(string sql, object?[]? parameters = null, SQLWatchOptions? options = null)
     {
         List<string> resolvedTables = options?.Tables != null ? [.. options.Tables] : [];
 
