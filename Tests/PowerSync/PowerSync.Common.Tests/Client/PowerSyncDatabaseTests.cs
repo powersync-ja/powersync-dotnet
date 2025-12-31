@@ -80,7 +80,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
             [id, name, null]
         );
 
-        var result = await db.GetAll<AssetResult>("SELECT id, description, make FROM assets WHERE id = ?", [id]);
+        var result = await db.GetAll<AssetResult>("SELECT id, description, make FROM assets WHERE id = ? AND make IS NULL", [id]);
 
         Assert.Single(result);
         var row = result.First();
