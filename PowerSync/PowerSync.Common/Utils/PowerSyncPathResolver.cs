@@ -13,10 +13,17 @@ public static class PowerSyncPathResolver
             return Path.Combine(AppContext.BaseDirectory, "powersync.dll");
         }
 
+        string fileName = GetFileNameForPlatform();
+
+        // Packaged MSIX/Appx applications flatten all DLLs into one folder
+        string flattenedPath = Path.Combine(packagePath, fileName);
+        if (File.Exists(flattenedPath))
+        {
+            return flattenedPath;
+        }
+
         string rid = GetRuntimeIdentifier();
         string nativeDir = Path.Combine(packagePath, "runtimes", rid, "native");
-
-        string fileName = GetFileNameForPlatform();
 
         return Path.Combine(nativeDir, fileName);
     }
