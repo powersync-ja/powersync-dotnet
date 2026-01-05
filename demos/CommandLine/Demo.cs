@@ -102,7 +102,6 @@ class Demo
 
         await db.Connect(connector, new PowerSync.Common.Client.Sync.Stream.PowerSyncConnectionOptions
         {
-            ClientImplementation = PowerSync.Common.Client.Sync.Stream.SyncClientImplementation.RUST,
             AppMetadata = new Dictionary<string, string>
             {
                 { "app_version", GetAppVersion() },

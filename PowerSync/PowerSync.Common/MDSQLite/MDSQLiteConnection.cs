@@ -72,7 +72,7 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvent>, ILockContext
         Emit(new DBAdapterEvent { TablesUpdated = batchedUpdate });
     }
 
-    private static void PrepareCommand(SqliteCommand command, string query, object[]? parameters)
+    private static void PrepareCommand(SqliteCommand command, string query, object?[]? parameters)
     {
         if (parameters == null || parameters.Length == 0)
         {
@@ -113,7 +113,7 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvent>, ILockContext
         }
     }
 
-    public async Task<NonQueryResult> Execute(string query, object[]? parameters = null)
+    public async Task<NonQueryResult> Execute(string query, object?[]? parameters = null)
     {
         using var command = Db.CreateCommand();
         PrepareCommand(command, query, parameters);
@@ -127,7 +127,7 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvent>, ILockContext
         };
     }
 
-    public async Task<QueryResult> ExecuteQuery(string query, object[]? parameters = null)
+    public async Task<QueryResult> ExecuteQuery(string query, object?[]? parameters = null)
     {
         var result = new QueryResult();
         using var command = Db.CreateCommand();
@@ -151,7 +151,7 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvent>, ILockContext
         return result;
     }
 
-    public async Task<T[]> GetAll<T>(string sql, object[]? parameters = null)
+    public async Task<T[]> GetAll<T>(string sql, object?[]? parameters = null)
     {
         var result = await ExecuteQuery(sql, parameters);
 
@@ -177,7 +177,7 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvent>, ILockContext
         return [.. items];
     }
 
-    public async Task<T?> GetOptional<T>(string sql, object[]? parameters = null)
+    public async Task<T?> GetOptional<T>(string sql, object?[]? parameters = null)
     {
         var result = await ExecuteQuery(sql, parameters);
 
@@ -198,7 +198,7 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvent>, ILockContext
         return JsonConvert.DeserializeObject<T>(json);
     }
 
-    public async Task<T> Get<T>(string sql, object[]? parameters = null)
+    public async Task<T> Get<T>(string sql, object?[]? parameters = null)
     {
         return await GetOptional<T>(sql, parameters) ?? throw new InvalidOperationException("Result set is empty");
     }

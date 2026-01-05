@@ -71,6 +71,25 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task QueryWithNullParams()
+    {
+        var id = Guid.NewGuid().ToString();
+        var name = "Test user";
+
+        await db.Execute(
+            "INSERT INTO assets(id, description, make) VALUES(?, ?, ?)",
+            [id, name, null]
+        );
+
+        var result = await db.GetAll<AssetResult>("SELECT id, description, make FROM assets WHERE id = ? AND make IS NULL", [id]);
+
+        Assert.Single(result);
+        var row = result.First();
+        Assert.Equal(name, row.description);
+        Assert.Equal(null, row.make);
+    }
+
+    [Fact]
     public async Task FailedInsertTest()
     {
         var name = "Test User";
