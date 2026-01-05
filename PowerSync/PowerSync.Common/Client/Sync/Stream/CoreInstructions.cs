@@ -137,7 +137,7 @@ public class CoreInstructionHelpers
         return new DB.Crud.SyncPriorityStatus
         {
             Priority = status.Priority,
-            HasSynced = status.HasSynced ?? null,
+            HasSynced = status.HasSynced,
             LastSyncedAt = status?.LastSyncedAt != null ? DateTimeOffset.FromUnixTimeSeconds(status!.LastSyncedAt).DateTime : null
         };
     }

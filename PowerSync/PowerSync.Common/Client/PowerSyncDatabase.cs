@@ -171,8 +171,8 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
     /// <returns>A task which will complete once the first full sync has completed.</returns>
     public async Task WaitForFirstSync(PrioritySyncRequest? request = null)
     {
-        var priority = request?.Priority ?? null;
-        var cancellationToken = request?.Token ?? null;
+        var priority = request?.Priority;
+        var cancellationToken = request?.Token;
 
         bool StatusMatches(SyncStatus status)
         {
@@ -488,7 +488,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
                 return null;
             }
 
-            long? txId = first.TransactionId ?? null;
+            long? txId = first.TransactionId;
             List<CrudEntry> all;
 
             if (txId == null)

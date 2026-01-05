@@ -30,7 +30,7 @@ public class TableOptions(
     /// <summary>
     /// When set to a non-null value, track old values of columns
     /// </summary>
-    public TrackPreviousOptions? TrackPreviousValues { get; set; } = trackPreviousValues ?? null;
+    public TrackPreviousOptions? TrackPreviousValues { get; set; } = trackPreviousValues;
 
     /// <summary>
     /// Whether an `UPDATE` statement that doesn't change any values should be ignored when creating
