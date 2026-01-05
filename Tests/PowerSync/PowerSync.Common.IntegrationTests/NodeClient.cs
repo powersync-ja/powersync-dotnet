@@ -33,6 +33,7 @@ public class NodeClient
     {
         return CreateItem("lists", id, name);
     }
+
     async Task<string> CreateItem(string table, string id, string name)
     {
         var data = new Dictionary<string, object>
@@ -73,6 +74,55 @@ public class NodeClient
     public Task<string> DeleteList(string id)
     {
         return DeleteItem("lists", id);
+    }
+
+    public Task<string> CreateTodo(string id, string listId, string description)
+    {
+        return CreateTodoItem("todos", id, listId, description);
+    }
+
+    async Task<string> CreateTodoItem(string table, string id, string listId, string description)
+    {
+        var data = new Dictionary<string, object>
+        {
+            { "created_at", DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss") },
+            { "description", description },
+            { "list_id", listId },
+            { "created_by", _userId },
+            { "completed", 0 },
+        };
+
+        var batch = new[]
+        {
+            new
+            {
+                op = UpdateType.PUT.ToString(),
+                table = table,
+                id = id,
+                data = data
+            }
+        };
+
+        var payload = JsonSerializer.Serialize(new { batch });
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        HttpResponseMessage response = await _httpClient.PostAsync($"{_backendUrl}/api/data", content);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            Console.WriteLine(await response.Content.ReadAsStringAsync());
+            throw new Exception(
+                $"Failed to create todo. Status: {response.StatusCode}, " +
+                $"Response: {await response.Content.ReadAsStringAsync()}"
+            );
+        }
+
+        return await response.Content.ReadAsStringAsync();
+    }
+
+    public Task<string> DeleteTodo(string id)
+    {
+        return DeleteItem("todos", id);
     }
 
     async Task<string> DeleteItem(string table, string id)

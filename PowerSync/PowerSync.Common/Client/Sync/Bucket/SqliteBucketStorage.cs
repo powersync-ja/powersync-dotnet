@@ -21,12 +21,9 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
 
     private readonly IDBAdapter db;
     private bool hasCompletedSync;
-    private bool pendingBucketDeletes;
+    private readonly bool pendingBucketDeletes;
     private readonly HashSet<string> tableNames;
     private string? clientId;
-
-    private static readonly int COMPACT_OPERATION_INTERVAL = 1000;
-    private int compactCounter = COMPACT_OPERATION_INTERVAL;
 
     private readonly ILogger logger;
 
@@ -95,50 +92,6 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
         return MAX_OP_ID;
     }
 
-    public void StartSession() { }
-
-    public async Task<BucketState[]> GetBucketStates()
-    {
-        return
-            await db.GetAll<BucketState>("SELECT name as bucket, cast(last_op as TEXT) as op_id FROM ps_buckets WHERE pending_delete = 0 AND name != '$local'");
-    }
-
-    public async Task SaveSyncData(SyncDataBatch batch)
-    {
-        await db.WriteTransaction(async tx =>
-        {
-            int count = 0;
-            foreach (var b in batch.Buckets)
-            {
-                var result = await tx.Execute("INSERT INTO powersync_operations(op, data) VALUES(?, ?)",
-                    ["save", JsonConvert.SerializeObject(new { buckets = new[] { JsonConvert.DeserializeObject(b.ToJSON()) } })]);
-                logger.LogDebug("saveSyncData {message}", JsonConvert.SerializeObject(result));
-                count += b.Data.Length;
-            }
-            compactCounter += count;
-        });
-    }
-
-    public async Task RemoveBuckets(string[] buckets)
-    {
-        foreach (var bucket in buckets)
-        {
-            await DeleteBucket(bucket);
-        }
-    }
-
-    private async Task DeleteBucket(string bucket)
-    {
-        await db.WriteTransaction(async tx =>
-        {
-            await tx.Execute("INSERT INTO powersync_operations(op, data) VALUES(?, ?)",
-                ["delete_bucket", bucket]);
-        });
-
-        logger.LogDebug("Done deleting bucket");
-        pendingBucketDeletes = true;
-    }
-
     private record LastSyncedResult(string? synced_at);
     public async Task<bool> HasCompletedSync()
     {
@@ -150,71 +103,6 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
         return hasCompletedSync;
     }
 
-    public async Task<SyncLocalDatabaseResult> SyncLocalDatabase(Checkpoint checkpoint)
-    {
-        var validation = await ValidateChecksums(checkpoint);
-        if (!validation.CheckpointValid)
-        {
-            logger.LogError("Checksums failed for {failures}", JsonConvert.SerializeObject(validation.CheckpointFailures));
-            foreach (var failedBucket in validation.CheckpointFailures ?? [])
-            {
-                await DeleteBucket(failedBucket);
-            }
-            return new SyncLocalDatabaseResult
-            {
-                Ready = false,
-                CheckpointValid = false,
-                CheckpointFailures = validation.CheckpointFailures
-            };
-        }
-
-        var bucketNames = checkpoint.Buckets.Select(b => b.Bucket).ToArray();
-        await db.WriteTransaction(async tx =>
-        {
-            await tx.Execute(
-                "UPDATE ps_buckets SET last_op = ? WHERE name IN (SELECT json_each.value FROM json_each(?))",
-                [checkpoint.LastOpId, JsonConvert.SerializeObject(bucketNames)]
-            );
-
-            if (checkpoint.WriteCheckpoint != null)
-            {
-                await tx.Execute(
-                    "UPDATE ps_buckets SET last_op = ? WHERE name = '$local'",
-                    [checkpoint.WriteCheckpoint]
-                );
-            }
-        });
-
-        var valid = await UpdateObjectsFromBuckets(checkpoint);
-        if (!valid)
-        {
-            logger.LogDebug("Not at a consistent checkpoint - cannot update local db");
-            return new SyncLocalDatabaseResult
-            {
-                Ready = false,
-                CheckpointValid = true
-            };
-        }
-
-        await ForceCompact();
-
-        return new SyncLocalDatabaseResult
-        {
-            Ready = true,
-            CheckpointValid = true
-        };
-    }
-
-    private async Task<bool> UpdateObjectsFromBuckets(Checkpoint checkpoint)
-    {
-        return await db.WriteTransaction(async tx =>
-        {
-            var result = await tx.Execute("INSERT INTO powersync_operations(op, data) VALUES(?, ?)",
-                                           ["sync_local", ""]);
-
-            return result.InsertId == 1;
-        });
-    }
 
     private record ResultResult(object result);
 
@@ -227,75 +115,6 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
         public List<string>? FailedBuckets { get; set; }
     }
 
-    public async Task<SyncLocalDatabaseResult> ValidateChecksums(
-        Checkpoint checkpoint)
-    {
-        var result = await db.Get<ResultResult>("SELECT powersync_validate_checkpoint(?) as result",
-                [JsonConvert.SerializeObject(checkpoint)]);
-
-        logger.LogDebug("validateChecksums result item {message}", JsonConvert.SerializeObject(result));
-
-        if (result == null) return new SyncLocalDatabaseResult { CheckpointValid = false, Ready = false };
-
-        var resultDetail = JsonConvert.DeserializeObject<ResultDetail>(result.result.ToString() ?? "{}");
-
-        if (resultDetail?.Valid == true)
-        {
-            return new SyncLocalDatabaseResult { Ready = true, CheckpointValid = true };
-        }
-        else
-        {
-            return new SyncLocalDatabaseResult
-            {
-                CheckpointValid = false,
-                Ready = false,
-                CheckpointFailures = resultDetail?.FailedBuckets?.ToArray() ?? []
-            };
-        }
-    }
-
-    /// <summary>
-    /// Force a compact operation, primarily for testing purposes.
-    /// </summary>
-    public async Task ForceCompact()
-    {
-        compactCounter = COMPACT_OPERATION_INTERVAL;
-        pendingBucketDeletes = true;
-
-        await AutoCompact();
-    }
-
-    public async Task AutoCompact()
-    {
-        await DeletePendingBuckets();
-        await ClearRemoveOps();
-    }
-
-    private async Task DeletePendingBuckets()
-    {
-        if (!pendingBucketDeletes) return;
-
-        await db.WriteTransaction(async tx =>
-        {
-            await tx.Execute("INSERT INTO powersync_operations(op, data) VALUES (?, ?)",
-                ["delete_pending_buckets", ""]);
-        });
-
-        pendingBucketDeletes = false;
-    }
-
-    private async Task ClearRemoveOps()
-    {
-        if (compactCounter < COMPACT_OPERATION_INTERVAL) return;
-
-        await db.WriteTransaction(async tx =>
-        {
-            await tx.Execute("INSERT INTO powersync_operations(op, data) VALUES (?, ?)",
-                ["clear_remove_ops", ""]);
-        });
-
-        compactCounter = 0;
-    }
 
     private record TargetOpResult(string target_op);
     private record SequenceResult(int seq);
@@ -429,12 +248,6 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
     public async Task<bool> HasCrud()
     {
         return await db.GetOptional<object>("SELECT 1 as ignore FROM ps_crud LIMIT 1") != null;
-    }
-
-    public async Task SetTargetCheckpoint(Checkpoint checkpoint)
-    {
-        // No Op
-        await Task.CompletedTask;
     }
 
     record ControlResult(string? r);

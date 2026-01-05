@@ -67,6 +67,9 @@ public class StreamingSyncRequest
     [JsonProperty("raw_data")]
     public bool RawData { get; set; }
 
+    [JsonProperty("app_metadata")]
+    public Dictionary<string, string>? AppMetadata { get; set; }
+
     [JsonProperty("parameters")]
     public Dictionary<string, object>? Parameters { get; set; }
 

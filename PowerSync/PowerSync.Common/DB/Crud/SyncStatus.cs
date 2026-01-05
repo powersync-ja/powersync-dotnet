@@ -102,7 +102,7 @@ public class SyncStatus(SyncStatusOptions options)
     /// </summary>
     public SyncPriorityStatus[] PriorityStatusEntries =>
         (Options.PriorityStatusEntries ?? [])
-        .OrderBy(entry => entry.Priority)
+        .OrderBy(x => x, Comparer<SyncPriorityStatus>.Create(ComparePriorities))
         .ToArray();
 
     /// <summary>
@@ -154,9 +154,30 @@ public class SyncStatus(SyncStatusOptions options)
         };
     }
 
+    /// <summary>
+    /// Creates an updated SyncStatus by merging the current status with the provided updated status.
+    /// </summary>
+    public SyncStatus CreateUpdatedStatus(SyncStatus updatedStatus)
+    {
+        var updatedOptions = updatedStatus.Options;
+        var currentOptions = Options;
+
+        var parsedOptions = new SyncStatusOptions
+        {
+            Connected = updatedOptions.Connected ?? currentOptions.Connected,
+            Connecting = updatedOptions.Connecting ?? currentOptions.Connecting,
+            LastSyncedAt = updatedOptions.LastSyncedAt ?? currentOptions.LastSyncedAt,
+            HasSynced = updatedOptions.HasSynced ?? currentOptions.HasSynced,
+            PriorityStatusEntries = updatedOptions.PriorityStatusEntries ?? currentOptions.PriorityStatusEntries,
+            DataFlow = updatedOptions.DataFlow ?? currentOptions.DataFlow,
+        };
+
+        return new SyncStatus(parsedOptions);
+    }
+
     private string SerializeObject()
     {
-        return JsonConvert.SerializeObject(new { Options = Options, UploadErrorMessage = Options.DataFlow?.UploadError?.Message, DownloadErrorMessage = DataFlowStatus.DownloadError?.Message });
+        return JsonConvert.SerializeObject(new { Options, UploadErrorMessage = Options.DataFlow?.UploadError?.Message, DownloadErrorMessage = DataFlowStatus.DownloadError?.Message });
     }
 
     public bool IsEqual(SyncStatus status)
@@ -174,5 +195,10 @@ public class SyncStatus(SyncStatusOptions options)
     public string ToJSON()
     {
         return SerializeObject();
+    }
+
+    private static int ComparePriorities(SyncPriorityStatus a, SyncPriorityStatus b)
+    {
+        return b.Priority - a.Priority; // Reverse because higher priorities have lower numbers
     }
 }

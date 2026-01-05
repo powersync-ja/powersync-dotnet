@@ -1,6 +1,8 @@
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
+using PowerSync.Common.DB.Crud;
+
 namespace PowerSync.Common.Client.Sync.Stream;
 
 /// <summary>
@@ -83,6 +85,7 @@ public class CoreSyncStatus
 
     [JsonProperty("downloading")]
     public DownloadProgress? Downloading { get; set; }
+
 }
 
 public class SyncPriorityStatus
@@ -127,3 +130,44 @@ public class FetchCredentials : Instruction
 public class CloseSyncStream : Instruction { }
 public class FlushFileSystem : Instruction { }
 public class DidCompleteSync : Instruction { }
+
+public class CoreInstructionHelpers
+{
+    public static DB.Crud.SyncPriorityStatus PriorityToStatus(SyncPriorityStatus status)
+    {
+        return new DB.Crud.SyncPriorityStatus
+        {
+            Priority = status.Priority,
+            HasSynced = status.HasSynced,
+            LastSyncedAt = status?.LastSyncedAt != null ? DateTimeOffset.FromUnixTimeSeconds(status!.LastSyncedAt).DateTime : null
+        };
+    }
+
+    public static DB.Crud.SyncStatus CoreStatusToSyncStatus(CoreSyncStatus status)
+    {
+        return new DB.Crud.SyncStatus(CoreStatusToSyncStatusOptions(status));
+    }
+
+    public static DB.Crud.SyncStatusOptions CoreStatusToSyncStatusOptions(CoreSyncStatus status)
+    {
+        var coreCompleteSync =
+            status.PriorityStatus.FirstOrDefault(s => s.Priority == SyncProgress.FULL_SYNC_PRIORITY);
+        var completeSync = coreCompleteSync != null ? PriorityToStatus(coreCompleteSync) : null;
+
+        return new DB.Crud.SyncStatusOptions
+        {
+            Connected = status.Connected,
+            Connecting = status.Connecting,
+            DataFlow = new DB.Crud.SyncDataFlowStatus
+            {
+                // We expose downloading as a boolean field, the core extension reports download information as a nullable
+                // download status. When that status is non-null, a download is in progress.
+                Downloading = status.Downloading != null,
+                DownloadProgress = status.Downloading?.Buckets
+            },
+            LastSyncedAt = completeSync?.LastSyncedAt,
+            HasSynced = completeSync?.HasSynced,
+            PriorityStatusEntries = status.PriorityStatus.Select(PriorityToStatus).ToArray()
+        };
+    }
+}
