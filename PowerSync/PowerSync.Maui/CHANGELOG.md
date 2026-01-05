@@ -2,6 +2,7 @@
 
 ## 0.0.4-alpha.1
 - Upstream PowerSync.Common version bump (See Powersync.Common changelog for more information)
+- Added ability to specify `AppMetadata` sync/stream requests (see Common changelog).
 
 ## 0.0.3-alpha.1
 - Upstream PowerSync.Common version bump

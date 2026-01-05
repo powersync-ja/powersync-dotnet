@@ -1,5 +1,6 @@
 ﻿namespace CommandLine;
 
+using System.Reflection;
 using CommandLine.Utils;
 using PowerSync.Common.Client;
 using PowerSync.Common.Client.Connection;
@@ -96,7 +97,14 @@ class Demo
              }
          });
 
-        await db.Connect(connector);
+        await db.Connect(connector, new PowerSync.Common.Client.Sync.Stream.PowerSyncConnectionOptions
+        {
+            ClientImplementation = PowerSync.Common.Client.Sync.Stream.SyncClientImplementation.RUST,
+            AppMetadata = new Dictionary<string, string>
+            {
+                { "app_version", GetAppVersion() },
+            }
+        });
         await db.WaitForFirstSync();
 
         var panel = new Panel(table)
@@ -127,5 +135,11 @@ class Demo
             });
 
         Console.WriteLine("\nExited live table. Press any key to exit.");
+    }
+
+    private static string GetAppVersion()
+    {
+        var version = Assembly.GetExecutingAssembly().GetName().Version;
+        return version?.ToString() ?? "unknown";
     }
 }
