@@ -9,7 +9,7 @@ public static class HashUtils
     /// Create a hash from the key-value pairs in a dictionary. The hash does not depend
     /// on the internal pair ordering of the dictionary.
     /// </summary>
-    public static int GetHashCodeDictionary<TKey, TValue>(Dictionary<TKey, TValue>? dict)
+    public static int GetHashCodeDictionary<TKey, TValue>(Dictionary<TKey, TValue>? dict) where TKey : notnull
     {
         if (dict == null)
         {

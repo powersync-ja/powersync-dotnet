@@ -9,7 +9,7 @@ public static class CompareUtils
     /// Compare two dictionaries by value. Checks if both dictionaries have both the same 
     /// number of keys, as well as the same keys pointing to the same values.
     /// </summary>
-    public static bool DictionariesEqual<TKey, TValue>(Dictionary<TKey, TValue>? dict1, Dictionary<TKey, TValue>? dict2)
+    public static bool DictionariesEqual<TKey, TValue>(Dictionary<TKey, TValue>? dict1, Dictionary<TKey, TValue>? dict2) where TKey : notnull
     {
         if (ReferenceEquals(dict1, dict2)) return true;
         if (dict1 == null || dict2 == null) return false;
@@ -19,7 +19,7 @@ public static class CompareUtils
 
         foreach (var keyValuePair in dict1)
         {
-            if (!dict2.TryGetValue(keyValuePair.Key, out TValue secondValue) ||
+            if (!dict2.TryGetValue(keyValuePair.Key, out TValue? secondValue) ||
               !comparer.Equals(keyValuePair.Value, secondValue))
             {
                 return false;
