@@ -1,15 +1,17 @@
 using System.Collections.ObjectModel;
 using System.Reflection;
+
+using MAUITodo.Data;
+
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using MAUITodo.Data;
 
 namespace MAUITodo.Views;
 
 public partial class SqlConsolePage : ContentPage
 {
     private readonly PowerSyncData database;
-    
+
     public SqlConsolePage(PowerSyncData powerSyncData)
     {
         InitializeComponent();
@@ -19,23 +21,23 @@ public partial class SqlConsolePage : ContentPage
     private async void OnQuerySubmitted(object sender, EventArgs e)
     {
         Headers.Text = "";
-        Results.Text = "";  
+        Results.Text = "";
         try
         {
             var query = QueryEntry.Text;
             if (string.IsNullOrWhiteSpace(query))
                 return;
-            
+
             var results = await database.Db.GetAll<object>(query);
-            
-            var keys =  JObject.Parse(JsonConvert.SerializeObject(results[0])).Properties().Select(p => p.Name).ToList();
+
+            var keys = JObject.Parse(JsonConvert.SerializeObject(results[0])).Properties().Select(p => p.Name).ToList();
             var allValues = results
                 .Select(result => JObject.Parse(JsonConvert.SerializeObject(result))
                     .Properties()
                     .Select(p => p.Value.ToObject<object>())
                     .ToList())
                 .ToList();
-            
+
             Console.WriteLine($"Results count: {JsonConvert.SerializeObject(keys)}");
             Console.WriteLine($"Results count \n: {JsonConvert.SerializeObject(allValues)}");
 
@@ -47,4 +49,4 @@ public partial class SqlConsolePage : ContentPage
             await DisplayAlert("Error", ex.Message, "OK");
         }
     }
-} 
+}

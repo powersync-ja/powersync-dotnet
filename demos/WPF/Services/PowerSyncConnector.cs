@@ -2,7 +2,9 @@ using System.IO;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
+
 using DotNetEnv;
+
 using PowerSync.Common.Client;
 using PowerSync.Common.Client.Connection;
 using PowerSync.Common.DB.Crud;

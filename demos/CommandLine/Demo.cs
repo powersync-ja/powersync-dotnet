@@ -1,9 +1,12 @@
 ﻿namespace CommandLine;
 
 using System.Reflection;
+
 using CommandLine.Utils;
+
 using PowerSync.Common.Client;
 using PowerSync.Common.Client.Connection;
+
 using Spectre.Console;
 
 class Demo

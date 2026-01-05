@@ -78,6 +78,19 @@ When running commands such as `dotnet run` or `dotnet test`, you may need to spe
 
 # Development
 
+## Setup Development Environment
+
+### Formatting
+
+This project uses [EditorConfig](https://editorconfig.org/) for formatting, which may require certain extensions/plugins to function properly in your IDE.
+
+- **VSCode**: Available via [this extension](https://marketplace.visualstudio.com/items?itemName=EditorConfig.EditorConfig).
+- **JetBrains Rider**: Supported by default.
+- **Neovim**: Supported by default, or via the `gpanders/editorconfig.nvim` plugin for versions prior to `v0.9`.
+- **Emacs**: Available via `editorconfig-mode`, or the `editorconfig` package for versions prior to `v30.1`.
+
+### Project Setup
+
 Download PowerSync extension
 
 ```bash

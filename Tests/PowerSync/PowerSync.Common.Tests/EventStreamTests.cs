@@ -1,7 +1,7 @@
 namespace PowerSync.Common.Tests;
 
-using PowerSync.Common.Utils;
 using PowerSync.Common.DB.Crud;
+using PowerSync.Common.Utils;
 
 public class EventStreamTests
 {

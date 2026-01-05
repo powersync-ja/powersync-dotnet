@@ -1,6 +1,7 @@
 namespace PowerSync.Common.DB.Schema;
 
 using System.Text.RegularExpressions;
+
 using Newtonsoft.Json;
 
 public class TableOptions(

@@ -3,6 +3,7 @@ namespace PowerSync.Common.Client.Sync.Stream;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
+
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 

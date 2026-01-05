@@ -1,5 +1,6 @@
-using PowerSync.Common.Client;
 using Microsoft.Extensions.Logging;
+
+using PowerSync.Common.Client;
 using PowerSync.Common.Client.Sync.Stream;
 
 
@@ -12,7 +13,7 @@ public class SyncIntegrationTests : IAsyncLifetime
 
     private record TodoResult(string id, string list_id, string content, string owner_id, string created_at);
 
-    private string userId = Uuid();
+    private readonly string userId = Uuid();
 
     private NodeClient nodeClient = default!;
 

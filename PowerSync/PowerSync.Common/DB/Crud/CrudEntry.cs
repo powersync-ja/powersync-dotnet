@@ -1,6 +1,7 @@
 namespace PowerSync.Common.DB.Crud;
 
 using System.Collections.Generic;
+
 using Newtonsoft.Json;
 
 public enum UpdateType

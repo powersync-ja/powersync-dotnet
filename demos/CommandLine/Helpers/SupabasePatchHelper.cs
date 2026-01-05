@@ -1,7 +1,9 @@
 namespace CommandLine.Helpers;
 
 using System.Linq.Expressions;
+
 using Newtonsoft.Json;
+
 using Supabase.Postgrest.Interfaces;
 using Supabase.Postgrest.Models;
 
