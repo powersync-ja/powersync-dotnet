@@ -3,8 +3,11 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using System.Windows.Input;
+
 using Newtonsoft.Json;
+
 using PowerSync.Common.Client;
+
 using PowersyncDotnetTodoList.Services;
 
 namespace PowersyncDotnetTodoList.ViewModels

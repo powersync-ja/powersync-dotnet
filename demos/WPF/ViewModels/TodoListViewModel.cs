@@ -1,7 +1,9 @@
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using System.Windows.Input;
+
 using PowerSync.Common.Client;
+
 using PowersyncDotnetTodoList.Models;
 using PowersyncDotnetTodoList.Services;
 using PowersyncDotnetTodoList.Views;

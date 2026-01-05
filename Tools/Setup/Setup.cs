@@ -5,9 +5,12 @@ using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.IO.Compression;
 
+/// <summary>
+/// Execute with `dotnet run --project Tools/Setup`
+/// </summary>
 public class PowerSyncSetup
 {
-    private const string VERSION = "0.4.9";
+    private const string VERSION = "0.4.10";
 
     private const string GITHUB_BASE_URL = $"https://github.com/powersync-ja/powersync-sqlite-core/releases/download/v{VERSION}";
     private const string MAVEN_BASE_URL = $"https://repo1.maven.org/maven2/com/powersync/powersync-sqlite-core/{VERSION}";

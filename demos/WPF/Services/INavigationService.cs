@@ -1,5 +1,7 @@
 using System.Windows.Controls;
+
 using Microsoft.Extensions.DependencyInjection;
+
 using PowersyncDotnetTodoList.Models;
 using PowersyncDotnetTodoList.ViewModels;
 using PowersyncDotnetTodoList.Views;

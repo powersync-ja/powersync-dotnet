@@ -4,9 +4,10 @@ namespace PowerSync.Common.Client.Sync.Bucket;
 using System;
 using System.Threading.Tasks;
 
+using Newtonsoft.Json;
+
 using PowerSync.Common.DB.Crud;
 using PowerSync.Common.Utils;
-using Newtonsoft.Json;
 
 public static class PowerSyncControlCommand
 {
@@ -95,15 +96,6 @@ public class BucketStorageEvent
 public interface IBucketStorageAdapter : IEventStream<BucketStorageEvent>
 {
     Task Init();
-    Task SaveSyncData(SyncDataBatch batch);
-    Task RemoveBuckets(string[] buckets);
-    Task SetTargetCheckpoint(Checkpoint checkpoint);
-
-    void StartSession();
-
-    Task<BucketState[]> GetBucketStates();
-
-    Task<SyncLocalDatabaseResult> SyncLocalDatabase(Checkpoint checkpoint);
 
     Task<CrudEntry?> NextCrudItem();
     Task<bool> HasCrud();
@@ -111,12 +103,6 @@ public interface IBucketStorageAdapter : IEventStream<BucketStorageEvent>
 
     Task<bool> HasCompletedSync();
     Task<bool> UpdateLocalTarget(Func<Task<string>> callback);
-
-    /// <summary>
-    /// Exposed for tests only.
-    /// </summary>
-    Task AutoCompact();
-    Task ForceCompact();
 
     string GetMaxOpId();
 

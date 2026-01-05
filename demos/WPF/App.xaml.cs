@@ -1,8 +1,11 @@
 ﻿using System.Diagnostics;
 using System.Windows;
+
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+
 using PowerSync.Common.Client;
+
 using PowersyncDotnetTodoList.Models;
 using PowersyncDotnetTodoList.Services;
 using PowersyncDotnetTodoList.ViewModels;

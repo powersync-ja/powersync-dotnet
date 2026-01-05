@@ -68,7 +68,7 @@ public class ProgressWithOperations
     public int TotalOperations { get; set; }
 
     /// <summary>
-    /// The numnber of operations that have already been downloaded.
+    /// The number of operations that have already been downloaded.
     /// </summary>
     public int DownloadedOperations { get; set; }
 

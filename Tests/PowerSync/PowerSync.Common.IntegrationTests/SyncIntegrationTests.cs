@@ -1,9 +1,6 @@
-using Newtonsoft.Json;
-using PowerSync.Common.Client;
-using System.Data.Common;
-using System.Diagnostics;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+
+using PowerSync.Common.Client;
 using PowerSync.Common.Client.Sync.Stream;
 
 
@@ -14,7 +11,9 @@ public class SyncIntegrationTests : IAsyncLifetime
 {
     private record ListResult(string id, string name, string owner_id, string created_at);
 
-    private string userId = Uuid();
+    private record TodoResult(string id, string list_id, string content, string owner_id, string created_at);
+
+    private readonly string userId = Uuid();
 
     private NodeClient nodeClient = default!;
 
@@ -42,15 +41,18 @@ public class SyncIntegrationTests : IAsyncLifetime
         await db.Init();
         var connector = new NodeConnector(userId);
 
-        await ClearAllData();
-
         Console.WriteLine($"Using User ID: {userId}");
         try
         {
             await db.Connect(connector, new PowerSyncConnectionOptions
             {
-                ClientImplementation = SyncClientImplementation.RUST,
+                AppMetadata = new Dictionary<string, string>
+                {
+                    { "app_version", "1.0.0-integration-tests" },
+                    { "environment", "integration-tests" }
+                }
             });
+            await db.Connect(connector);
             await db.WaitForFirstSync();
         }
         catch (Exception ex)
@@ -220,8 +222,67 @@ public class SyncIntegrationTests : IAsyncLifetime
         await backendInsertWatch.Task;
     }
 
+
+    /// <summary>
+    /// Helper that requires manual setup of the data to verify that download progress updates are working.
+    /// Ensure backend has 5000+ entries, then run this test to see progress updates in the console. 
+    /// </summary>
+    // [IntegrationFact(Timeout = 10000)]
+    // public async Task InitialSyncDownloadProgressTest()
+    // {
+    //     ILoggerFactory loggerFactory = LoggerFactory.Create(builder =>
+    //     {
+    //         builder.AddConsole();
+    //         builder.SetMinimumLevel(LogLevel.Information);
+    //     });
+
+    //     var logger = loggerFactory.CreateLogger("PowerSyncLogger");
+
+    //     nodeClient = new NodeClient(userId);
+    //     db = new PowerSyncDatabase(new PowerSyncDatabaseOptions
+    //     {
+    //         Database = new SQLOpenOptions { DbFilename = "powersync-sync-progress-tests.db" },
+    //         Schema = TestSchema.PowerSyncSchema,
+    //         Logger = logger
+
+    //     });
+    //     await db.Init();
+    //     await db.DisconnectAndClear();
+
+
+    //     var clearListener = db.RunListener((update) =>
+    //     {
+    //         if (update.StatusChanged != null)
+    //         {
+    //             try
+    //             {
+    //                 Console.WriteLine("Total: " + update.StatusChanged.DownloadProgress()?.TotalOperations + " Downloaded: " + update.StatusChanged.DownloadProgress()?.DownloadedOperations);
+    //                 Console.WriteLine("Synced: " + Math.Round((decimal)((update.StatusChanged.DownloadProgress()?.DownloadedFraction ?? 0) * 100)) + "%");
+
+    //             }
+    //             catch (Exception ex)
+    //             {
+    //                 Console.WriteLine("Exception reading DownloadProgress: " + ex);
+    //             }
+    //         }
+    //     });
+
+    //     var connector = new NodeConnector(userId);
+    //     await db.Connect(connector);
+    //     await db.WaitForFirstSync();
+
+
+    //     clearListener.Dispose();
+    //     await db.DisconnectAndClear();
+    //     await db.Close();
+    // }
+
     private async Task ClearAllData()
     {
+        if (db.Closed)
+        {
+            return;
+        }
         // Inefficient but simple way to clear all data, avoiding payload limitations
         var results = await db.GetAll<ListResult>("select * from lists");
         foreach (var item in results)

@@ -1,6 +1,7 @@
-using PowerSync.Common.Client;
-using MAUITodo.Models;
 using MAUITodo.Data;
+using MAUITodo.Models;
+
+using PowerSync.Common.Client;
 
 namespace MAUITodo.Views;
 
@@ -18,7 +19,7 @@ public partial class ListsPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        
+
         database.Db.RunListener((update) =>
         {
             if (update.StatusChanged != null)
@@ -30,7 +31,7 @@ public partial class ListsPage
 
             }
         });
-        
+
         await database.Db.Watch("select * from lists", null, new WatchHandler<TodoList>
         {
             OnResult = (results) =>

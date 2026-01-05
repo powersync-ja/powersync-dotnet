@@ -1,8 +1,9 @@
 namespace PowerSync.Common.Tests.Client;
 
+using System.Diagnostics;
+
 using Microsoft.Data.Sqlite;
 
-using System.Diagnostics;
 using PowerSync.Common.Client;
 
 public class PowerSyncDatabaseTests : IAsyncLifetime

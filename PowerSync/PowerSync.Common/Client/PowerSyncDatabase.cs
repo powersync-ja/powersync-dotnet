@@ -80,8 +80,6 @@ public interface IPowerSyncDatabase : IEventStream<PowerSyncDBEvent>
 
 public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDatabase
 {
-    private static readonly int FULL_SYNC_PRIORITY = 2147483647;
-
     public IDBAdapter Database;
     private Schema schema;
 
@@ -156,9 +154,36 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         await isReadyTask;
     }
 
-    public async Task WaitForFirstSync(CancellationToken? cancellationToken = null)
+    public class PrioritySyncRequest
     {
-        if (CurrentStatus.HasSynced == true)
+        public CancellationToken? Token { get; set; }
+        public int? Priority { get; set; }
+    }
+
+    /// <summary>
+    /// Wait for the first sync operation to complete.
+    /// </summary>
+    /// <param name="request">
+    /// An object providing a cancellation token and a priority target.
+    /// When a priority target is set, the task may complete when all buckets with the given (or higher)
+    /// priorities have been synchronized. This can be earlier than a complete sync.
+    /// </param>
+    /// <returns>A task which will complete once the first full sync has completed.</returns>
+    public async Task WaitForFirstSync(PrioritySyncRequest? request = null)
+    {
+        var priority = request?.Priority;
+        var cancellationToken = request?.Token;
+
+        bool StatusMatches(SyncStatus status)
+        {
+            if (priority == null)
+            {
+                return status.HasSynced == true;
+            }
+            return status.StatusForPriority(priority.Value).HasSynced == true;
+        }
+
+        if (StatusMatches(CurrentStatus))
         {
             return;
         }
@@ -166,11 +191,11 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         var tcs = new TaskCompletionSource<bool>();
         var cts = new CancellationTokenSource();
 
-        var _ = Task.Run(() =>
+        _ = Task.Run(() =>
         {
             foreach (var update in Listen(cts.Token))
             {
-                if (update.StatusChanged?.HasSynced == true)
+                if (update.StatusChanged != null && StatusMatches(update.StatusChanged!))
                 {
                     cts.Cancel();
                     tcs.SetResult(true);
@@ -192,7 +217,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         await BucketStorageAdapter.Init();
         await LoadVersion();
         await UpdateSchema(schema);
-        await UpdateHasSynced();
+        await ResolveOfflineSyncStatus();
         await Database.Execute("PRAGMA RECURSIVE_TRIGGERS=TRUE");
         Ready = true;
         Emit(new PowerSyncDBEvent { Initialized = true });
@@ -216,48 +241,29 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         catch (Exception e)
         {
             throw new Exception(
-                $"Unsupported PowerSync extension version. Need >=0.2.0 <1.0.0, got: {sdkVersion}. Details: {e.Message}"
+                $"Unsupported PowerSync extension version. Need >=0.4.5 <1.0.0, got: {sdkVersion}. Details: {e.Message}"
             );
         }
 
-        // Validate version is >= 0.2.0 and < 1.0.0
-        if (versionInts[0] != 0 || versionInts[1] < 2 || versionInts[2] < 0)
+        // Validate version is >= 0.4.5 and < 1.0.0
+        if (versionInts[0] != 0 || versionInts[1] < 4 || (versionInts[1] == 4 && versionInts[2] < 5))
         {
-            throw new Exception($"Unsupported PowerSync extension version. Need >=0.2.0 <1.0.0, got: {sdkVersion}");
+            throw new Exception($"Unsupported PowerSync extension version. Need >=0.4.5 <1.0.0, got: {sdkVersion}");
         }
     }
 
-    private record LastSyncedResult(int? priority, string? last_synced_at);
-
-    protected async Task UpdateHasSynced()
+    private record OfflineSyncStatusResult(string r);
+    protected async Task ResolveOfflineSyncStatus()
     {
-        var results = await Database.GetAll<LastSyncedResult>(
-            "SELECT priority, last_synced_at FROM ps_sync_state ORDER BY priority DESC"
-        );
+        var result = await Database.Get<OfflineSyncStatusResult>("SELECT powersync_offline_sync_status() as r");
+        var parsed = JsonConvert.DeserializeObject<CoreSyncStatus>(result.r);
 
-        DateTime? lastCompleteSync = null;
+        var parsedSyncStatus = CoreInstructionHelpers.CoreStatusToSyncStatus(parsed!);
+        var updatedStatus = CurrentStatus.CreateUpdatedStatus(parsedSyncStatus);
 
-        // TODO: Will be altered/extended when reporting individual sync priority statuses is supported 
-        foreach (var result in results)
+        if (!updatedStatus.IsEqual(CurrentStatus))
         {
-            var parsedDate = DateTime.Parse(result.last_synced_at + "Z");
-
-            if (result.priority == FULL_SYNC_PRIORITY)
-            {
-                // This lowest-possible priority represents a complete sync.
-                lastCompleteSync = parsedDate;
-            }
-        }
-
-        var hasSynced = lastCompleteSync != null;
-        if (hasSynced != CurrentStatus.HasSynced)
-        {
-            CurrentStatus = new SyncStatus(new SyncStatusOptions(CurrentStatus.Options)
-            {
-                HasSynced = hasSynced,
-                LastSyncedAt = lastCompleteSync,
-            });
-
+            CurrentStatus = updatedStatus;
             Emit(new PowerSyncDBEvent { StatusChanged = CurrentStatus });
         }
     }
@@ -482,7 +488,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
                 return null;
             }
 
-            long? txId = first.TransactionId ?? null;
+            long? txId = first.TransactionId;
             List<CrudEntry> all;
 
             if (txId == null)
