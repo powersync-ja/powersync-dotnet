@@ -1,7 +1,8 @@
 ﻿<Application x:Class="PowersyncDotnetTodoList.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:converters="clr-namespace:PowersyncDotnetTodoList.Converters">
+             xmlns:converters="clr-namespace:PowersyncDotnetTodoList.Converters"
+             DispatcherUnhandledException="Application_DispatcherUnhandledException">
     <Application.Resources>
          <converters:BoolToStatusConverter x:Key="BoolToStatusConverter"/>
          <converters:StringToVisibilityConverter x:Key="StringToVisibilityConverter"/>

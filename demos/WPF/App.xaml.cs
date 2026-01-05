@@ -14,28 +14,41 @@ namespace PowersyncDotnetTodoList
     {
         public static IServiceProvider? Services { get; private set; }
 
-        protected override async void OnStartup(StartupEventArgs e)
+        protected override void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
 
+            // Handle async initialization synchronously or with proper error handling
+            try
+            {
+                InitializeApplicationAsync().GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    $"Application startup failed: {ex.Message}\n\nFull error: {ex}",
+                    "Startup Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error
+                );
+
+                // Shut down the application
+                Current.Shutdown(1);
+                return;
+            }
+        }
+
+        private async Task InitializeApplicationAsync()
+        {
             var services = new ServiceCollection();
             ConfigureServices(services);
 
             // Build the service provider
             Services = services.BuildServiceProvider();
-
-            // Initialize the database and connector
-            var db = Services.GetRequiredService<PowerSyncDatabase>();
-            var connector = Services.GetRequiredService<PowerSyncConnector>();
-            await db.Init();
-            await db.Connect(connector);
-            await db.WaitForFirstSync();
-
             var mainWindow = Services.GetRequiredService<MainWindow>();
-
             var navigationService = Services.GetRequiredService<INavigationService>();
-            navigationService.Navigate<TodoListViewModel>();
 
+            navigationService.Navigate<TodoListViewModel>();
             mainWindow.Show();
         }
 
@@ -67,7 +80,10 @@ namespace PowersyncDotnetTodoList
             );
 
             // Register PowerSyncConnector
-            services.AddSingleton<PowerSyncConnector>();
+            services.AddSingleton<PowerSyncConnector>(sp =>
+            {
+                return new PowerSyncConnector();
+            });
 
             // Register ViewModels and Views
             services.AddTransient<TodoListViewModel>();
@@ -85,6 +101,22 @@ namespace PowersyncDotnetTodoList
                 var mainWindow = sp.GetRequiredService<MainWindow>();
                 return new NavigationService(mainWindow.MainFrame, sp);
             });
+        }
+
+        // Add global exception handler
+        private void Application_DispatcherUnhandledException(
+            object sender,
+            System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e
+        )
+        {
+            MessageBox.Show(
+                $"An unhandled exception occurred: {e.Exception.Message}\n\nFull error: {e.Exception}",
+                "Unhandled Exception",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error
+            );
+
+            e.Handled = true; // Prevent application crash
         }
     }
 }
