@@ -8,7 +8,7 @@ public static class PowerSyncPathResolver
     {
         string fileName = GetFileNameForPlatform();
 
-        // Check the flattened path first since some technologies (eg. .NET 4.8 Framework) flatten libraries into the root folder.
+        // Check the flattened path first since some technologies (eg. .NET Framework 4.8) flatten libraries into the root folder.
         // Checking this path first also makes debugging easier, since one can easily change the resolved DLL.
         string flattenedPath = Path.Combine(packagePath, fileName);
         if (File.Exists(flattenedPath)) return flattenedPath;
