@@ -9,8 +9,27 @@ using PowerSync.Common.Client.Connection;
 
 using Spectre.Console;
 
+using Dapper;
+using System.ComponentModel.DataAnnotations.Schema;
+
 class Demo
 {
+
+    private class SpecialListResult
+    {
+        [Column("name")]
+        public string? Name { get; set; }
+
+        [Column("owner_id")]
+        public string? OwnerId { get; set; }
+
+        [Column("id")]
+        public string? Id { get; set; }
+
+        [Column("created_at")]
+        public string? CreatedAt { get; set; }
+    }
+
     private record ListResult(string id, string name, string owner_id, string created_at);
     static async Task Main()
     {
@@ -68,6 +87,15 @@ class Demo
                 foreach (var line in results)
                 {
                     table.AddRow(line.id, line.name, line.owner_id, line.created_at);
+                }
+
+                var x = db.Database.GetWriteDatabaseConnection();
+                var result = x.Query<SpecialListResult>("select * from lists");
+
+                Console.WriteLine("DAPPER TIME");
+                foreach (var line in result)
+                {
+                    Console.WriteLine($"DAPPER ROW: {line.Id} | {line.Name} | {line.OwnerId} | {line.CreatedAt}");
                 }
             },
             OnError = (error) =>

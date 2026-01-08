@@ -25,6 +25,8 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
     public MDSQLiteConnection? writeConnection;
     public MDSQLiteConnection? readConnection;
 
+    public SqliteConnection GetWriteDatabaseConnection() => writeConnection!.Db;
+
     private readonly Task initialized;
 
     protected MDSQLiteAdapterOptions options;

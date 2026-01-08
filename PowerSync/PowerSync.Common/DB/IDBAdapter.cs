@@ -3,6 +3,8 @@ namespace PowerSync.Common.DB;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
+using Microsoft.Data.Sqlite;
+
 using PowerSync.Common.Utils;
 
 public class NonQueryResult
@@ -109,6 +111,9 @@ public class DBAdapterUtils
 
 public interface IDBAdapter : IEventStream<DBAdapterEvent>, ILockContext
 {
+
+    SqliteConnection GetWriteDatabaseConnection();
+
     /// <summary>
     /// Closes the adapter. 
     /// </summary>
