@@ -1,5 +1,8 @@
 # PowerSync.Common Changelog
 
+## 0.0.7-alpha.1
+- Added `ExecuteBatch()` implementation.
+
 ## 0.0.6-alpha.1
 - Updated to the latest version (0.4.10) of the core extension.
 - Dropping support for the legacy C# sync implementation.
