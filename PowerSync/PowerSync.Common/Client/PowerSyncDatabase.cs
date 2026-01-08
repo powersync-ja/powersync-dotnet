@@ -60,6 +60,8 @@ public interface IPowerSyncDatabase : IEventStream<PowerSyncDBEvent>
 
     Task<NonQueryResult> Execute(string query, object?[]? parameters = null);
 
+    Task<NonQueryResult> ExecuteBatch(string query, object?[][]? parameters = null);
+
     Task<T[]> GetAll<T>(string sql, object?[]? parameters = null);
 
     Task<T?> GetOptional<T>(string sql, object?[]? parameters = null);
@@ -553,6 +555,12 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
     {
         await WaitForReady();
         return await Database.Execute(query, parameters);
+    }
+
+    public async Task<NonQueryResult> ExecuteBatch(string query, object?[][]? parameters = null)
+    {
+        await WaitForReady();
+        return await Database.ExecuteBatch(query, parameters);
     }
 
     public async Task<T[]> GetAll<T>(string query, object?[]? parameters = null)

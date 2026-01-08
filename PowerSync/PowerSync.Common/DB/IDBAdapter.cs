@@ -43,6 +43,9 @@ public interface ILockContext : IDBGetUtils
 {
     // Execute a single write statement.
     Task<NonQueryResult> Execute(string query, object?[]? parameters = null);
+
+    // Execute a batch of write statements. 
+    Task<NonQueryResult> ExecuteBatch(string query, object?[][]? parameters = null);
 }
 
 public interface ITransaction : ILockContext
@@ -113,11 +116,6 @@ public interface IDBAdapter : IEventStream<DBAdapterEvent>, ILockContext
     /// Closes the adapter. 
     /// </summary>
     new void Close();
-
-    /// <summary>
-    /// Execute a batch of write statements.
-    /// </summary>
-    Task<QueryResult> ExecuteBatch(string query, object?[][]? parameters = null);
 
     /// <summary>
     /// The name of the adapter.
