@@ -6,6 +6,9 @@ using Microsoft.Data.Sqlite;
 
 using PowerSync.Common.Client;
 
+/// <summary>
+/// dotnet test -v n --framework net8.0 --filter "PowerSyncDatabaseTests"
+/// </summary>
 public class PowerSyncDatabaseTests : IAsyncLifetime
 {
     private PowerSyncDatabase db = default!;
@@ -454,4 +457,18 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         var afterTx = await db.GetAll<object>("SELECT * FROM assets");
         Assert.Equal(2, afterTx.Length);
     }
+
+    [Fact(Timeout = 5000)]
+    public async Task GetUploadQueueStatsTest()
+    {
+        for (var i = 0; i < 100; i++)
+        {
+            await db.Execute("INSERT INTO assets (id) VALUES(?)", ["0" + i + "-writelock"]);
+        }
+
+        var stats = await db.GetUploadQueueStats(true);
+        Assert.Equal(100, stats.Count);
+        Assert.NotNull(stats.Size);
+    }
+
 }

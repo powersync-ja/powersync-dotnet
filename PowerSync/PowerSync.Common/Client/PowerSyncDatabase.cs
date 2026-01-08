@@ -420,6 +420,33 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         Closed = true;
     }
 
+    private record UploadQueueStatsResult(int size, int count);
+    /// <summary>
+    /// Get upload queue size estimate and count.
+    /// </summary>
+    public async Task<UploadQueueStats> GetUploadQueueStats(bool includeSize = false)
+    {
+        return await ReadTransaction(async tx =>
+        {
+            if (includeSize)
+            {
+                var result = await tx.Get<UploadQueueStatsResult>(
+                    $"SELECT SUM(cast(data as blob) + 20) as size, count(*) as count FROM {PSInternalTable.CRUD}"
+                );
+
+                return new UploadQueueStats(result.count, result.size);
+            }
+            else
+            {
+                var result = await tx.Get<UploadQueueStatsResult>(
+                    $"SELECT count(*) as count FROM {PSInternalTable.CRUD}"
+                );
+                return new UploadQueueStats(result.count);
+            }
+        });
+    }
+
+
     /// <summary>
     /// Get a batch of crud data to upload.
     /// <para />
