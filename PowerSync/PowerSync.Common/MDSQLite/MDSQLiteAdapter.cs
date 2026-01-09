@@ -149,10 +149,9 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
         return await WriteLock((ctx) => ctx.Execute(query, parameters));
     }
 
-    public Task<QueryResult> ExecuteBatch(string query, object?[][]? parameters = null)
+    public async Task<NonQueryResult> ExecuteBatch(string query, object?[][]? parameters = null)
     {
-        // https://learn.microsoft.com/en-gb/dotnet/standard/data/sqlite/batching
-        throw new NotImplementedException();
+        return await WriteTransaction((ctx) => ctx.ExecuteBatch(query, parameters));
     }
 
     public async Task<T> Get<T>(string sql, object?[]? parameters = null)
@@ -305,6 +304,11 @@ public class MDSQLiteTransaction(MDSQLiteConnection connection) : ITransaction
     public Task<NonQueryResult> Execute(string query, object?[]? parameters = null)
     {
         return connection.Execute(query, parameters);
+    }
+
+    public Task<NonQueryResult> ExecuteBatch(string query, object?[][]? parameters = null)
+    {
+        return connection.ExecuteBatch(query, parameters);
     }
 
     public Task<T> Get<T>(string sql, object?[]? parameters = null)

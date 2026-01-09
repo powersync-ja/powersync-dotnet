@@ -293,6 +293,36 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.Equal(42, result);
     }
 
+    [Fact]
+    public async Task BatchExecuteTest()
+    {
+        var id1 = Guid.NewGuid().ToString();
+        var description1 = "Asset 1";
+        var make1 = "Make 1";
+
+        var id2 = Guid.NewGuid().ToString();
+        var description2 = "Asset 2";
+        var make2 = "Make 2";
+
+        var sql = "INSERT INTO assets (id, description, make) VALUES(?, ?, ?)";
+        object?[][] parameters = [
+            [id1, description1, make1],
+            [id2, description2, make2]
+        ];
+
+        await db.ExecuteBatch(sql, parameters);
+
+        var result = await db.GetAll<AssetResult>("SELECT id, description, make FROM assets ORDER BY description");
+
+        Assert.Equal(2, result.Length);
+        Assert.Equal(id1, result[0].id);
+        Assert.Equal(description1, result[0].description);
+        Assert.Equal(make1, result[0].make);
+        Assert.Equal(id2, result[1].id);
+        Assert.Equal(description2, result[1].description);
+        Assert.Equal(make2, result[1].make);
+    }
+
     [Fact(Timeout = 2000)]
     public async Task QueueSimultaneousExecutionsTest()
     {

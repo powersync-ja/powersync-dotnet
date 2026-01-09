@@ -72,25 +72,29 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvent>, ILockContext
         Emit(new DBAdapterEvent { TablesUpdated = batchedUpdate });
     }
 
-    private static void PrepareCommand(SqliteCommand command, string query, object?[]? parameters)
+    /// <summary>
+    /// Replaces ? placeholders with named parameters and sets up the command.
+    /// Returns the parameter names for reference.
+    /// </summary>
+    private static List<string> PrepareCommandParameters(SqliteCommand command, string query, int parameterCount)
     {
-        if (parameters == null || parameters.Length == 0)
+        var parameterNames = new List<string>();
+
+        if (parameterCount == 0)
         {
             command.CommandText = query;
-            return;
+            return parameterNames;
         }
-
-        var parameterNames = new List<string>();
 
         // Count placeholders
         int placeholderCount = query.Count(c => c == '?');
-        if (placeholderCount != parameters.Length)
+        if (placeholderCount != parameterCount)
         {
-            throw new ArgumentException("Number of provided parameters does not match the number of `?` placeholders in the query.");
+            throw new ArgumentException($"Number of parameters ({parameterCount}) does not match the number of `?` placeholders ({placeholderCount}) in the query.");
         }
 
         // Replace `?` sequentially with named parameters
-        for (int i = 0; i < parameters.Length; i++)
+        for (int i = 0; i < parameterCount; i++)
         {
             string paramName = $"@param{i}";
             parameterNames.Add(paramName);
@@ -102,16 +106,37 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvent>, ILockContext
             }
 
             query = string.Concat(query.Substring(0, index), paramName, query.Substring(index + 1));
+
         }
 
         command.CommandText = query;
 
-        // Add parameters to the command
-        for (int i = 0; i < parameters.Length; i++)
+        // Create empty parameter objects
+        foreach (var paramName in parameterNames)
         {
-            command.Parameters.AddWithValue(parameterNames[i], parameters[i] ?? DBNull.Value);
+            var parameter = command.CreateParameter();
+            parameter.ParameterName = paramName;
+            command.Parameters.Add(parameter);
+        }
+
+        return parameterNames;
+    }
+
+    private static void PrepareCommand(SqliteCommand command, string query, object?[]? parameters)
+    {
+        int paramCount = parameters?.Length ?? 0;
+        PrepareCommandParameters(command, query, paramCount);
+
+        // Set the values
+        if (parameters != null)
+        {
+            for (int i = 0; i < parameters.Length; i++)
+            {
+                command.Parameters[i].Value = parameters[i] ?? DBNull.Value;
+            }
         }
     }
+
 
     public async Task<NonQueryResult> Execute(string query, object?[]? parameters = null)
     {
@@ -124,6 +149,44 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvent>, ILockContext
         {
             InsertId = raw.sqlite3_last_insert_rowid(Db.Handle),
             RowsAffected = rowsAffected
+        };
+    }
+
+    public async Task<NonQueryResult> ExecuteBatch(string query, object?[][]? parameters = null)
+    {
+        parameters ??= [];
+
+        if (parameters.Length == 0)
+        {
+            return new NonQueryResult { RowsAffected = 0 };
+        }
+
+        int totalRowsAffected = 0;
+
+        var command = Db.CreateCommand();
+
+        // Prepare command once with parameter placeholders
+        int paramCount = parameters[0]?.Length ?? 0;
+        PrepareCommandParameters(command, query, paramCount);
+
+        // Execute for each parameter set (reuses compiled statement)
+        foreach (var paramSet in parameters)
+        {
+            if (paramSet != null)
+            {
+                for (int i = 0; i < paramSet.Length; i++)
+                {
+                    command.Parameters[i].Value = paramSet[i] ?? DBNull.Value;
+                }
+            }
+
+            totalRowsAffected += await command.ExecuteNonQueryAsync();
+        }
+
+        return new NonQueryResult
+        {
+            RowsAffected = totalRowsAffected,
+            InsertId = raw.sqlite3_last_insert_rowid(Db.Handle)
         };
     }
 
