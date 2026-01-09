@@ -6,17 +6,16 @@ public static class PowerSyncPathResolver
 {
     public static string GetNativeLibraryPath(string packagePath)
     {
+        string fileName = GetFileNameForPlatform();
 
-        // .NET Framework 4.8 on Windows requires a different path (not supporting versions prior to this)
-        if (RuntimeInformation.FrameworkDescription.StartsWith(".NET Framework 4.8") && RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            return Path.Combine(AppContext.BaseDirectory, "powersync.dll");
-        }
+        // Check the flattened path first since some technologies (eg. .NET Framework 4.8) flatten libraries into the root folder.
+        // Checking this path first also makes debugging easier, since one can easily change the resolved DLL.
+        string flattenedPath = Path.Combine(packagePath, fileName);
+        if (File.Exists(flattenedPath)) return flattenedPath;
 
+        // Otherwise, check the native code dir
         string rid = GetRuntimeIdentifier();
         string nativeDir = Path.Combine(packagePath, "runtimes", rid, "native");
-
-        string fileName = GetFileNameForPlatform();
 
         return Path.Combine(nativeDir, fileName);
     }
