@@ -1,7 +1,17 @@
 # PowerSync.Common Changelog
 
 ## 0.0.7-alpha.1
+- Added fallback to check the application's root directory for the PowerSync extension - fixing compatibility with WPF/WAP, .NET Framework <= 4.8, and other platforms that flatten DLLs into the base folder.
 - Added `ExecuteBatch()` implementation.
+- Added `GetUploadQueueStats()` to `PowerSyncDatabase`.
+- Altered query methods, `Execute()`, `GetAll()`, `GetOptional()`, `Get()`, `Watch()`,  to support null parameters in their parameters list, for example: 
+
+```csharp
+db.Execute(
+    "INSERT INTO assets(id, description, make) VALUES(?, ?, ?)",
+    [id, name, null] // last parameter is an explicit null value
+);
+```
 
 ## 0.0.6-alpha.1
 - Updated to the latest version (0.4.10) of the core extension.
