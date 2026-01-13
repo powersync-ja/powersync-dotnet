@@ -20,6 +20,9 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvent>, ILockContext
 {
 
     public SqliteConnection Db;
+
+    public SqliteConnection Connection => Db;
+
     private readonly List<UpdateNotification> updateBuffer;
     public MDSQLiteConnection(MDSQLiteConnectionOptions options)
     {

@@ -25,6 +25,8 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
     public MDSQLiteConnection? writeConnection;
     public MDSQLiteConnection? readConnection;
 
+    public SqliteConnection Connection => writeConnection!.Connection;
+
     private readonly Task initialized;
 
     protected MDSQLiteAdapterOptions options;
@@ -279,7 +281,10 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
 public class MDSQLiteTransaction(MDSQLiteConnection connection) : ITransaction
 {
     private readonly MDSQLiteConnection connection = connection;
+
     private bool finalized = false;
+
+    public SqliteConnection Connection => connection.Connection;
 
     public async Task Begin()
     {

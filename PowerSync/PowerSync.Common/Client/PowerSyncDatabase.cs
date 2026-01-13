@@ -17,6 +17,8 @@ using PowerSync.Common.DB.Schema;
 using PowerSync.Common.MDSQLite;
 using PowerSync.Common.Utils;
 
+using Dapper;
+
 public class BasePowerSyncDatabaseOptions()
 {
     /// <summary>
@@ -25,6 +27,11 @@ public class BasePowerSyncDatabaseOptions()
     public Schema Schema { get; set; } = null!;
 
     public ILogger? Logger { get; set; } = null!;
+
+}
+
+class User
+{
 
 }
 
@@ -293,6 +300,18 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         this.schema = schema;
         await Database.Execute("SELECT powersync_replace_schema(?)", [schema.ToJSON()]);
         await Database.RefreshSchema();
+
+
+
+        var users = await Database.ReadLock(async ctx =>
+        (await ctx.Connection.QueryAsync<User>("SELECT * FROM users WHERE age > @Age", new { Age = 21 })).ToList()
+    );
+
+        await Database.WriteLock(async ctx =>
+        {
+            await ctx.Connection.ExecuteAsync("INSERT INTO users (name, age) VALUES (@Name, @Age)", new { Name = "Alice", Age = 30 });
+        });
+
         Emit(new PowerSyncDBEvent { SchemaChanged = schema });
     }
 

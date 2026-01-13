@@ -3,6 +3,8 @@ namespace PowerSync.Common.DB;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
+using Microsoft.Data.Sqlite;
+
 using PowerSync.Common.Utils;
 
 public class NonQueryResult
@@ -46,6 +48,8 @@ public interface ILockContext : IDBGetUtils
 
     // Execute a batch of write statements. 
     Task<NonQueryResult> ExecuteBatch(string query, object?[][]? parameters = null);
+
+    SqliteConnection Connection { get; }
 }
 
 public interface ITransaction : ILockContext
