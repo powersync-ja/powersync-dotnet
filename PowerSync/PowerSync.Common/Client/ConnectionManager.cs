@@ -120,15 +120,10 @@ public class ConnectionManager : EventStream<ConnectionManagerEvent>
 
     public StreamingSyncImplementation? SyncStreamImplementation;
 
-    public IPowerSyncBackendConnector? Connector
-    {
-        get => PendingConnectionOptions?.Connector;
-    }
+    public IPowerSyncBackendConnector? Connector => PendingConnectionOptions?.Connector;
 
-    public PowerSyncConnectionOptions? ConnectionOptions
-    {
-        get => PendingConnectionOptions?.Options;
-    }
+
+    public PowerSyncConnectionOptions? ConnectionOptions => PendingConnectionOptions?.Options;
 
     /// <summary>
     /// Additional cleanup function which is called after the sync stream implementation
@@ -454,7 +449,20 @@ class SyncStreamSubscriptionHandle : ISyncStreamSubscription
         Subscription = subscription;
         Subscription.IncrementRefCount();
         Active = true;
-        //  _finalizer?.register(this, subscription);
+    }
+
+    /// <summary>
+    /// Finalizer(~): Logs a warning when the object is GC'd without Unsubscribe() being called.
+    /// </summary>
+    ~SyncStreamSubscriptionHandle()
+    {
+        if (Active)
+        {
+            Subscription.Logger.LogWarning(
+                "A subscription to {Name} with params {Params} leaked! Please ensure calling Unsubscribe() when you don't need a subscription anymore.",
+                Subscription.Name,
+                JsonConvert.SerializeObject(Subscription.Parameters));
+        }
     }
 
     public string Name => Subscription.Name;

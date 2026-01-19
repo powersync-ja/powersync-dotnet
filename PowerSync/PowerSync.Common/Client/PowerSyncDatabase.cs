@@ -113,20 +113,11 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
 
     private readonly AsyncLock runExclusive = new();
 
-    public StreamingSyncImplementation? SyncStreamImplementation
-    {
-        get => ConnectionManager.SyncStreamImplementation;
-    }
+    public StreamingSyncImplementation? SyncStreamImplementation => ConnectionManager.SyncStreamImplementation;
 
-    public IPowerSyncBackendConnector? Connector
-    {
-        get => ConnectionManager.Connector;
-    }
+    public IPowerSyncBackendConnector? Connector => ConnectionManager.Connector;
 
-    public PowerSyncConnectionOptions? ConnectionOptions
-    {
-        get => ConnectionManager.ConnectionOptions;
-    }
+    public PowerSyncConnectionOptions? ConnectionOptions => ConnectionManager.ConnectionOptions;
 
     public PowerSyncDatabase(PowerSyncDatabaseOptions options)
     {

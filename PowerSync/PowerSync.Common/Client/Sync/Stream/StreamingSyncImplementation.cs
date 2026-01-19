@@ -200,12 +200,13 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
     /// <summary>
     /// Indicates if the sync service is connected.
     /// </summary>
-    public bool IsConnected { get; protected set; }
+    public bool IsConnected => SyncStatus.Connected;
+
 
     /// <summary>
     /// The timestamp of the last successful sync.
     /// </summary>
-    public DateTime? LastSyncedAt { get; protected set; }
+    public DateTime? LastSyncedAt => SyncStatus.LastSyncedAt;
 
     /// <summary>
     /// The current synchronization status.
