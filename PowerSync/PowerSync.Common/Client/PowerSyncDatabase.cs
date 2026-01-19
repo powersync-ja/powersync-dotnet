@@ -8,6 +8,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 using Newtonsoft.Json;
 
+using Nito.AsyncEx;
+
 using PowerSync.Common.Client.Connection;
 using PowerSync.Common.Client.Sync.Bucket;
 using PowerSync.Common.Client.Sync.Stream;
@@ -47,6 +49,10 @@ public class PowerSyncDBEvent : StreamingSyncImplementationEvent
 {
     public bool? Initialized { get; set; }
     public Schema? SchemaChanged { get; set; }
+
+    public bool? Closing { get; set; }
+
+    public bool? Closed { get; set; }
 }
 
 public interface IPowerSyncDatabase : IEventStream<PowerSyncDBEvent>
@@ -94,28 +100,33 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
     protected Task IsReadyTask;
     protected ConnectionManager ConnectionManager;
 
-    private InternalSubscriptionManager subscriptions;
+    private readonly InternalSubscriptionManager subscriptions;
 
     private StreamingSyncImplementation? syncStreamImplementation;
     public string SdkVersion;
 
     protected IBucketStorageAdapter BucketStorageAdapter;
 
-    // protected CancellationTokenSource? syncStreamStatusCts;
-
     protected SyncStatus CurrentStatus;
 
     public ILogger Logger;
 
-    // public Task FirstStatusMatching(Func<SyncStatus, bool> predicate, CancellationToken? cancellationToken = null)
-    //     => firstStatusMatching(predicate, cancellationToken);
+    private readonly AsyncLock runExclusive = new();
 
-    // public IPowerSyncBackendConnector Connector => ConnectionManager.Connector;
+    public StreamingSyncImplementation? SyncStreamImplementation
+    {
+        get => ConnectionManager.SyncStreamImplementation;
+    }
 
-    // get syncStreamImplementation()
-    // {
-    //     return this.connectionManager.syncStreamImplementation;
-    // }
+    public IPowerSyncBackendConnector? Connector
+    {
+        get => ConnectionManager.Connector;
+    }
+
+    public PowerSyncConnectionOptions? ConnectionOptions
+    {
+        get => ConnectionManager.ConnectionOptions;
+    }
 
     public PowerSyncDatabase(PowerSyncDatabaseOptions options)
     {
@@ -151,8 +162,8 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
 
         /// Start async init
         subscriptions = new InternalSubscriptionManager(
-            firstStatusMatching: async (predicate, cancellationToken) => await WaitForStatus(predicate, cancellationToken),
-            resolveOfflineSyncStatus: async () => await ResolveOfflineSyncStatus(),
+            firstStatusMatching: WaitForStatus,
+            resolveOfflineSyncStatus: ResolveOfflineSyncStatus,
             subscriptionsCommand: async (payload) => await this.WriteTransaction(async tx =>
                 {
                     await tx.Execute("SELECT powersync_control(?, ?) AS r", ["subscriptions", payload]);
@@ -161,39 +172,41 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         ConnectionManager = new ConnectionManager(createSyncImplementation: async (connector, options) =>
         {
             await WaitForReady();
-            // TODO: runExclusive?
-            syncStreamImplementation = new StreamingSyncImplementation(new StreamingSyncImplementationOptions
+            using (await runExclusive.LockAsync())
             {
-                Adapter = BucketStorageAdapter,
-                Remote = new Remote(connector),
-                UploadCrud = async () =>
+                syncStreamImplementation = new StreamingSyncImplementation(new StreamingSyncImplementationOptions
                 {
-                    await WaitForReady();
-                    await connector.UploadData(this);
-                },
-                RetryDelayMs = options.RetryDelayMs,
-                CrudUploadThrottleMs = options.CrudUploadThrottleMs,
-                Logger = Logger
-            });
-
-            var syncStreamStatusCts = new CancellationTokenSource();
-            var _ = Task.Run(() =>
-            {
-                foreach (var update in syncStreamImplementation.Listen(syncStreamStatusCts.Token))
-                {
-                    if (update.StatusChanged != null)
+                    Adapter = BucketStorageAdapter,
+                    Remote = new Remote(connector),
+                    UploadCrud = async () =>
                     {
-                        CurrentStatus = new SyncStatus(new SyncStatusOptions(update.StatusChanged.Options)
-                        {
-                            HasSynced = CurrentStatus?.HasSynced == true || update.StatusChanged.LastSyncedAt != null,
-                        });
-                        Emit(new PowerSyncDBEvent { StatusChanged = CurrentStatus });
-                    }
-                }
-            });
+                        await WaitForReady();
+                        await connector.UploadData(this);
+                    },
+                    RetryDelayMs = options.RetryDelayMs,
+                    CrudUploadThrottleMs = options.CrudUploadThrottleMs,
+                    Logger = Logger
+                });
 
-            await syncStreamImplementation.WaitForReady();
-            return new ConnectionManagerSyncImplementationResult(syncStreamImplementation, () => syncStreamStatusCts.Cancel());
+                var syncStreamStatusCts = new CancellationTokenSource();
+                var _ = Task.Run(() =>
+                {
+                    foreach (var update in syncStreamImplementation.Listen(syncStreamStatusCts.Token))
+                    {
+                        if (update.StatusChanged != null)
+                        {
+                            CurrentStatus = new SyncStatus(new SyncStatusOptions(update.StatusChanged.Options)
+                            {
+                                HasSynced = CurrentStatus?.HasSynced == true || update.StatusChanged.LastSyncedAt != null,
+                            });
+                            Emit(new PowerSyncDBEvent { StatusChanged = CurrentStatus });
+                        }
+                    }
+                });
+
+                await syncStreamImplementation.WaitForReady();
+                return new ConnectionManagerSyncImplementationResult(syncStreamImplementation, () => syncStreamStatusCts.Cancel());
+            }
         }, logger: Logger);
 
         IsReadyTask = Initialize();
@@ -392,24 +405,14 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
             throw new Exception("Cannot connect using a closed client");
         }
 
-        var resolvedOptions = resolveConnectionOptions(options);
+        var resolvedOptions = options ?? new PowerSyncConnectionOptions();
 
         await ConnectionManager.Connect(connector, resolvedOptions);
-
-        // syncStreamImplementation.TriggerCrudUpload();
-        // await syncStreamImplementation.Connect(options);
     }
 
     public async Task Disconnect()
     {
-        // await WaitForReady();
-        // if (syncStreamImplementation != null)
-        // {
-        //     await syncStreamImplementation.Disconnect();
-        //     syncStreamImplementation.Close();
-        //     syncStreamImplementation = null;
-        // }
-        // syncStreamStatusCts?.Cancel();
+
         await ConnectionManager.Disconnect();
     }
 
@@ -462,14 +465,15 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         if (Closed) return;
 
 
+        Emit(new PowerSyncDBEvent { Closing = true });
         await Disconnect();
+
+
         base.Close();
         await ConnectionManager.Close();
-        // syncStreamImplementation?.Close();
-        // BucketStorageAdapter?.Close();
-
         Database.Close();
         Closed = true;
+        Emit(new PowerSyncDBEvent { Closed = true });
     }
 
     private record UploadQueueStatsResult(int size, int count);

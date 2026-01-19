@@ -3,6 +3,8 @@ using System.Reflection.Emit;
 
 using Microsoft.Extensions.Logging;
 
+using Newtonsoft.Json;
+
 using PowerSync.Common.Client.Connection;
 using PowerSync.Common.Client.Sync.Stream;
 using PowerSync.Common.DB.Crud;
@@ -119,9 +121,19 @@ public class ConnectionManager : EventStream<ConnectionManagerEvent>
     /// <summary>
     /// Subscriptions managed in this connection manager.
     /// </summary>
-    private Dictionary<string, ActiveSubscription> locallyActiveSubscriptions = [];
+    private readonly Dictionary<string, ActiveSubscription> locallyActiveSubscriptions = [];
 
-    protected StreamingSyncImplementation? SyncStreamImplementation;
+    public StreamingSyncImplementation? SyncStreamImplementation;
+
+    public IPowerSyncBackendConnector? Connector
+    {
+        get => PendingConnectionOptions?.Connector;
+    }
+
+    public PowerSyncConnectionOptions? ConnectionOptions
+    {
+        get => PendingConnectionOptions?.Options;
+    }
 
     /// <summary>
     /// Additional cleanup function which is called after the sync stream implementation
@@ -144,18 +156,6 @@ public class ConnectionManager : EventStream<ConnectionManagerEvent>
         PendingConnectionOptions = null;
         SyncStreamImplementation = null;
         SyncDisposer = null;
-    }
-
-
-    public SubscribedStream[] ActiveStreams
-    {
-        get => locallyActiveSubscriptions.Values
-            .Select(a => new SubscribedStream
-            {
-                Name = a.Name,
-                Parameters = a.Parameters
-            })
-            .ToArray();
     }
 
     public new async Task Close()
@@ -256,10 +256,6 @@ public class ConnectionManager : EventStream<ConnectionManagerEvent>
         // This method ensures a disconnect before any connection attempt
         await DisconnectInternal();
 
-
-        /// ----
-
-        /// 
         /// 
         SyncStreamInitTask = InitSyncStream();
 
@@ -372,8 +368,107 @@ public class ConnectionManager : EventStream<ConnectionManagerEvent>
 
     public ISyncStream Stream(InternalSubscriptionManager adapter, string name, Dictionary<string, object>? parameters)
     {
-        return default;
+        Task WaitForFirstSync(CancellationToken? cancellationToken = null) =>
+            adapter.FirstStatusMatching(s =>
+            s.ForStream(
+                new ConnectionManagerSyncDescription(name, parameters))?.Subscription.HasSynced == true, cancellationToken
+            );
+
+        var stream = new ConnectionManagerSyncStream(
+            name: name,
+            subscribe: async options =>
+            {
+                // NOTE: We also run this command if a subscription already exists, because this increases the expiry date
+                // (relevant if the app is closed before connecting again, where the last subscribe call determines the ttl).
+                await adapter.SubscriptionsCommand(new
+                {
+                    subscribe = new
+                    {
+                        stream = new
+                        {
+                            name,
+                            @params = parameters
+                        },
+                        ttl = options?.Ttl,
+                        priority = options?.Priority
+                    }
+                });
+
+                if (SyncStreamImplementation == null)
+                {
+                    // We're not connected. So, update the offline sync status to reflect the new subscription.
+                    // (With an active iteration, the sync client would include it in its state).
+                    await adapter.ResolveOfflineSyncStatus();
+                }
+
+                var key = $"{name}|{JsonConvert.SerializeObject(parameters)}";
+                var subscription = locallyActiveSubscriptions.GetValueOrDefault(key);
+
+                if (subscription == null)
+                {
+                    var clearSubscription = () =>
+                    {
+                        locallyActiveSubscriptions.Remove(key);
+                        SubscriptionsMayHaveChanged();
+                    };
+
+                    subscription = new ActiveSubscription(name, parameters, Logger, WaitForFirstSync, clearSubscription);
+                    locallyActiveSubscriptions[key] = subscription;
+                    SubscriptionsMayHaveChanged();
+                }
+
+                return new SyncStreamSubscriptionHandle(subscription);
+            },
+            unsubscribeAll: async () =>
+            {
+                await adapter.SubscriptionsCommand(new { unsubscribe = new { name, @params = parameters } });
+                SubscriptionsMayHaveChanged();
+
+            },
+            parameters: parameters
+        );
+        return stream;
     }
+
+    public SubscribedStream[] ActiveStreams
+    {
+        get => locallyActiveSubscriptions.Values
+            .Select(a => new SubscribedStream
+            {
+                Name = a.Name,
+                Parameters = a.Parameters
+            })
+            .ToArray();
+    }
+
+    private void SubscriptionsMayHaveChanged()
+    {
+        SyncStreamImplementation?.UpdateSubscriptions(ActiveStreams);
+    }
+}
+
+class ConnectionManagerSyncDescription(string name,
+    Dictionary<string, object>? parameters = null) : ISyncStreamDescription
+{
+    public string Name => name;
+
+    public Dictionary<string, object>? Parameters => parameters;
+}
+
+class ConnectionManagerSyncStream(
+    string name,
+    Func<SyncStreamSubscribeOptions?, Task<ISyncStreamSubscription>> subscribe,
+    Func<Task> unsubscribeAll,
+    Dictionary<string, object>? parameters = null) : ISyncStream
+{
+    public string Name => name;
+    public Dictionary<string, object>? Parameters => parameters;
+
+    public Task<ISyncStreamSubscription> Subscribe(SyncStreamSubscribeOptions? options = null)
+        => subscribe(options);
+
+    public Task UnsubscribeAll()
+        => unsubscribeAll();
 }
 
 class SyncStreamSubscriptionHandle : ISyncStreamSubscription
