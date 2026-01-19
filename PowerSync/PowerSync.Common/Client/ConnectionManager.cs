@@ -1,6 +1,3 @@
-using System.Dynamic;
-using System.Reflection.Emit;
-
 using Microsoft.Extensions.Logging;
 
 using Newtonsoft.Json;
@@ -74,7 +71,6 @@ public class ActiveSubscription(
     }
 }
 
-
 public class StoredConnectionOptions(
     IPowerSyncBackendConnector connector,
     PowerSyncConnectionOptions options)
@@ -87,7 +83,6 @@ public class ConnectionManagerEvent
 {
     public StreamingSyncImplementation? SyncStreamCreated { get; set; }
 }
-
 
 public class ConnectionManager : EventStream<ConnectionManagerEvent>
 {
@@ -138,7 +133,7 @@ public class ConnectionManager : EventStream<ConnectionManagerEvent>
     /// <summary>
     /// Additional cleanup function which is called after the sync stream implementation
     /// is disposed.
-    /// </summary
+    /// </summary>
     protected Action? SyncDisposer;
 
     Func<IPowerSyncBackendConnector, CreateSyncImplementationOptions, Task<ConnectionManagerSyncImplementationResult>> CreateSyncImplementation;
@@ -189,26 +184,8 @@ public class ConnectionManager : EventStream<ConnectionManagerEvent>
             await DisconnectInternal();
         }
 
-        if (ConnectingTask == null)
-        {
-            try
-            {
-                ConnectingTask = ConnectInternal();
-            }
-            catch
-            {
-                // Swallow errors
-            }
-            finally
-            {
-                await CheckConnection();
-            }
-        }
-
-        if (ConnectingTask != null)
-        {
-            await ConnectingTask;
-        }
+        ConnectingTask ??= CheckedConnectInternal();
+        await ConnectingTask;
     }
 
     /// <summary>
@@ -222,7 +199,7 @@ public class ConnectionManager : EventStream<ConnectionManagerEvent>
         {
             // Pending options have been placed while connecting.
             // Need to reconnect.
-            ConnectingTask = safeConnectInternal();
+            ConnectingTask = CheckedConnectInternal();
             return ConnectingTask;
         }
         else
@@ -231,21 +208,21 @@ public class ConnectionManager : EventStream<ConnectionManagerEvent>
             ConnectingTask = null;
             return Task.CompletedTask;
         }
+    }
 
-        async Task safeConnectInternal()
+    async Task CheckedConnectInternal()
+    {
+        try
         {
-            try
-            {
-                await ConnectInternal();
-            }
-            catch
-            {
-                // Swallow errors
-            }
-            finally
-            {
-                await CheckConnection();
-            }
+            await ConnectInternal();
+        }
+        catch
+        {
+            // Swallow errors
+        }
+        finally
+        {
+            await CheckConnection();
         }
     }
 
@@ -256,19 +233,16 @@ public class ConnectionManager : EventStream<ConnectionManagerEvent>
         // This method ensures a disconnect before any connection attempt
         await DisconnectInternal();
 
-        /// 
+        appliedOptions = PendingConnectionOptions?.Options;
         SyncStreamInitTask = InitSyncStream();
 
-        if (SyncStreamInitTask != null)
-        {
-            await SyncStreamInitTask;
-            SyncStreamInitTask = null;
-        }
-        appliedOptions = PendingConnectionOptions?.Options;
+        await SyncStreamInitTask;
+        SyncStreamInitTask = null;
+        PendingConnectionOptions = null;
 
         if (appliedOptions == null)
         {
-            // A disconnect could have cleared the options which did not create a syncStreamImplementation
+            // A disconnect could have cleared the options.
             return;
         }
 
@@ -303,7 +277,6 @@ public class ConnectionManager : EventStream<ConnectionManagerEvent>
         var connector = PendingConnectionOptions.Connector;
         var options = PendingConnectionOptions.Options;
 
-        PendingConnectionOptions = null;
 
         var result = await CreateSyncImplementation(connector, new CreateSyncImplementationOptions
         {
@@ -436,7 +409,7 @@ public class ConnectionManager : EventStream<ConnectionManagerEvent>
             .Select(a => new SubscribedStream
             {
                 Name = a.Name,
-                Parameters = a.Parameters
+                Params = a.Parameters
             })
             .ToArray();
     }
@@ -498,8 +471,8 @@ class SyncStreamSubscriptionHandle : ISyncStreamSubscription
         if (Active)
         {
             Active = false;
-            Subscription.DecrementRefCount();
             // _finalizer?.unregister(this);
+            Subscription.DecrementRefCount();
         }
     }
 }

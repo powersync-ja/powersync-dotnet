@@ -121,10 +121,11 @@ public class PowerSyncConnectionOptions(
 
 public class SubscribedStream
 {
-
+    [JsonProperty("name")]
     public string Name { get; set; } = null!;
 
-    public Dictionary<string, object>? Parameters { get; set; }
+    [JsonProperty("params")]
+    public Dictionary<string, object>? Params { get; set; }
 
 }
 
