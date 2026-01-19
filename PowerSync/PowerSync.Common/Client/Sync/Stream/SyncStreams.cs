@@ -120,7 +120,7 @@ public interface ISyncStream : ISyncStreamDescription
 /// <summary>
 /// Represents an active subscription to a sync stream.
 /// </summary>
-public interface ISyncStreamSubscription : ISyncStreamDescription, IDisposable
+public interface ISyncStreamSubscription : ISyncStreamDescription
 {
     /// <summary>
     /// Waits until data from this sync stream has been synced and applied.
