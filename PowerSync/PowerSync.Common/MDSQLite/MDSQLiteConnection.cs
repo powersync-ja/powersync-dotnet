@@ -1,10 +1,11 @@
 namespace PowerSync.Common.MDSQLite;
 
+using System.Data;
 using System.Threading.Tasks;
 
-using Microsoft.Data.Sqlite;
+using Dapper;
 
-using Newtonsoft.Json;
+using Microsoft.Data.Sqlite;
 
 using PowerSync.Common.DB;
 using PowerSync.Common.Utils;
@@ -72,21 +73,14 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvent>, ILockContext
         Emit(new DBAdapterEvent { TablesUpdated = batchedUpdate });
     }
 
-    /// <summary>
-    /// Replaces ? placeholders with named parameters and sets up the command.
-    /// Returns the parameter names for reference.
-    /// </summary>
-    private static List<string> PrepareCommandParameters(SqliteCommand command, string query, int parameterCount)
+    private static List<string> PrepareQueryString(ref string query, int parameterCount)
     {
-        var parameterNames = new List<string>();
-
+        var parameterList = new List<string>();
         if (parameterCount == 0)
         {
-            command.CommandText = query;
-            return parameterNames;
+            return parameterList;
         }
 
-        // Count placeholders
         int placeholderCount = query.Count(c => c == '?');
         if (placeholderCount != parameterCount)
         {
@@ -97,7 +91,7 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvent>, ILockContext
         for (int i = 0; i < parameterCount; i++)
         {
             string paramName = $"@param{i}";
-            parameterNames.Add(paramName);
+            parameterList.Add(paramName);
 
             int index = query.IndexOf('?');
             if (index == -1)
@@ -105,165 +99,126 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvent>, ILockContext
                 throw new ArgumentException("Mismatch between placeholders and parameters.");
             }
 
+            // TODO inefficient, but maybe not noticeably so
             query = string.Concat(query.Substring(0, index), paramName, query.Substring(index + 1));
-
         }
 
-        command.CommandText = query;
-
-        // Create empty parameter objects
-        foreach (var paramName in parameterNames)
-        {
-            var parameter = command.CreateParameter();
-            parameter.ParameterName = paramName;
-            command.Parameters.Add(parameter);
-        }
-
-        return parameterNames;
+        return parameterList;
     }
 
-    private static void PrepareCommand(SqliteCommand command, string query, object?[]? parameters)
+    private static DynamicParameters? PrepareQuery(ref string query, object?[]? parameters)
     {
-        int paramCount = parameters?.Length ?? 0;
-        PrepareCommandParameters(command, query, paramCount);
-
-        // Set the values
-        if (parameters != null)
+        if (parameters is null)
         {
-            for (int i = 0; i < parameters.Length; i++)
-            {
-                command.Parameters[i].Value = parameters[i] ?? DBNull.Value;
-            }
+            return null;
         }
+
+        int parameterCount = parameters.Length;
+        if (parameterCount == 0)
+        {
+            return null;
+        }
+
+        var parameterNames = PrepareQueryString(ref query, parameterCount);
+
+        var dynamicParams = new DynamicParameters();
+
+        for (int i = 0; i < parameterCount; i++)
+        {
+            dynamicParams.Add(parameterNames[i], parameters[i]);
+        }
+
+        return dynamicParams;
     }
 
+    private static List<DynamicParameters>? PrepareQuery(ref string query, object?[][]? parameters)
+    {
+        if (parameters is null || parameters.Length == 0)
+        {
+            return null;
+        }
+        var parameterCount = parameters[0].Length;
+        var parameterNames = PrepareQueryString(ref query, parameterCount);
+
+        var dynamicParamsList = new List<DynamicParameters>();
+
+        foreach (var paramSet in parameters)
+        {
+            if (paramSet.Length != parameterCount)
+            {
+                throw new ArgumentException("Parameter sets have different number of arguments.");
+            }
+
+            var dynamicParams = new DynamicParameters();
+            for (int i = 0; i < parameterCount; i++)
+            {
+                dynamicParams.Add(parameterNames[i], paramSet[i]);
+            }
+            dynamicParamsList.Add(dynamicParams);
+        }
+
+        return dynamicParamsList;
+    }
+
+    public async Task<T?> GetOptional<T>(string query, object?[]? parameters = null)
+    {
+        DynamicParameters? dynamicParams = PrepareQuery(ref query, parameters);
+        return dynamicParams == null
+            ? await Db.QueryFirstOrDefaultAsync<T>(query, commandType: CommandType.Text)
+            : await Db.QueryFirstOrDefaultAsync<T>(query, dynamicParams, commandType: CommandType.Text);
+    }
+
+    public async Task<T> Get<T>(string query, object?[]? parameters = null)
+    {
+        DynamicParameters? dynamicParams = PrepareQuery(ref query, parameters);
+        return dynamicParams == null
+            ? await Db.QueryFirstAsync<T>(query, commandType: CommandType.Text)
+            : await Db.QueryFirstAsync<T>(query, dynamicParams, commandType: CommandType.Text);
+    }
+
+    public async Task<T[]> GetAll<T>(string query, object?[]? parameters = null)
+    {
+        DynamicParameters? dynamicParams = PrepareQuery(ref query, parameters);
+        return [..dynamicParams == null
+            ? await Db.QueryAsync<T>(query, commandType: CommandType.Text)
+            : await Db.QueryAsync<T>(query, dynamicParams, commandType: CommandType.Text)];
+    }
 
     public async Task<NonQueryResult> Execute(string query, object?[]? parameters = null)
     {
-        using var command = Db.CreateCommand();
-        PrepareCommand(command, query, parameters);
-
-        int rowsAffected = await command.ExecuteNonQueryAsync();
+        DynamicParameters? dynamicParams = PrepareQuery(ref query, parameters);
+        int rowsAffected = dynamicParams == null
+            ? await Db.ExecuteAsync(query, commandType: CommandType.Text)
+            : await Db.ExecuteAsync(query, dynamicParams, commandType: CommandType.Text);
 
         return new NonQueryResult
         {
             InsertId = raw.sqlite3_last_insert_rowid(Db.Handle),
-            RowsAffected = rowsAffected
+            RowsAffected = rowsAffected,
         };
     }
 
     public async Task<NonQueryResult> ExecuteBatch(string query, object?[][]? parameters = null)
     {
-        parameters ??= [];
-
-        if (parameters.Length == 0)
+        if (parameters is null || parameters.Length == 0)
         {
             return new NonQueryResult { RowsAffected = 0 };
         }
 
-        int totalRowsAffected = 0;
-
-        var command = Db.CreateCommand();
-
-        // Prepare command once with parameter placeholders
-        int paramCount = parameters[0]?.Length ?? 0;
-        PrepareCommandParameters(command, query, paramCount);
-
-        // Execute for each parameter set (reuses compiled statement)
-        foreach (var paramSet in parameters)
+        List<DynamicParameters>? dynamicParamsList = PrepareQuery(ref query, parameters);
+        if (dynamicParamsList is null)
         {
-            if (paramSet != null)
-            {
-                for (int i = 0; i < paramSet.Length; i++)
-                {
-                    command.Parameters[i].Value = paramSet[i] ?? DBNull.Value;
-                }
-            }
-
-            totalRowsAffected += await command.ExecuteNonQueryAsync();
+            // Should be unreachable but you never know
+            return new NonQueryResult { RowsAffected = 0 };
         }
+
+        int rowsAffected = await Db.ExecuteAsync(query, dynamicParamsList, commandType: CommandType.Text);
 
         return new NonQueryResult
         {
-            RowsAffected = totalRowsAffected,
-            InsertId = raw.sqlite3_last_insert_rowid(Db.Handle)
+            InsertId = raw.sqlite3_last_insert_rowid(Db.Handle),
+            RowsAffected = rowsAffected,
         };
-    }
-
-    public async Task<QueryResult> ExecuteQuery(string query, object?[]? parameters = null)
-    {
-        var result = new QueryResult();
-        using var command = Db.CreateCommand();
-        PrepareCommand(command, query, parameters);
-
-        var rows = new List<Dictionary<string, object>>();
-
-        using var reader = await command.ExecuteReaderAsync();
-
-        while (await reader.ReadAsync())
-        {
-            var row = new Dictionary<string, object>();
-            for (int i = 0; i < reader.FieldCount; i++)
-            {
-                row[reader.GetName(i)] = reader.IsDBNull(i) ? null! : reader.GetValue(i);
-            }
-            rows.Add(row);
-        }
-
-        result.Rows.Array = rows;
-        return result;
-    }
-
-    public async Task<T[]> GetAll<T>(string sql, object?[]? parameters = null)
-    {
-        var result = await ExecuteQuery(sql, parameters);
-
-        // If there are no rows, return an empty array.
-        if (result.Rows.Array.Count == 0)
-        {
-            return [];
-        }
-
-        var items = new List<T>();
-
-        foreach (var row in result.Rows.Array)
-        {
-            if (row != null)
-            {
-                // Serialize the row to JSON and then deserialize it into type T.
-                string json = JsonConvert.SerializeObject(row);
-                T item = JsonConvert.DeserializeObject<T>(json)!;
-                items.Add(item);
-            }
-        }
-
-        return [.. items];
-    }
-
-    public async Task<T?> GetOptional<T>(string sql, object?[]? parameters = null)
-    {
-        var result = await ExecuteQuery(sql, parameters);
-
-        // If there are no rows, return null
-        if (result.Rows.Array.Count == 0)
-        {
-            return default;
-        }
-
-        var firstRow = result.Rows.Array[0];
-
-        if (firstRow == null)
-        {
-            return default;
-        }
-
-        string json = JsonConvert.SerializeObject(firstRow);
-        return JsonConvert.DeserializeObject<T>(json);
-    }
-
-    public async Task<T> Get<T>(string sql, object?[]? parameters = null)
-    {
-        return await GetOptional<T>(sql, parameters) ?? throw new InvalidOperationException("Result set is empty");
     }
 
     public new void Close()

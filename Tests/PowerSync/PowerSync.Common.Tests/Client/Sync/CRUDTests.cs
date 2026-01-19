@@ -188,7 +188,8 @@ public class CRUDTests : IAsyncLifetime
         Assert.True(tx.Crud.First().Equals(expectedCrudEntry));
     }
 
-    private record CountResult(int count);
+    private record CountResult(long count);
+    private record CrudEntryDataResult(string data);
 
     [Fact]
     public async Task InsertOrReplaceTest()
@@ -199,7 +200,7 @@ public class CRUDTests : IAsyncLifetime
         // Replace existing entry
         await db.Execute("INSERT OR REPLACE INTO assets(id, description) VALUES(?, ?)", [testId, "test2"]);
 
-        var crudEntry = await db.Get<CrudEntryJSON>("SELECT data FROM ps_crud ORDER BY id");
+        var crudEntry = await db.Get<CrudEntryDataResult>("SELECT data FROM ps_crud ORDER BY id");
 
         Assert.Equal(
             JsonConvert.SerializeObject(new
@@ -209,7 +210,7 @@ public class CRUDTests : IAsyncLifetime
                 type = "assets",
                 data = new { description = "test2" }
             }),
-            crudEntry.Data
+            crudEntry.data
         );
 
         var assetCount = await db.Get<CountResult>("SELECT count(*) as count FROM assets");
