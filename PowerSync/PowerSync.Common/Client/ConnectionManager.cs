@@ -148,15 +148,11 @@ public class ConnectionManager : EventStream<ConnectionManagerEvent>
         SyncDisposer = null;
     }
 
-    public new async Task Close()
+    public new void Close()
     {
         base.Close();
         SyncStreamImplementation?.Close();
-
-        if (SyncDisposer != null)
-        {
-            SyncDisposer();
-        }
+        SyncDisposer?.Invoke();
     }
 
     public async Task Connect(IPowerSyncBackendConnector connector, PowerSyncConnectionOptions options)
@@ -370,7 +366,8 @@ public class ConnectionManager : EventStream<ConnectionManagerEvent>
                 }
 
                 var key = $"{name}|{JsonConvert.SerializeObject(parameters)}";
-                var subscription = locallyActiveSubscriptions.GetValueOrDefault(key);
+                var subscription = locallyActiveSubscriptions.TryGetValue(key, out var result) ? result : null;
+
 
                 if (subscription == null)
                 {

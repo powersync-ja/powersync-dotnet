@@ -21,7 +21,6 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
 
     private readonly IDBAdapter db;
     private bool hasCompletedSync;
-    private readonly bool pendingBucketDeletes;
     private readonly HashSet<string> tableNames;
     private string? clientId;
 
@@ -36,7 +35,6 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
         this.db = db;
         this.logger = logger ?? NullLogger.Instance; ;
         hasCompletedSync = false;
-        pendingBucketDeletes = true;
         tableNames = [];
 
         updateCts = new CancellationTokenSource();

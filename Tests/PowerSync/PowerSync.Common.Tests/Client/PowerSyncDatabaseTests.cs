@@ -89,7 +89,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.Single(result);
         var row = result.First();
         Assert.Equal(name, row.description);
-        Assert.Equal(null, row.make);
+        Assert.Null(row.make);
     }
 
     [Fact]

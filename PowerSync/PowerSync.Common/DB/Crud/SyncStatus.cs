@@ -200,20 +200,6 @@ public class SyncStatus(SyncStatusOptions options)
         }
     }
 
-    /**
- * If the `stream` appears in {@link syncStreams}, returns the current status for that stream.
- *
- * @experimental Sync streams are currently in alpha.
- */
-    //   forStream(stream: SyncStreamDescription): SyncStreamStatus | undefined {
-    //     const asJson = JSON.stringify(stream.parameters);
-    //     const raw = this.options.dataFlow?.internalStreamSubscriptions?.find(
-    //       (r) => r.name == stream.name && asJson == JSON.stringify(r.parameters)
-    //     );
-
-    //     return raw && new SyncStreamStatusView(this, raw);
-    //   }
-
     /// <summary>
     /// If the stream appears in <see cref="SyncStreams"/>, returns the current status for that stream.
     /// 

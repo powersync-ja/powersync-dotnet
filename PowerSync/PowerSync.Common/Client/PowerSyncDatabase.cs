@@ -151,7 +151,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         schema = options.Schema;
         SdkVersion = "";
 
-        /// Start async init
+        // Start async init
         subscriptions = new InternalSubscriptionManager(
             firstStatusMatching: WaitForStatus,
             resolveOfflineSyncStatus: ResolveOfflineSyncStatus,
@@ -461,7 +461,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
 
 
         base.Close();
-        await ConnectionManager.Close();
+        ConnectionManager.Close();
         Database.Close();
         Closed = true;
         Emit(new PowerSyncDBEvent { Closed = true });
@@ -544,7 +544,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
     ///
     /// Use this from the <see cref="IPowerSyncBackendConnector.UploadData"/> callback.
     /// <para />
-    /// Once the data have been successfully uploaded, call <see cref="CrudTransaction.Complete"/> before
+    /// Once the data have been successfully uploaded, CrudTransaction.Complete() before
     /// requesting the next transaction.
     /// <para />
     /// Unlike <see cref="GetCrudBatch"/>, this only returns data from a single transaction at a time.
