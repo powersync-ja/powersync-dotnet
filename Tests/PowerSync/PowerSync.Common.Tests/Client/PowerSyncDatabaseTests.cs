@@ -508,4 +508,20 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.NotNull(stats.Size);
     }
 
+    [Fact]
+    public async Task DynamicQueryTest()
+    {
+        string id = Guid.NewGuid().ToString();
+        string description = "new description";
+        string make = "some make";
+        await db.Execute(
+            "insert into assets (id, description, make) values (?, ?, ?)",
+            [id, description, make]
+        );
+
+        var dynamicAsset = await db.Get("select id, description, make from assets");
+        Assert.Equal(id, dynamicAsset.id);
+        Assert.Equal(description, dynamicAsset.description);
+        Assert.Equal(make, dynamicAsset.make);
+    }
 }

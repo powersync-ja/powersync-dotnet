@@ -31,12 +31,15 @@ public interface IDBGetUtils
 {
     // Execute a read-only query and return results.
     Task<T[]> GetAll<T>(string sql, object?[]? parameters = null);
+    Task<dynamic[]> GetAll(string sql, object?[]? parameters = null);
 
     // Execute a read-only query and return the first result, or null if the ResultSet is empty.
     Task<T?> GetOptional<T>(string sql, object?[]? parameters = null);
+    Task<dynamic?> GetOptional(string sql, object?[]? parameters = null);
 
     // Execute a read-only query and return the first result, error if the ResultSet is empty.
     Task<T> Get<T>(string sql, object?[]? parameters = null);
+    Task<dynamic> Get(string sql, object?[]? parameters = null);
 }
 
 public interface ILockContext : IDBGetUtils

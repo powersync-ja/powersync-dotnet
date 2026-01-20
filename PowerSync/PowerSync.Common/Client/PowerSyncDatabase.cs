@@ -68,6 +68,12 @@ public interface IPowerSyncDatabase : IEventStream<PowerSyncDBEvent>
 
     Task<T> Get<T>(string sql, object?[]? parameters = null);
 
+    Task<dynamic[]> GetAll(string sql, object?[]? parameters = null);
+
+    Task<dynamic?> GetOptional(string sql, object?[]? parameters = null);
+
+    Task<dynamic> Get(string sql, object?[]? parameters = null);
+
     Task<T> ReadLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null);
 
     Task<T> ReadTransaction<T>(Func<ITransaction, Task<T>> fn, DBLockOptions? options = null);
@@ -590,6 +596,23 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         return await Database.ExecuteBatch(query, parameters);
     }
 
+    public async Task<dynamic[]> GetAll(string query, object?[]? parameters = null)
+    {
+        await WaitForReady();
+        return await Database.GetAll(query, parameters);
+    }
+
+    public async Task<dynamic?> GetOptional(string query, object?[]? parameters = null)
+    {
+        await WaitForReady();
+        return await Database.GetOptional(query, parameters);
+    }
+    public async Task<dynamic> Get(string query, object?[]? parameters = null)
+    {
+        await WaitForReady();
+        return await Database.Get(query, parameters);
+    }
+
     public async Task<T[]> GetAll<T>(string query, object?[]? parameters = null)
     {
         await WaitForReady();
@@ -693,13 +716,13 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
 
     private class ExplainedResult
     {
-        public int addr;
-        public string opcode;
-        public int p1;
-        public int p2;
-        public int p3;
-        public string p4;
-        public int p5;
+        public int addr = 0;
+        public string opcode = "";
+        public int p1 = 0;
+        public int p2 = 0;
+        public int p3 = 0;
+        public string p4 = "";
+        public int p5 = 0;
     }
     private record TableSelectResult(string tbl_name);
     public async Task<string[]> ResolveTables(string sql, object?[]? parameters = null, SQLWatchOptions? options = null)
