@@ -462,6 +462,8 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
 
         base.Close();
         ConnectionManager.Close();
+        BucketStorageAdapter?.Close();
+
         Database.Close();
         Closed = true;
         Emit(new PowerSyncDBEvent { Closed = true });
