@@ -167,7 +167,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
             await tx.Rollback();
         });
 
-        var result = await db.GetAll<IdResult>("SELECT id FROM assets");
+        var result = await db.GetAll("SELECT * FROM assets");
         Assert.Empty(result);
     }
 
@@ -189,7 +189,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
             exceptionThrown = true;
         }
 
-        var result = await db.GetAll<IdResult>("SELECT id FROM assets");
+        var result = await db.GetAll("SELECT * FROM assets");
         Assert.Empty(result);
         Assert.True(exceptionThrown);
     }
@@ -214,10 +214,10 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         {
             await tx.Execute("INSERT INTO assets(id) VALUES(?)", ["O6"]);
 
-            var txQuery = await tx.GetAll<IdResult>("SELECT id FROM assets");
+            var txQuery = await tx.GetAll("SELECT * FROM assets");
             Assert.Single(txQuery);
 
-            var dbQuery = await db.GetAll<IdResult>("SELECT id FROM assets");
+            var dbQuery = await db.GetAll("SELECT * FROM assets");
             Assert.Empty(dbQuery);
         });
     }
@@ -483,7 +483,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         });
 
         // Try and read while the write transaction is still open
-        var result = await db.GetAll<IdResult>("SELECT id FROM assets");
+        var result = await db.GetAll("SELECT * FROM assets");
         Assert.Single(result); // The transaction is not commited yet, we should only read 1 asset
 
         // Let the transaction complete
@@ -491,7 +491,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         await transactionTask;
 
         // Read again after the transaction is committed
-        var afterTx = await db.GetAll<IdResult>("SELECT id FROM assets");
+        var afterTx = await db.GetAll("SELECT * FROM assets");
         Assert.Equal(2, afterTx.Length);
     }
 

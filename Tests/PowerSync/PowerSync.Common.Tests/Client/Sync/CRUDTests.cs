@@ -160,7 +160,7 @@ public class CRUDTests : IAsyncLifetime
     [Fact]
     public async Task Insert_RecordCrudEntryTest()
     {
-        var initialRows = await db.GetAll<object>("SELECT * FROM ps_crud");
+        var initialRows = await db.GetAll("SELECT * FROM ps_crud");
         Assert.Empty(initialRows);
 
         await db.Execute("INSERT INTO assets(id, description) VALUES(?, ?)", [testId, "test"]);
@@ -200,7 +200,7 @@ public class CRUDTests : IAsyncLifetime
         // Replace existing entry
         await db.Execute("INSERT OR REPLACE INTO assets(id, description) VALUES(?, ?)", [testId, "test2"]);
 
-        var crudEntry = await db.Get<CrudEntryDataResult>("SELECT data FROM ps_crud ORDER BY id");
+        var crudEntry = await db.Get<CrudEntryJSON>("SELECT data FROM ps_crud ORDER BY id");
 
         Assert.Equal(
             JsonConvert.SerializeObject(new
@@ -210,7 +210,7 @@ public class CRUDTests : IAsyncLifetime
                 type = "assets",
                 data = new { description = "test2" }
             }),
-            crudEntry.data
+            crudEntry.Data
         );
 
         var assetCount = await db.Get<CountResult>("SELECT count(*) as count FROM assets");
@@ -310,7 +310,7 @@ public class CRUDTests : IAsyncLifetime
 
         await insertOnlyDb.Init();
 
-        var initialCrudRows = await insertOnlyDb.GetAll<object>("SELECT * FROM ps_crud");
+        var initialCrudRows = await insertOnlyDb.GetAll("SELECT * FROM ps_crud");
         Assert.Empty(initialCrudRows);
 
         await insertOnlyDb.Execute("INSERT INTO logs(id, level, content) VALUES(?, ?, ?)", [testId, "INFO", "test log"]);
@@ -328,7 +328,7 @@ public class CRUDTests : IAsyncLifetime
             crudEntry.Data
         );
 
-        var logRows = await insertOnlyDb.GetAll<object>("SELECT * FROM logs");
+        var logRows = await insertOnlyDb.GetAll("SELECT * FROM logs");
         Assert.Empty(logRows);
 
         var tx = await insertOnlyDb.GetNextCrudTransaction();
@@ -424,7 +424,7 @@ public class CRUDTests : IAsyncLifetime
     [Fact]
     public async Task TransactionGroupingTest()
     {
-        var initialCrudRows = await db.GetAll<object>("SELECT * FROM ps_crud");
+        var initialCrudRows = await db.GetAll("SELECT * FROM ps_crud");
         Assert.Empty(initialCrudRows);
 
         await db.WriteTransaction(async (tx) =>
