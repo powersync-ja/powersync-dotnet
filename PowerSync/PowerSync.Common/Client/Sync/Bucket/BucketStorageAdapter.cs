@@ -30,6 +30,9 @@ public class Checkpoint
 
     [JsonProperty("write_checkpoint")]
     public string? WriteCheckpoint { get; set; } = null;
+
+    [JsonProperty("streams")]
+    public object[]? Streams { get; set; } = [];
 }
 
 public class BucketState

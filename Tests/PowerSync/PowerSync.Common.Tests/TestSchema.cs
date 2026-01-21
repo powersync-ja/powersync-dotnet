@@ -2,6 +2,28 @@ namespace PowerSync.Common.Tests;
 
 using PowerSync.Common.DB.Schema;
 
+public class TestSchemaTodoList
+{
+
+    public static readonly Table Lists = new Table(new Dictionary<string, ColumnType>
+    {
+        { "name",  ColumnType.TEXT }
+
+    });
+
+    public static readonly Table Todos = new Table(new Dictionary<string, ColumnType>
+        {
+            { "content", ColumnType.TEXT },
+            { "list_id", ColumnType.TEXT }
+        });
+
+    public static readonly Schema AppSchema = new Schema(new Dictionary<string, Table>
+        {
+            { "lists", Lists },
+            { "todos", Todos }
+        });
+}
+
 public class TestSchema
 {
     public static readonly Dictionary<string, ColumnType> AssetsColumns = new Dictionary<string, ColumnType>

@@ -39,10 +39,17 @@ public class DBAdapterSource(IDBAdapter Adapter) : IDatabaseSource
 
 public class PowerSyncDatabaseOptions() : BasePowerSyncDatabaseOptions()
 {
-    /// <summary> 
+    /// <summary>
     /// Source for a SQLite database connection.
     /// </summary>
     public IDatabaseSource Database { get; set; } = null!;
+
+    /// <summary>
+    /// Optional factory for creating the Remote instance.
+    /// Used for testing to inject mock implementations.
+    /// If not provided, a default Remote will be created.
+    /// </summary>
+    public Func<IPowerSyncBackendConnector, Remote>? RemoteFactory { get; set; }
 }
 
 public class PowerSyncDBEvent : StreamingSyncImplementationEvent
@@ -58,6 +65,8 @@ public class PowerSyncDBEvent : StreamingSyncImplementationEvent
 public interface IPowerSyncDatabase : IEventStream<PowerSyncDBEvent>
 {
     public Task Connect(IPowerSyncBackendConnector connector, PowerSyncConnectionOptions? options = null);
+    public ISyncStream SyncStream(string name, Dictionary<string, object>? parameters = null);
+
     public Task<string> GetClientId();
 
     public Task<CrudBatch?> GetCrudBatch(int limit);
@@ -112,6 +121,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
     public ILogger Logger;
 
     private readonly AsyncLock runExclusive = new();
+    private readonly Func<IPowerSyncBackendConnector, Remote> remoteFactory;
 
     public StreamingSyncImplementation? SyncStreamImplementation => ConnectionManager.SyncStreamImplementation;
 
@@ -151,6 +161,8 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         schema = options.Schema;
         SdkVersion = "";
 
+        remoteFactory = options.RemoteFactory ?? (connector => new Remote(connector));
+
         // Start async init
         subscriptions = new InternalSubscriptionManager(
             firstStatusMatching: WaitForStatus,
@@ -168,13 +180,14 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
                 syncStreamImplementation = new StreamingSyncImplementation(new StreamingSyncImplementationOptions
                 {
                     Adapter = BucketStorageAdapter,
-                    Remote = new Remote(connector),
+                    Remote = remoteFactory(connector),
                     UploadCrud = async () =>
                     {
                         await WaitForReady();
                         await connector.UploadData(this);
                     },
                     RetryDelayMs = options.RetryDelayMs,
+                    Subscriptions = options.Subscriptions,
                     CrudUploadThrottleMs = options.CrudUploadThrottleMs,
                     Logger = Logger
                 });
