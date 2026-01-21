@@ -19,6 +19,8 @@ public class CRUDTests : IAsyncLifetime
     private readonly string testId = Guid.NewGuid().ToString();
     private readonly string dbName = "crud-test.db";
 
+    private record CrudEntryData(string data);
+
     public async Task InitializeAsync()
     {
         db = new PowerSyncDatabase(new PowerSyncDatabaseOptions
@@ -164,7 +166,7 @@ public class CRUDTests : IAsyncLifetime
         Assert.Empty(initialRows);
 
         await db.Execute("INSERT INTO assets(id, description) VALUES(?, ?)", [testId, "test"]);
-        var crudEntry = await db.Get<CrudEntryJSON>("SELECT data FROM ps_crud ORDER BY id");
+        var crudEntry = await db.Get<CrudEntryData>("SELECT data FROM ps_crud ORDER BY id");
 
         Assert.Equal(
             JsonConvert.SerializeObject(new
@@ -174,7 +176,7 @@ public class CRUDTests : IAsyncLifetime
                 type = "assets",
                 data = new { description = "test" }
             }),
-            crudEntry.Data
+            crudEntry.data
         );
 
         var tx = await db.GetNextCrudTransaction();
@@ -200,7 +202,7 @@ public class CRUDTests : IAsyncLifetime
         // Replace existing entry
         await db.Execute("INSERT OR REPLACE INTO assets(id, description) VALUES(?, ?)", [testId, "test2"]);
 
-        var crudEntry = await db.Get<CrudEntryJSON>("SELECT data FROM ps_crud ORDER BY id");
+        var crudEntry = await db.Get<CrudEntryData>("SELECT data FROM ps_crud ORDER BY id");
 
         Assert.Equal(
             JsonConvert.SerializeObject(new
@@ -210,7 +212,7 @@ public class CRUDTests : IAsyncLifetime
                 type = "assets",
                 data = new { description = "test2" }
             }),
-            crudEntry.Data
+            crudEntry.data
         );
 
         var assetCount = await db.Get<CountResult>("SELECT count(*) as count FROM assets");
@@ -232,7 +234,7 @@ public class CRUDTests : IAsyncLifetime
 
         await db.Execute("UPDATE assets SET description = ? WHERE id = ?", ["test2", testId]);
 
-        var crudEntry = await db.Get<CrudEntryJSON>("SELECT data FROM ps_crud ORDER BY id");
+        var crudEntry = await db.Get<CrudEntryData>("SELECT data FROM ps_crud ORDER BY id");
 
         Assert.Equal(
             JsonConvert.SerializeObject(new
@@ -242,7 +244,7 @@ public class CRUDTests : IAsyncLifetime
                 type = "assets",
                 data = new { description = "test2" }
             }),
-            crudEntry.Data
+            crudEntry.data
         );
 
         var tx = await db.GetNextCrudTransaction();
@@ -264,7 +266,7 @@ public class CRUDTests : IAsyncLifetime
 
         await db.Execute("DELETE FROM assets WHERE id = ?", [testId]);
 
-        var crudEntry = await db.Get<CrudEntryJSON>("SELECT data FROM ps_crud ORDER BY id");
+        var crudEntry = await db.Get<CrudEntryData>("SELECT data FROM ps_crud ORDER BY id");
 
         Assert.Equal(
             JsonConvert.SerializeObject(new
@@ -273,7 +275,7 @@ public class CRUDTests : IAsyncLifetime
                 id = testId,
                 type = "assets",
             }),
-            crudEntry.Data
+            crudEntry.data
         );
 
         var tx = await db.GetNextCrudTransaction();
@@ -315,7 +317,7 @@ public class CRUDTests : IAsyncLifetime
 
         await insertOnlyDb.Execute("INSERT INTO logs(id, level, content) VALUES(?, ?, ?)", [testId, "INFO", "test log"]);
 
-        var crudEntry = await insertOnlyDb.Get<CrudEntryJSON>("SELECT data FROM ps_crud ORDER BY id");
+        var crudEntry = await insertOnlyDb.Get<CrudEntryData>("SELECT data FROM ps_crud ORDER BY id");
 
         Assert.Equal(
             JsonConvert.SerializeObject(new
@@ -325,7 +327,7 @@ public class CRUDTests : IAsyncLifetime
                 id = testId,
                 data = new { content = "test log", level = "INFO" }
             }),
-            crudEntry.Data
+            crudEntry.data
         );
 
         var logRows = await insertOnlyDb.GetAll("SELECT * FROM logs");
@@ -354,7 +356,7 @@ public class CRUDTests : IAsyncLifetime
         var result = await db.Get<QuantityResult>("SELECT quantity FROM assets WHERE id = ?", [testId]);
         Assert.Equal(bigNumber, result.quantity);
 
-        var crudEntry = await db.Get<CrudEntryJSON>("SELECT data FROM ps_crud ORDER BY id");
+        var crudEntry = await db.Get<CrudEntryData>("SELECT data FROM ps_crud ORDER BY id");
 
         Assert.Equal(
             JsonConvert.SerializeObject(new
@@ -364,7 +366,7 @@ public class CRUDTests : IAsyncLifetime
                 type = "assets",
                 data = new { quantity = bigNumber }
             }),
-            crudEntry.Data
+            crudEntry.data
         );
 
         var tx = await db.GetNextCrudTransaction();
@@ -387,7 +389,7 @@ public class CRUDTests : IAsyncLifetime
         var result = await db.Get<QuantityResult>("SELECT quantity FROM assets WHERE id = ?", [testId]);
         Assert.Equal(bigNumber, result.quantity);
 
-        var crudEntry = await db.Get<CrudEntryJSON>("SELECT data FROM ps_crud ORDER BY id");
+        var crudEntry = await db.Get<CrudEntryData>("SELECT data FROM ps_crud ORDER BY id");
 
         Assert.Equal(
             JsonConvert.SerializeObject(new
@@ -397,7 +399,7 @@ public class CRUDTests : IAsyncLifetime
                 type = "assets",
                 data = new { quantity = bigNumber.ToString() }
             }),
-            crudEntry.Data
+            crudEntry.data
         );
 
         await db.Execute("DELETE FROM ps_crud WHERE 1");
@@ -407,7 +409,7 @@ public class CRUDTests : IAsyncLifetime
         testId
         ]);
 
-        crudEntry = await db.Get<CrudEntryJSON>("SELECT data FROM ps_crud ORDER BY id");
+        crudEntry = await db.Get<CrudEntryData>("SELECT data FROM ps_crud ORDER BY id");
 
         Assert.Equal(
             JsonConvert.SerializeObject(new
@@ -417,7 +419,7 @@ public class CRUDTests : IAsyncLifetime
                 type = "assets",
                 data = new { description = "updated", quantity = bigNumber + 1 }
             }),
-            crudEntry.Data
+            crudEntry.data
         );
     }
 

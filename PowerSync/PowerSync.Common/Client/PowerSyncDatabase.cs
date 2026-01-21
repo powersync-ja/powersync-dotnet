@@ -63,15 +63,12 @@ public interface IPowerSyncDatabase : IEventStream<PowerSyncDBEvent>
     Task<NonQueryResult> ExecuteBatch(string query, object?[][]? parameters = null);
 
     Task<T[]> GetAll<T>(string sql, object?[]? parameters = null);
-
-    Task<T?> GetOptional<T>(string sql, object?[]? parameters = null);
-
-    Task<T> Get<T>(string sql, object?[]? parameters = null);
-
     Task<dynamic[]> GetAll(string sql, object?[]? parameters = null);
 
+    Task<T?> GetOptional<T>(string sql, object?[]? parameters = null);
     Task<dynamic?> GetOptional(string sql, object?[]? parameters = null);
 
+    Task<T> Get<T>(string sql, object?[]? parameters = null);
     Task<dynamic> Get(string sql, object?[]? parameters = null);
 
     Task<T> ReadLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null);
@@ -474,7 +471,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
     /// </summary>
     public async Task<CrudBatch?> GetCrudBatch(int limit = 100)
     {
-        var crudResult = await GetAll<CrudEntryJSON>($"SELECT id, tx_id AS TransactionId, data FROM {PSInternalTable.CRUD} ORDER BY id ASC LIMIT ?", [limit + 1]);
+        var crudResult = await GetAll<CrudEntryJSON>($"SELECT id, tx_id as transactionId, data FROM {PSInternalTable.CRUD} ORDER BY id ASC LIMIT ?", [limit + 1]);
 
         var all = crudResult.Select(CrudEntry.FromRow).ToList();
 
@@ -516,7 +513,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         return await ReadTransaction(async tx =>
         {
             var first = await tx.GetOptional<CrudEntryJSON>(
-            $"SELECT id, tx_id AS TransactionId, data FROM {PSInternalTable.CRUD} ORDER BY id ASC LIMIT 1");
+            $"SELECT id, tx_id AS transactionId, data FROM {PSInternalTable.CRUD} ORDER BY id ASC LIMIT 1");
 
             if (first == null)
             {
@@ -534,7 +531,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
             else
             {
                 var result = await tx.GetAll<CrudEntryJSON>(
-                    $"SELECT id, tx_id AS TransactionId, data FROM {PSInternalTable.CRUD} WHERE tx_id = ? ORDER BY id ASC",
+                    $"SELECT id, tx_id as transactionId, data FROM {PSInternalTable.CRUD} WHERE tx_id = ? ORDER BY id ASC",
                     [txId]);
 
                 all = result.Select(CrudEntry.FromRow).ToList();
@@ -596,27 +593,16 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         return await Database.ExecuteBatch(query, parameters);
     }
 
-    public async Task<dynamic[]> GetAll(string query, object?[]? parameters = null)
-    {
-        await WaitForReady();
-        return await Database.GetAll(query, parameters);
-    }
-
-    public async Task<dynamic?> GetOptional(string query, object?[]? parameters = null)
-    {
-        await WaitForReady();
-        return await Database.GetOptional(query, parameters);
-    }
-    public async Task<dynamic> Get(string query, object?[]? parameters = null)
-    {
-        await WaitForReady();
-        return await Database.Get(query, parameters);
-    }
-
     public async Task<T[]> GetAll<T>(string query, object?[]? parameters = null)
     {
         await WaitForReady();
         return await Database.GetAll<T>(query, parameters);
+    }
+
+    public async Task<dynamic[]> GetAll(string query, object?[]? parameters = null)
+    {
+        await WaitForReady();
+        return await Database.GetAll(query, parameters);
     }
 
     public async Task<T?> GetOptional<T>(string query, object?[]? parameters = null)
@@ -624,10 +610,23 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         await WaitForReady();
         return await Database.GetOptional<T>(query, parameters);
     }
+
+    public async Task<dynamic?> GetOptional(string query, object?[]? parameters = null)
+    {
+        await WaitForReady();
+        return await Database.GetOptional(query, parameters);
+    }
+
     public async Task<T> Get<T>(string query, object?[]? parameters = null)
     {
         await WaitForReady();
         return await Database.Get<T>(query, parameters);
+    }
+
+    public async Task<dynamic> Get(string query, object?[]? parameters = null)
+    {
+        await WaitForReady();
+        return await Database.Get(query, parameters);
     }
 
     public async Task<T> ReadLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null)
