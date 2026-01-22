@@ -174,57 +174,43 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvent>, ILockContext
     public async Task<T[]> GetAll<T>(string query, object?[]? parameters = null)
     {
         DynamicParameters? dynamicParams = PrepareQuery(ref query, parameters);
-        return [..dynamicParams == null
-            ? await Db.QueryAsync<T>(query, commandType: CommandType.Text)
-            : await Db.QueryAsync<T>(query, dynamicParams, commandType: CommandType.Text)];
+        return [.. await Db.QueryAsync<T>(query, dynamicParams, commandType: CommandType.Text)];
     }
 
     public async Task<dynamic[]> GetAll(string query, object?[]? parameters = null)
     {
         DynamicParameters? dynamicParams = PrepareQuery(ref query, parameters);
-        return [..dynamicParams == null
-            ? await Db.QueryAsync(query, commandType: CommandType.Text)
-            : await Db.QueryAsync(query, dynamicParams, commandType: CommandType.Text)];
+        return [.. await Db.QueryAsync(query, dynamicParams, commandType: CommandType.Text)];
     }
 
     public async Task<T?> GetOptional<T>(string query, object?[]? parameters = null)
     {
         DynamicParameters? dynamicParams = PrepareQuery(ref query, parameters);
-        return dynamicParams == null
-            ? await Db.QueryFirstOrDefaultAsync<T>(query, commandType: CommandType.Text)
-            : await Db.QueryFirstOrDefaultAsync<T>(query, dynamicParams, commandType: CommandType.Text);
+        return await Db.QueryFirstOrDefaultAsync<T>(query, dynamicParams, commandType: CommandType.Text);
     }
 
     public async Task<dynamic?> GetOptional(string query, object?[]? parameters = null)
     {
         DynamicParameters? dynamicParams = PrepareQuery(ref query, parameters);
-        return dynamicParams == null
-            ? await Db.QueryFirstOrDefaultAsync(query, commandType: CommandType.Text)
-            : await Db.QueryFirstOrDefaultAsync(query, dynamicParams, commandType: CommandType.Text);
+        return await Db.QueryFirstOrDefaultAsync(query, dynamicParams, commandType: CommandType.Text);
     }
 
     public async Task<T> Get<T>(string query, object?[]? parameters = null)
     {
         DynamicParameters? dynamicParams = PrepareQuery(ref query, parameters);
-        return dynamicParams == null
-            ? await Db.QueryFirstAsync<T>(query, commandType: CommandType.Text)
-            : await Db.QueryFirstAsync<T>(query, dynamicParams, commandType: CommandType.Text);
+        return await Db.QueryFirstAsync<T>(query, dynamicParams, commandType: CommandType.Text);
     }
 
     public async Task<dynamic> Get(string query, object?[]? parameters = null)
     {
         DynamicParameters? dynamicParams = PrepareQuery(ref query, parameters);
-        return dynamicParams == null
-            ? await Db.QueryFirstAsync(query, commandType: CommandType.Text)
-            : await Db.QueryFirstAsync(query, dynamicParams, commandType: CommandType.Text);
+        return await Db.QueryFirstAsync(query, dynamicParams, commandType: CommandType.Text);
     }
 
     public async Task<NonQueryResult> Execute(string query, object?[]? parameters = null)
     {
         DynamicParameters? dynamicParams = PrepareQuery(ref query, parameters);
-        int rowsAffected = dynamicParams == null
-            ? await Db.ExecuteAsync(query, commandType: CommandType.Text)
-            : await Db.ExecuteAsync(query, dynamicParams, commandType: CommandType.Text);
+        int rowsAffected = await Db.ExecuteAsync(query, dynamicParams, commandType: CommandType.Text);
 
         return new NonQueryResult
         {
