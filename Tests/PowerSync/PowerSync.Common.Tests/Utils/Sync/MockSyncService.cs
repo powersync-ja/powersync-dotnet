@@ -97,6 +97,7 @@ public class MockRemote : Remote
 
     public override async Task<Stream> PostStreamRaw(SyncStreamOptions options)
     {
+        Console.WriteLine(JsonConvert.SerializeObject(options.Data));
         connectedListeners.Add(options.Data);
 
         var pipe = new Pipe();

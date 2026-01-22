@@ -267,7 +267,6 @@ public class ConnectionManager : EventStream<ConnectionManagerEvent>
         var connector = PendingConnectionOptions.Connector;
         var options = PendingConnectionOptions.Options;
 
-
         var result = await CreateSyncImplementation(connector, new CreateSyncImplementationOptions
         {
             Subscriptions = ActiveStreams,
@@ -343,19 +342,32 @@ public class ConnectionManager : EventStream<ConnectionManagerEvent>
             {
                 // NOTE: We also run this command if a subscription already exists, because this increases the expiry date
                 // (relevant if the app is closed before connecting again, where the last subscribe call determines the ttl).
-                await adapter.SubscriptionsCommand(new
-                {
-                    subscribe = new
+                // await adapter.SubscriptionsCommand(new SubscribeCommand
+                // {
+                //     Stream = new SubscribeCommandStream
+                //     {
+                //         Name = name,
+                //         Params = parameters
+                //     },
+                //     Ttl = options?.Ttl,
+                //     Priority = options?.Priority
+                // });
+
+                await adapter.SubscriptionsCommand(
+                    new
                     {
-                        stream = new
+                        subscribe = new
                         {
-                            name,
-                            @params = parameters
-                        },
-                        ttl = options?.Ttl,
-                        priority = options?.Priority
+                            stream = new
+                            {
+                                name,
+                                @params = parameters
+                            },
+                            ttl = options?.Ttl,
+                            priority = options?.Priority
+                        }
                     }
-                });
+                 );
 
                 if (SyncStreamImplementation == null)
                 {
@@ -366,7 +378,6 @@ public class ConnectionManager : EventStream<ConnectionManagerEvent>
 
                 var key = $"{name}|{JsonConvert.SerializeObject(parameters)}";
                 var subscription = locallyActiveSubscriptions.TryGetValue(key, out var result) ? result : null;
-
 
                 if (subscription == null)
                 {
@@ -478,4 +489,29 @@ class SyncStreamSubscriptionHandle : ISyncStreamSubscription
             Subscription.DecrementRefCount();
         }
     }
+}
+
+
+public class SubscribeCommand
+{
+
+    [JsonProperty("stream")]
+    public SubscribeCommandStream Stream { get; set; } = null!;
+
+
+    [JsonProperty("ttl", NullValueHandling = NullValueHandling.Ignore)]
+    public int? Ttl { get; set; }
+
+    [JsonProperty("priority", NullValueHandling = NullValueHandling.Ignore)]
+
+    public SyncPriority? Priority { get; set; }
+}
+
+public class SubscribeCommandStream
+{
+    [JsonProperty("name")]
+    public string Name { get; set; } = null!;
+
+    [JsonProperty("params")]
+    public Dictionary<string, object>? Params { get; set; } = null;
 }

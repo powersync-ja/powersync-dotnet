@@ -572,6 +572,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                     {
                         throw new Exception("Unexpected request to establish sync stream, already connected");
                     }
+
                     receivingLines = Connect(establishSyncStream);
                     break;
                 case FetchCredentials fetchCredentials:
@@ -833,8 +834,8 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
 
     public void UpdateSubscriptions(SubscribedStream[] subscriptions)
     {
-        this.activeStreams = subscriptions;
-        this.handleActiveStreamsChange?.Invoke();
+        activeStreams = subscriptions;
+        handleActiveStreamsChange?.Invoke();
     }
 }
 
