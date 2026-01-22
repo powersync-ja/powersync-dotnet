@@ -244,7 +244,6 @@ public class ConnectionManager : EventStream<ConnectionManagerEvent>
             await DisconnectingTask;
         }
 
-        Logger.LogDebug("Attempting to connect to PowerSync instance");
         if (SyncStreamImplementation != null)
         {
             await SyncStreamImplementation.Connect(appliedOptions);
@@ -476,7 +475,6 @@ class SyncStreamSubscriptionHandle : ISyncStreamSubscription
         if (Active)
         {
             Active = false;
-            // _finalizer?.unregister(this);
             Subscription.DecrementRefCount();
         }
     }

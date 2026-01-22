@@ -127,6 +127,10 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
 
     public IPowerSyncBackendConnector? Connector => ConnectionManager.Connector;
 
+    public bool Connected => CurrentStatus.Connected;
+    public bool Connecting => CurrentStatus.Connecting;
+
+
     public PowerSyncConnectionOptions? ConnectionOptions => ConnectionManager.ConnectionOptions;
 
     public PowerSyncDatabase(PowerSyncDatabaseOptions options)
@@ -416,7 +420,6 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
 
     public async Task Disconnect()
     {
-
         await ConnectionManager.Disconnect();
     }
 
@@ -468,10 +471,8 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
 
         if (Closed) return;
 
-
         Emit(new PowerSyncDBEvent { Closing = true });
         await Disconnect();
-
 
         base.Close();
         ConnectionManager.Close();

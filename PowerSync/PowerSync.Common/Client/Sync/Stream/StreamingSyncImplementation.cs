@@ -105,8 +105,10 @@ public class StreamingSyncImplementationEvent
 public class PowerSyncConnectionOptions(
     Dictionary<string, object>? @params = null,
     int? retryDelayMs = null,
-    int? crudUploadThrottleMs = null
-) : BaseConnectionOptions(@params)
+    int? crudUploadThrottleMs = null,
+    Dictionary<string, string>? appMetadata = null,
+    bool? includeDefaultStreams = true
+) : BaseConnectionOptions(@params, appMetadata, includeDefaultStreams)
 {
     /// <summary>
     /// Delay for retrying sync streaming operations from the PowerSync backend after an error occurs.
@@ -221,8 +223,6 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
         }
         CancellationTokenSource = new CancellationTokenSource();
 
-        streamingSyncTask = StreamingSync(CancellationTokenSource.Token, options);
-
         var tcs = new TaskCompletionSource<bool>();
         var cts = new CancellationTokenSource();
 
@@ -230,21 +230,22 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
         {
             foreach (var status in Listen(cts.Token))
             {
-                if (status.StatusUpdated != null)
+                if (status.StatusChanged != null)
                 {
-                    if (status.StatusUpdated.Connected != null)
-                    {
-                        if (status.StatusUpdated.Connected == false)
-                        {
-                            logger.LogWarning("Initial connect attempt did not successfully connect to server");
-                        }
+                    logger.LogWarning("Received status update: {status}", JsonConvert.SerializeObject(status.StatusChanged));
 
-                        tcs.SetResult(true);
-                        cts.Cancel();
+                    if (status.StatusChanged.Connected == false)
+                    {
+                        logger.LogWarning("Initial connect attempt did not successfully connect to server");
                     }
+
+                    tcs.SetResult(true);
+                    cts.Cancel();
                 }
             }
         });
+
+        streamingSyncTask = StreamingSync(CancellationTokenSource.Token, options);
 
         await tcs.Task;
     }
@@ -274,7 +275,6 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
             // The operation might have failed, all we care about is if it has completed
             logger.LogWarning("{Message}", ex.Message);
         }
-
         streamingSyncTask = null;
         CancellationTokenSource = null;
 
@@ -485,15 +485,37 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                     Connected = true
                 });
 
-                string? line;
-                while ((line = await reader.ReadLineAsync()) != null)
+                // Read lines in a cancellation-aware manner.
+                // ReadLineAsync() doesn't support CancellationToken on all .NET versions,
+                // so we use WhenAny to check for cancellation between reads.
+                while (!syncOptions.CancellationToken.IsCancellationRequested)
                 {
+                    var readTask = reader.ReadLineAsync();
+
+                    // Create a task that completes when cancellation is requested
+                    var cancellationTcs = new TaskCompletionSource<bool>();
+                    using var registration = syncOptions.CancellationToken.Register(() => cancellationTcs.TrySetResult(true));
+
+                    var completedTask = await Task.WhenAny(readTask, cancellationTcs.Task);
+
+                    if (completedTask == cancellationTcs.Task)
+                    {
+                        // Cancellation was requested, exit the loop
+                        break;
+                    }
+
+                    var line = await readTask;
+                    if (line == null)
+                    {
+                        // Stream ended
+                        break;
+                    }
+
                     controlInvocations?.Emit(new EnqueuedCommand
                     {
                         Command = PowerSyncControlCommand.PROCESS_TEXT_LINE,
                         Payload = line
                     });
-
                 }
             }
             finally
@@ -786,7 +808,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
             if (!SyncStatus.Equals(updatedStatus))
             {
                 SyncStatus = updatedStatus;
-                logger.LogDebug("[Sync status updated]: {message}", updatedStatus.ToJSON());
+                logger.LogDebug("[Sync status changed]: {message}", updatedStatus.ToJSON());
                 // Only trigger this if there was a change
                 Emit(new StreamingSyncImplementationEvent { StatusChanged = updatedStatus });
             }

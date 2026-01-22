@@ -1,36 +1,51 @@
 namespace PowerSync.Common.Tests.Client.Sync;
 
+using System.Runtime.CompilerServices;
+
 using PowerSync.Common.Client;
 using PowerSync.Common.DB.Schema;
 using PowerSync.Common.Tests.Utils;
 using PowerSync.Common.Tests.Utils.Sync;
+
+using Common.Client.Sync.Stream;
 
 /// <summary>
 /// dotnet test -v n --framework net8.0 --filter "SyncStreamsTests"
 /// </summary>
 public class SyncStreamsTests : IAsyncLifetime
 {
+
+    MockSyncService syncService = null!;
+    PowerSyncDatabase db = null!;
+
     public async Task InitializeAsync()
     {
-
+        syncService = new MockSyncService();
+        db = syncService.CreateDatabase();
     }
 
     public async Task DisposeAsync()
     {
-
+        syncService.Close();
+        await db.Close();
     }
 
     [Fact]
-    public async Task BasicSyncStreamTest()
+    public async Task BasicConnectTest()
     {
-        Console.WriteLine("Starting BasicSyncStreamTest");
-        var syncService = new MockSyncService();
-        var db = syncService.CreateDatabase();
-
+        Assert.False(db.Connected);
         await db.Connect(new TestConnector());
-        // syncService.PushLine("{\"type\":\"sync_start\",\"stream\":\"test_stream\"}");
-        // syncService.PushLine(MockDataFactory.Checkpoint(lastOpId: 12345, streams: []));
-        await Task.Delay(1000);
+        Assert.True(db.Connected);
+    }
 
+    [Fact]
+    public async Task CanDisableDefaultStreams()
+    {
+        Assert.False(db.Connected);
+        await db.Connect(new TestConnector(), new PowerSyncConnectionOptions
+        {
+            IncludeDefaultStreams = false
+        });
+        Assert.True(db.Connected);
     }
 }

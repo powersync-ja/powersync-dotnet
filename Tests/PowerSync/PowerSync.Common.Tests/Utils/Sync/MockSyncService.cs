@@ -23,7 +23,7 @@ public class MockSyncService : EventStream<string>
         Emit(JsonConvert.SerializeObject(line));
     }
 
-    public IPowerSyncDatabase CreateDatabase()
+    public PowerSyncDatabase CreateDatabase()
     {
         var connector = new TestConnector();
         var mockRemote = new MockRemote(connector, this);
@@ -42,7 +42,7 @@ public class MockSyncService : EventStream<string>
         ILoggerFactory loggerFactory = LoggerFactory.Create(builder =>
         {
             builder.AddConsole();
-            builder.SetMinimumLevel(LogLevel.Trace);
+            builder.SetMinimumLevel(LogLevel.Error);
         });
         return loggerFactory.CreateLogger("PowerSyncLogger");
     }
@@ -90,35 +90,26 @@ public class MockRemote : Remote
 
     public override async Task<Stream> PostStreamRaw(SyncStreamOptions options)
     {
+        Console.WriteLine("MockRemote PostStreamRaw called" + JsonConvert.SerializeObject(options));
         var pipe = new Pipe();
         var writer = pipe.Writer;
-        try
+
+        var x = syncService.RunListenerAsync(async (line) =>
         {
-            syncService.RunListenerAsync(async (line) =>
-            {
-                var bytes = Encoding.UTF8.GetBytes(line);
-                await writer.WriteAsync(bytes);
-            });
-        }
-        finally
-        {
-            await writer.CompleteAsync();
-        }
+            var bytes = Encoding.UTF8.GetBytes(line + "\n");
+            await writer.WriteAsync(bytes);
+        });
 
         return pipe.Reader.AsStream();
     }
 
     public override async Task<T> Get<T>(string path, Dictionary<string, string>? headers = null)
     {
+        var response = new StreamingSyncImplementation.ApiResponse(
+            new StreamingSyncImplementation.ResponseData("1")
+        );
 
-        Console.WriteLine("MockRemote Get: " + path);
-        //  return new Response(
-        //           JSON.stringify({
-        //             data: { write_checkpoint: '1' }
-        //           }),
-        //           { status: 200 }
-        //         );
-        throw new Exception("MOOOO");
+        return (T)(object)response;
     }
 }
 
