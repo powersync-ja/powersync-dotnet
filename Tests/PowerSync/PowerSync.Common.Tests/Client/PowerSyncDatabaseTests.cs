@@ -524,4 +524,48 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.Equal(description, dynamicAsset.description);
         Assert.Equal(make, dynamicAsset.make);
     }
+
+    [Fact(Timeout = 2000)]
+    public async Task DynamicWatchTest()
+    {
+        string id = Guid.NewGuid().ToString();
+        string description = "new description";
+        string make = "some make";
+
+        var watched = new TaskCompletionSource<bool>();
+        var cts = new CancellationTokenSource();
+
+        await db.Watch("select id, description, make from assets", null, new WatchHandler<dynamic>
+        {
+            OnResult = (assets) =>
+            {
+                // Only care about results after Execute is called
+                if (assets.Length == 0) return;
+
+                Assert.Single(assets);
+                dynamic dynamicAsset = assets[0];
+                Assert.Equal(id, dynamicAsset.id);
+                Assert.Equal(description, dynamicAsset.description);
+                Assert.Equal(make, dynamicAsset.make);
+
+                watched.SetResult(true);
+                cts.Cancel();
+            },
+            OnError = (ex) => throw ex,
+        },
+        new SQLWatchOptions
+        {
+            Signal = cts.Token
+        });
+
+        await db.WriteTransaction(async tx =>
+        {
+            await tx.Execute(
+                "insert into assets (id, description, make) values (?, ?, ?)",
+                [id, description, make]
+            );
+        });
+
+        await watched.Task;
+    }
 }
