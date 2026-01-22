@@ -697,7 +697,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
             try
             {
                 var resolvedTables = await ResolveTables(query, parameters, options);
-                var result = await GetAll<T>(query, parameters);
+                var result = await getter(query, parameters);
                 handler.OnResult(result);
 
                 OnChange(new WatchOnChangeHandler
