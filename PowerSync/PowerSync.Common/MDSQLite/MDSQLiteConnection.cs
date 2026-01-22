@@ -1,6 +1,7 @@
 namespace PowerSync.Common.MDSQLite;
 
 using System.Data;
+using System.Text;
 using System.Threading.Tasks;
 
 using Dapper;
@@ -73,7 +74,8 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvent>, ILockContext
         Emit(new DBAdapterEvent { TablesUpdated = batchedUpdate });
     }
 
-    private static List<string> PrepareQueryString(ref string query, int parameterCount)
+    // TODO only public for benchmarking
+    public static List<string> PrepareQueryString(ref string query, int parameterCount)
     {
         var parameterList = new List<string>();
         if (parameterCount == 0)
@@ -88,20 +90,29 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvent>, ILockContext
         }
 
         // Replace `?` sequentially with named parameters
+        var sb = new StringBuilder();
+        int lastPos = 0;
+        int currentPos;
         for (int i = 0; i < parameterCount; i++)
         {
+            currentPos = query.IndexOf('?', lastPos);
+
             string paramName = $"@param{i}";
             parameterList.Add(paramName);
 
-            int index = query.IndexOf('?');
-            if (index == -1)
-            {
-                throw new ArgumentException("Mismatch between placeholders and parameters.");
-            }
+            sb.Append(query, lastPos, currentPos - lastPos);
+            sb.Append(paramName);
 
-            // TODO inefficient, but maybe not noticeably so
-            query = string.Concat(query.Substring(0, index), paramName, query.Substring(index + 1));
+            lastPos = currentPos + 1;
         }
+
+        // Append any remaining chars
+        if (lastPos < query.Length)
+        {
+            sb.Append(query, lastPos, query.Length - lastPos);
+        }
+
+        query = sb.ToString();
 
         return parameterList;
     }
