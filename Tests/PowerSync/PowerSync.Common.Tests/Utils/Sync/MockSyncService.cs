@@ -18,6 +18,10 @@ namespace PowerSync.Common.Tests.Utils.Sync;
 
 public class MockSyncService : EventStream<string>
 {
+    private readonly List<StreamingSyncRequest> _requests = new();
+
+    public IReadOnlyList<StreamingSyncRequest> Requests => _requests;
+
     public void PushLine(StreamingSyncLine line)
     {
         Emit(JsonConvert.SerializeObject(line));
@@ -26,7 +30,7 @@ public class MockSyncService : EventStream<string>
     public PowerSyncDatabase CreateDatabase()
     {
         var connector = new TestConnector();
-        var mockRemote = new MockRemote(connector, this);
+        var mockRemote = new MockRemote(connector, this, _requests);
 
         return new PowerSyncDatabase(new PowerSyncDatabaseOptions
         {
@@ -79,18 +83,22 @@ public class MockDataFactory
 public class MockRemote : Remote
 {
     private readonly MockSyncService syncService;
+    private readonly List<StreamingSyncRequest> connectedListeners;
 
     public MockRemote(
         IPowerSyncBackendConnector connector,
-        MockSyncService syncService)
+        MockSyncService syncService,
+        List<StreamingSyncRequest> connectedListeners)
         : base(connector)
     {
         this.syncService = syncService;
+        this.connectedListeners = connectedListeners;
     }
 
     public override async Task<Stream> PostStreamRaw(SyncStreamOptions options)
     {
-        Console.WriteLine("MockRemote PostStreamRaw called" + JsonConvert.SerializeObject(options));
+        connectedListeners.Add(options.Data);
+
         var pipe = new Pipe();
         var writer = pipe.Writer;
 

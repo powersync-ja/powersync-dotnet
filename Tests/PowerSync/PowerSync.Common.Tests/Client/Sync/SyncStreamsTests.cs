@@ -27,6 +27,7 @@ public class SyncStreamsTests : IAsyncLifetime
     public async Task DisposeAsync()
     {
         syncService.Close();
+        await db.DisconnectAndClear();
         await db.Close();
     }
 
@@ -35,17 +36,19 @@ public class SyncStreamsTests : IAsyncLifetime
     {
         Assert.False(db.Connected);
         await db.Connect(new TestConnector());
+
         Assert.True(db.Connected);
+        Assert.Equivalent(new RequestStream { IncludeDefaults = true, Subscriptions = [] }, syncService.Requests[0].Streams);
     }
 
     [Fact]
     public async Task CanDisableDefaultStreams()
     {
-        Assert.False(db.Connected);
         await db.Connect(new TestConnector(), new PowerSyncConnectionOptions
         {
             IncludeDefaultStreams = false
         });
-        Assert.True(db.Connected);
+
+        Assert.Equivalent(new RequestStream { IncludeDefaults = false, Subscriptions = [] }, syncService.Requests[0].Streams);
     }
 }

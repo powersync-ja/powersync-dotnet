@@ -75,6 +75,32 @@ public class StreamingSyncRequest
 
     [JsonProperty("client_id")]
     public string? ClientId { get; set; }
+
+    [JsonProperty("streams")]
+    public RequestStream? Streams { get; set; }
+}
+
+
+public class RequestStream
+{
+    [JsonProperty("include_defaults")]
+    public bool IncludeDefaults { get; set; }
+
+    [JsonProperty("subscriptions")]
+    public List<RequestStreamSubscription> Subscriptions { get; set; } = [];
+}
+
+public class RequestStreamSubscription
+{
+    [JsonProperty("stream")]
+    public string Stream { get; set; } = "";
+
+    [JsonProperty("parameters")]
+    public Dictionary<string, object> Parameters { get; set; } = new();
+
+    [JsonProperty("override_priority")]
+    public int? OverridePriority { get; set; }
+
 }
 
 public class BucketRequest
