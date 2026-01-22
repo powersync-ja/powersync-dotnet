@@ -1,5 +1,14 @@
 # PowerSync.Common Changelog
 
+## 0.0.8-alpha.1
+- Replaced the old JSON-based method of extracting type information from queries with using Dapper internally for queries, improving memory usage and execution time for querying.
+- Added non-generic overloads for `GetAll()`, `GetOptional()`, `Get()`, `Watch()` which return `dynamic`:
+
+```csharp
+dynamic asset = db.Get("SELECT id, description, make FROM assets");
+Console.WriteLine($"Asset ID: {asset.id}");
+```
+
 ## 0.0.7-alpha.1
 - Added fallback to check the application's root directory for the PowerSync extension - fixing compatibility with WPF/WAP, .NET Framework <= 4.8, and other platforms that flatten DLLs into the base folder.
 - Added `ExecuteBatch()` implementation.

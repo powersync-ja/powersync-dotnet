@@ -63,10 +63,13 @@ public interface IPowerSyncDatabase : IEventStream<PowerSyncDBEvent>
     Task<NonQueryResult> ExecuteBatch(string query, object?[][]? parameters = null);
 
     Task<T[]> GetAll<T>(string sql, object?[]? parameters = null);
+    Task<dynamic[]> GetAll(string sql, object?[]? parameters = null);
 
     Task<T?> GetOptional<T>(string sql, object?[]? parameters = null);
+    Task<dynamic?> GetOptional(string sql, object?[]? parameters = null);
 
     Task<T> Get<T>(string sql, object?[]? parameters = null);
+    Task<dynamic> Get(string sql, object?[]? parameters = null);
 
     Task<T> ReadLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null);
 
@@ -422,7 +425,8 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         Closed = true;
     }
 
-    private record UploadQueueStatsResult(int size, int count);
+    private record UploadQueueStatsSizeCountResult(long size, long count);
+    private record UploadQueueStatsCountResult(long count);
     /// <summary>
     /// Get upload queue size estimate and count.
     /// </summary>
@@ -432,7 +436,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         {
             if (includeSize)
             {
-                var result = await tx.Get<UploadQueueStatsResult>(
+                var result = await tx.Get<UploadQueueStatsSizeCountResult>(
                     $"SELECT SUM(cast(data as blob) + 20) as size, count(*) as count FROM {PSInternalTable.CRUD}"
                 );
 
@@ -440,14 +444,13 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
             }
             else
             {
-                var result = await tx.Get<UploadQueueStatsResult>(
+                var result = await tx.Get<UploadQueueStatsCountResult>(
                     $"SELECT count(*) as count FROM {PSInternalTable.CRUD}"
                 );
                 return new UploadQueueStats(result.count);
             }
         });
     }
-
 
     /// <summary>
     /// Get a batch of crud data to upload.
@@ -468,7 +471,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
     /// </summary>
     public async Task<CrudBatch?> GetCrudBatch(int limit = 100)
     {
-        var crudResult = await GetAll<CrudEntryJSON>($"SELECT id, tx_id, data FROM {PSInternalTable.CRUD} ORDER BY id ASC LIMIT ?", [limit + 1]);
+        var crudResult = await GetAll<CrudEntryJSON>($"SELECT id, tx_id as transactionId, data FROM {PSInternalTable.CRUD} ORDER BY id ASC LIMIT ?", [limit + 1]);
 
         var all = crudResult.Select(CrudEntry.FromRow).ToList();
 
@@ -510,7 +513,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         return await ReadTransaction(async tx =>
         {
             var first = await tx.GetOptional<CrudEntryJSON>(
-            $"SELECT id, tx_id, data FROM {PSInternalTable.CRUD} ORDER BY id ASC LIMIT 1");
+            $"SELECT id, tx_id AS transactionId, data FROM {PSInternalTable.CRUD} ORDER BY id ASC LIMIT 1");
 
             if (first == null)
             {
@@ -528,7 +531,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
             else
             {
                 var result = await tx.GetAll<CrudEntryJSON>(
-                    $"SELECT id, tx_id, data FROM {PSInternalTable.CRUD} WHERE tx_id = ? ORDER BY id ASC",
+                    $"SELECT id, tx_id as transactionId, data FROM {PSInternalTable.CRUD} WHERE tx_id = ? ORDER BY id ASC",
                     [txId]);
 
                 all = result.Select(CrudEntry.FromRow).ToList();
@@ -596,15 +599,34 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         return await Database.GetAll<T>(query, parameters);
     }
 
+    public async Task<dynamic[]> GetAll(string query, object?[]? parameters = null)
+    {
+        await WaitForReady();
+        return await Database.GetAll(query, parameters);
+    }
+
     public async Task<T?> GetOptional<T>(string query, object?[]? parameters = null)
     {
         await WaitForReady();
         return await Database.GetOptional<T>(query, parameters);
     }
+
+    public async Task<dynamic?> GetOptional(string query, object?[]? parameters = null)
+    {
+        await WaitForReady();
+        return await Database.GetOptional(query, parameters);
+    }
+
     public async Task<T> Get<T>(string query, object?[]? parameters = null)
     {
         await WaitForReady();
         return await Database.Get<T>(query, parameters);
+    }
+
+    public async Task<dynamic> Get(string query, object?[]? parameters = null)
+    {
+        await WaitForReady();
+        return await Database.Get(query, parameters);
     }
 
     public async Task<T> ReadLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null)
@@ -650,6 +672,24 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
     /// Source tables are automatically detected using <c>EXPLAIN QUERY PLAN</c>.
     /// </summary>
     public Task Watch<T>(string query, object?[]? parameters, WatchHandler<T> handler, SQLWatchOptions? options = null)
+        => WatchInternal(query, parameters, handler, options, GetAll<T>);
+
+    /// <summary>
+    /// Executes a read query every time the source tables are modified.
+    /// <para />
+    /// Use <see cref="SQLWatchOptions.ThrottleMs"/> to specify the minimum interval between queries.
+    /// Source tables are automatically detected using <c>EXPLAIN QUERY PLAN</c>.
+    /// </summary>
+    public Task Watch(string query, object?[]? parameters, WatchHandler<dynamic> handler, SQLWatchOptions? options = null)
+        => WatchInternal(query, parameters, handler, options, GetAll);
+
+    private Task WatchInternal<T>(
+        string query,
+        object?[]? parameters,
+        WatchHandler<T> handler,
+        SQLWatchOptions? options,
+        Func<string, object?[]?, Task<T[]>> getter
+    )
     {
         var tcs = new TaskCompletionSource<bool>();
         Task.Run(async () =>
@@ -657,7 +697,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
             try
             {
                 var resolvedTables = await ResolveTables(query, parameters, options);
-                var result = await GetAll<T>(query, parameters);
+                var result = await getter(query, parameters);
                 handler.OnResult(result);
 
                 OnChange(new WatchOnChangeHandler
@@ -666,7 +706,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
                     {
                         try
                         {
-                            var result = await GetAll<T>(query, parameters);
+                            var result = await getter(query, parameters);
                             handler.OnResult(result);
                         }
                         catch (Exception ex)
@@ -691,7 +731,16 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         return tcs.Task;
     }
 
-    private record ExplainedResult(string opcode, int p2, int p3);
+    private class ExplainedResult
+    {
+        public int addr = 0;
+        public string opcode = "";
+        public int p1 = 0;
+        public int p2 = 0;
+        public int p3 = 0;
+        public string p4 = "";
+        public int p5 = 0;
+    }
     private record TableSelectResult(string tbl_name);
     public async Task<string[]> ResolveTables(string sql, object?[]? parameters = null, SQLWatchOptions? options = null)
     {
@@ -718,7 +767,6 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
                 resolvedTables.Add(POWERSYNC_TABLE_MATCH.Replace(table.tbl_name, ""));
             }
         }
-
         return [.. resolvedTables];
     }
 
