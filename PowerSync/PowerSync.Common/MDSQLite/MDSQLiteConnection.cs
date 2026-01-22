@@ -74,8 +74,7 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvent>, ILockContext
         Emit(new DBAdapterEvent { TablesUpdated = batchedUpdate });
     }
 
-    // TODO only public for benchmarking
-    public static List<string> PrepareQueryString(ref string query, int parameterCount)
+    private static List<string> PrepareQueryString(ref string query, int parameterCount)
     {
         var parameterList = new List<string>();
         if (parameterCount == 0)
@@ -119,17 +118,12 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvent>, ILockContext
 
     private static DynamicParameters? PrepareQuery(ref string query, object?[]? parameters)
     {
-        if (parameters is null)
+        if (parameters == null || parameters.Length == 0)
         {
             return null;
         }
 
         int parameterCount = parameters.Length;
-        if (parameterCount == 0)
-        {
-            return null;
-        }
-
         var parameterNames = PrepareQueryString(ref query, parameterCount);
 
         var dynamicParams = new DynamicParameters();
@@ -144,11 +138,17 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvent>, ILockContext
 
     private static List<DynamicParameters>? PrepareQuery(ref string query, object?[][]? parameters)
     {
-        if (parameters is null || parameters.Length == 0)
+        if (parameters == null || parameters.Length == 0)
         {
             return null;
         }
+
         var parameterCount = parameters[0].Length;
+        if (parameterCount == 0)
+        {
+            return null;
+        }
+
         var parameterNames = PrepareQueryString(ref query, parameterCount);
 
         var dynamicParamsList = new List<DynamicParameters>();
@@ -235,15 +235,14 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvent>, ILockContext
 
     public async Task<NonQueryResult> ExecuteBatch(string query, object?[][]? parameters = null)
     {
-        if (parameters is null || parameters.Length == 0)
+        if (parameters == null || parameters.Length == 0)
         {
             return new NonQueryResult { RowsAffected = 0 };
         }
 
         List<DynamicParameters>? dynamicParamsList = PrepareQuery(ref query, parameters);
-        if (dynamicParamsList is null)
+        if (dynamicParamsList == null)
         {
-            // Should be unreachable but you never know
             return new NonQueryResult { RowsAffected = 0 };
         }
 
