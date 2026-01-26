@@ -1,42 +1,38 @@
-using PowerSync.Common.DB.Schema;
-
 namespace PowersyncDotnetTodoList.Models;
+
+using PowerSync.Common.DB.Schema;
 
 class AppSchema
 {
-    public static Table Todos = new Table(
-        new Dictionary<string, ColumnType>
+    public static Table Todos = new TableBuilder()
+    {
+        Name = "todos",
+        Columns =
         {
-            { "list_id", ColumnType.Text },
-            { "created_at", ColumnType.Text },
-            { "completed_at", ColumnType.Text },
-            { "description", ColumnType.Text },
-            { "created_by", ColumnType.Text },
-            { "completed_by", ColumnType.Text },
-            { "completed", ColumnType.Integer },
+            ["list_id"] = ColumnType.Text,
+            ["created_at"] = ColumnType.Text,
+            ["completed_at"] = ColumnType.Text,
+            ["description"] = ColumnType.Text,
+            ["created_by"] = ColumnType.Text,
+            ["completed_by"] = ColumnType.Text,
+            ["completed"] = ColumnType.Integer
         },
-        new TableOptions
+        Indexes =
         {
-            Indexes = new Dictionary<string, List<string>>
-            {
-                {
-                    "list",
-                    new List<string> { "list_id" }
-                },
-            },
+            ["list"] = ["list_id"],
+            ["created_at"] = ["created_at"],
         }
-    );
+    }.Build();
 
-    public static Table Lists = new Table(
-        new Dictionary<string, ColumnType>
-        {
-            { "created_at", ColumnType.Text },
-            { "name", ColumnType.Text },
-            { "owner_id", ColumnType.Text },
+    public static Table Lists = new TableBuilder()
+    {
+        Name = "lists",
+        Columns = {
+            ["created_at"] = ColumnType.Text,
+            ["name"] = ColumnType.Text,
+            ["owner_id"] = ColumnType.Text
         }
-    );
+    }.Build();
 
-    public static Schema PowerSyncSchema = new Schema(
-        new Dictionary<string, Table> { { "todos", Todos }, { "lists", Lists } }
-    );
+    public static Schema PowerSyncSchema = new SchemaBuilder(Todos, Lists).Build();
 }

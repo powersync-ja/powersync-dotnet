@@ -19,7 +19,7 @@ class AppSchema
         },
         Indexes =
         {
-            ["list"] = new Index { "list_id" },
+            ["list"] = ["list_id"],
             ["created_at"] = ["created_at"],
         }
     }.Build();

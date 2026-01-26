@@ -16,16 +16,19 @@ class AppSchema
         },
         Indexes =
         {
-            ["list"] = new Index { "list_id" },
+            ["list"] = ["list_id"],
         }
     }.Build();
 
-    public static Table Lists = new Table(new Dictionary<string, ColumnType>
+    public static Table Lists = new TableBuilder()
     {
-        { "created_at", ColumnType.Text },
-        { "name", ColumnType.Text },
-        { "owner_id", ColumnType.Text }
-    });
+        Columns =
+        {
+            ["created_at"] = ColumnType.Text,
+            ["name"] = ColumnType.Text,
+            ["owner_id"] = ColumnType.Text
+        }
+    }.Build();
 
     public static Schema PowerSyncSchema = new Schema(new Dictionary<string, Table>
     {

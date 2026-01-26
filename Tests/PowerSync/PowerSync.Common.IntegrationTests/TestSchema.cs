@@ -4,26 +4,36 @@ using PowerSync.Common.DB.Schema;
 
 public class TestSchema
 {
-    public static Table Todos = new Table("todos", new Dictionary<string, ColumnType>
+    public static Table Todos = new TableBuilder()
     {
-        { "list_id", ColumnType.Text },
-        { "created_at", ColumnType.Text },
-        { "completed_at", ColumnType.Text },
-        { "description", ColumnType.Text },
-        { "created_by", ColumnType.Text },
-        { "completed_by", ColumnType.Text },
-        { "completed", ColumnType.Integer }
-    }, new TableOptions
-    {
-        Indexes = new Dictionary<string, List<string>> { { "list", new List<string> { "list_id" } } }
-    });
+        Name = "todos",
+        Columns =
+        {
+            ["list_id"] = ColumnType.Text,
+            ["created_at"] = ColumnType.Text,
+            ["completed_at"] = ColumnType.Text,
+            ["description"] = ColumnType.Text,
+            ["created_by"] = ColumnType.Text,
+            ["completed_by"] = ColumnType.Text,
+            ["completed"] = ColumnType.Integer,
+        },
+        Indexes =
+        {
+            ["list"] = ["list_id"],
+        }
+    }.Build();
 
-    public static Table Lists = new Table("lists", new Dictionary<string, ColumnType>
+
+    public static Table Lists = new TableBuilder()
     {
-        { "created_at", ColumnType.Text },
-        { "name", ColumnType.Text },
-        { "owner_id", ColumnType.Text }
-    });
+        Name = "lists",
+        Columns =
+        {
+            ["created_at"] = ColumnType.Text,
+            ["name"] = ColumnType.Text,
+            ["owner_id"] = ColumnType.Text
+        }
+    }.Build();
 
     public static Schema PowerSyncSchema = new SchemaBuilder(Todos, Lists).Build();
 }
