@@ -285,10 +285,10 @@ public class CRUDTests : IAsyncLifetime
     [Fact]
     public async Task InsertOnlyTablesTest()
     {
-        var logs = new Table(new Dictionary<string, ColumnType>
+        var logs = new Table("logs", new Dictionary<string, ColumnType>
         {
-            { "level", ColumnType.TEXT },
-            { "content", ColumnType.TEXT },
+            { "level", ColumnType.Text },
+            { "content", ColumnType.Text },
         }, new TableOptions
         {
             InsertOnly = true

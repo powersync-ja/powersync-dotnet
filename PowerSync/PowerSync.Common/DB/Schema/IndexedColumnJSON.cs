@@ -2,19 +2,19 @@ namespace PowerSync.Common.DB.Schema;
 
 using Newtonsoft.Json;
 
-public class IndexColumnOptions(string Name, bool Ascending = true)
+class IndexedColumnJSONOptions(string Name, bool Ascending = true)
 {
     public string Name { get; set; } = Name;
     public bool Ascending { get; set; } = Ascending;
 }
 
-public class IndexedColumn(IndexColumnOptions options)
+class IndexedColumnJSON(IndexedColumnJSONOptions options)
 {
     protected string Name { get; set; } = options.Name;
 
     protected bool Ascending { get; set; } = options.Ascending;
 
-    public object ToJSON(Table table)
+    public string ToJSON(Table table)
     {
         var colType = table.Columns.TryGetValue(Name, out var value) ? value : default;
 

@@ -7,13 +7,13 @@ class AppSchema
     public static Table Todos = new Table(
         new Dictionary<string, ColumnType>
         {
-            { "list_id", ColumnType.TEXT },
-            { "created_at", ColumnType.TEXT },
-            { "completed_at", ColumnType.TEXT },
-            { "description", ColumnType.TEXT },
-            { "created_by", ColumnType.TEXT },
-            { "completed_by", ColumnType.TEXT },
-            { "completed", ColumnType.INTEGER },
+            { "list_id", ColumnType.Text },
+            { "created_at", ColumnType.Text },
+            { "completed_at", ColumnType.Text },
+            { "description", ColumnType.Text },
+            { "created_by", ColumnType.Text },
+            { "completed_by", ColumnType.Text },
+            { "completed", ColumnType.Integer },
         },
         new TableOptions
         {
@@ -30,9 +30,9 @@ class AppSchema
     public static Table Lists = new Table(
         new Dictionary<string, ColumnType>
         {
-            { "created_at", ColumnType.TEXT },
-            { "name", ColumnType.TEXT },
-            { "owner_id", ColumnType.TEXT },
+            { "created_at", ColumnType.Text },
+            { "name", ColumnType.Text },
+            { "owner_id", ColumnType.Text },
         }
     );
 

@@ -20,7 +20,7 @@ public class TableOptions(
 
     public bool InsertOnly { get; set; } = insertOnly ?? false;
 
-    public string? ViewName { get; } = viewName;
+    public string? ViewName { get; set; } = viewName;
 
     /// <summary>
     /// Whether to add a hidden `_metadata` column that will be enabled for updates to attach custom
@@ -62,54 +62,63 @@ public class TrackPreviousOptions
 
 public class Table
 {
+    public const int MAX_AMOUNT_OF_COLUMNS = 1999;
+
     public static readonly Regex InvalidSQLCharacters = new Regex(@"[""'%,.#\s\[\]]", RegexOptions.Compiled);
 
-
-    protected TableOptions Options { get; init; } = null!;
+    public string Name { get; init; } = null!;
+    protected TableOptions Options { get; init; } = null!; // TODO this feels weird
 
     public Dictionary<string, ColumnType> Columns;
     public Dictionary<string, List<string>> Indexes;
 
-    private readonly List<Column> ConvertedColumns;
-    private readonly List<Index> ConvertedIndexes;
+    // TODO recalculate when Columns or Indexes changes, or make Columns and Indexes readonly?
+    private readonly List<ColumnJSON> ColumnsJSON;
+    private readonly List<IndexJSON> IndexesJSON;
 
-    public Table(Dictionary<string, ColumnType> columns, TableOptions? options = null)
+    public Table(string name, Dictionary<string, ColumnType> columns, TableOptions? options = null)
     {
-        ConvertedColumns = [.. columns.Select(kv => new Column(new ColumnOptions(kv.Key, kv.Value)))];
+        ColumnsJSON =
+            columns
+            .Select(kvp => new ColumnJSON(new ColumnJSONOptions(kvp.Key, kvp.Value)))
+            .ToList();
 
-        ConvertedIndexes =
-        [
-            .. (Options?.Indexes ?? [])
-            .Select(kv =>
-                new Index(new IndexOptions(
-                    kv.Key,
-                    [
-                        .. kv.Value.Select(name =>
-                            new IndexedColumn(new IndexColumnOptions(
-                                name.Replace("-", ""), !name.StartsWith("-")))
-                        )
-                    ]
+        IndexesJSON =
+            (Options?.Indexes ?? [])
+            .Select(kvp =>
+                new IndexJSON(new IndexJSONOptions(
+                    kvp.Key,
+                    kvp.Value.Select(name =>
+                        new IndexedColumnJSON(new IndexedColumnJSONOptions(
+                            name.Replace("-", ""), !name.StartsWith("-")))
+                    ).ToList()
                 ))
             )
-        ];
+            .ToList();
 
         Options = options ?? new TableOptions();
 
+        Name = name;
         Columns = columns;
         Indexes = Options?.Indexes ?? [];
     }
 
     public void Validate()
     {
+        if (string.IsNullOrWhiteSpace(Name))
+        {
+            throw new Exception($"Table name is required.");
+        }
+
         if (!string.IsNullOrWhiteSpace(Options.ViewName) && InvalidSQLCharacters.IsMatch(Options.ViewName!))
         {
             throw new Exception($"Invalid characters in view name: {Options.ViewName}");
         }
 
-        if (Columns.Count > Column.MAX_AMOUNT_OF_COLUMNS)
+        if (Columns.Count > MAX_AMOUNT_OF_COLUMNS)
         {
             throw new Exception(
-                $"Table has too many columns. The maximum number of columns is {Column.MAX_AMOUNT_OF_COLUMNS}.");
+                $"Table has too many columns. The maximum number of columns is {MAX_AMOUNT_OF_COLUMNS}.");
         }
 
         if (Options.TrackMetadata && Options.LocalOnly)
@@ -168,8 +177,9 @@ public class Table
             view_name = Options.ViewName ?? Name,
             local_only = Options.LocalOnly,
             insert_only = Options.InsertOnly,
-            columns = ConvertedColumns.Select(c => JsonConvert.DeserializeObject<object>(c.ToJSON())).ToList(),
-            indexes = ConvertedIndexes.Select(e => JsonConvert.DeserializeObject<object>(e.ToJSON(this))).ToList(),
+            // TODO is this needed?
+            columns = ColumnsJSON.Select(c => JsonConvert.DeserializeObject<object>(c.ToJSON())).ToList(),
+            indexes = IndexesJSON.Select(i => JsonConvert.DeserializeObject<object>(i.ToJSON(this))).ToList(),
 
             include_metadata = Options.TrackMetadata,
             ignore_empty_update = Options.IgnoreEmptyUpdates,

@@ -4,24 +4,22 @@ using Newtonsoft.Json;
 
 public enum ColumnType
 {
-    TEXT,
-    INTEGER,
-    REAL
+    Text,
+    Integer,
+    Real
 }
 
-public class ColumnOptions(string Name, ColumnType? Type)
+class ColumnJSONOptions(string Name, ColumnType? Type)
 {
     public string Name { get; set; } = Name;
     public ColumnType? Type { get; set; } = Type;
 }
 
-public class Column(ColumnOptions options)
+class ColumnJSON(ColumnJSONOptions options)
 {
-    public const int MAX_AMOUNT_OF_COLUMNS = 1999;
-
     public string Name { get; set; } = options.Name;
 
-    public ColumnType Type { get; set; } = options.Type ?? ColumnType.TEXT;
+    public ColumnType Type { get; set; } = options.Type ?? ColumnType.Text;
 
     public string ToJSON()
     {
