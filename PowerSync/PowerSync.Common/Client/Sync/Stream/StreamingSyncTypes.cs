@@ -80,7 +80,6 @@ public class StreamingSyncRequest
     public RequestStream? Streams { get; set; }
 }
 
-
 public class RequestStream
 {
     [JsonProperty("include_defaults")]
@@ -98,7 +97,7 @@ public class RequestStreamSubscription
     [JsonProperty("parameters")]
     public Dictionary<string, object> Parameters { get; set; } = new();
 
-    [JsonProperty("override_priority")]
+    [JsonProperty("override_priority", NullValueHandling = NullValueHandling.Ignore)]
     public int? OverridePriority { get; set; }
 
 }
@@ -157,6 +156,21 @@ public class CheckpointComplete
 {
     [JsonProperty("last_op_id")]
     public string LastOpId { get; set; } = "";
+}
+
+public class StreamingSyncCheckpointPartiallyComplete : StreamingSyncLine
+{
+    [JsonProperty("partial_checkpoint_complete")]
+    public PartialCheckpointComplete PartialCheckpointComplete { get; set; } = new();
+}
+
+public class PartialCheckpointComplete
+{
+    [JsonProperty("last_op_id")]
+    public string LastOpId { get; set; } = "";
+
+    [JsonProperty("priority")]
+    public int Priority { get; set; }
 }
 
 public class StreamingSyncKeepalive : StreamingSyncLine

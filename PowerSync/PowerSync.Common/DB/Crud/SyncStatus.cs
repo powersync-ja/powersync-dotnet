@@ -230,7 +230,7 @@ public class SyncStatus(SyncStatusOptions options)
 
     public bool IsEqual(SyncStatus status)
     {
-        return this.SerializeObject() == status.SerializeObject();
+        return SerializeObject() == status.SerializeObject();
     }
 
     public string GetMessage()
@@ -269,8 +269,8 @@ public class SyncStreamStatusView : SyncStreamStatus
 
     public SyncStreamStatusView(SyncStatus status, CoreStreamSubscription core)
     {
-        this.Status = status;
-        this.Core = core;
+        Status = status;
+        Core = core;
 
         Subscription = new SyncSubscriptionDescription
         {

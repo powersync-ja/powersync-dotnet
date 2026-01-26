@@ -173,7 +173,6 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
             resolveOfflineSyncStatus: ResolveOfflineSyncStatus,
             subscriptionsCommand: async (payload) => await this.WriteTransaction(async tx =>
                 {
-                    Console.WriteLine("Executing subscriptions command with payload: " + JsonConvert.SerializeObject(payload));
                     await tx.Execute("SELECT powersync_control(?, ?) AS r", ["subscriptions", JsonConvert.SerializeObject(payload)]);
                 }));
 

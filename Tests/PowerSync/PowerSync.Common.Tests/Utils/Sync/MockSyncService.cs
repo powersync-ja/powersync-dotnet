@@ -6,6 +6,7 @@ using PowerSync.Common.Client;
 using PowerSync.Common.Client.Connection;
 using PowerSync.Common.Client.Sync.Bucket;
 using PowerSync.Common.Client.Sync.Stream;
+using PowerSync.Common.DB.Crud;
 using PowerSync.Common.Utils;
 
 using System.Dynamic;
@@ -50,22 +51,28 @@ public class MockSyncService : EventStream<string>
         });
         return loggerFactory.CreateLogger("PowerSyncLogger");
     }
+
+    public static async Task<SyncStatus> NextStatus(PowerSyncDatabase db)
+    {
+        var tcs = new TaskCompletionSource<SyncStatus>();
+        CancellationTokenSource? cts = null;
+
+        cts = db.RunListenerAsync(async (update) =>
+        {
+            if (update.StatusChanged != null)
+            {
+                tcs.TrySetResult(update.StatusChanged);
+                cts?.Cancel();
+            }
+        });
+
+        return await tcs.Task;
+    }
 }
 
 public class MockDataFactory
 {
-    //     export function checkpoint(options: { last_op_id: number; buckets?: any[]; streams?: any[] }): StreamingSyncCheckpoint {
-    //   return {
-    //     checkpoint: {
-    //       last_op_id: `${options.last_op_id}`,
-    //       buckets: options.buckets ?? [],
-    //       write_checkpoint: null,
-    //       streams: options.streams ?? []
-    //     }
-    //   };
-    // }
-
-    public static StreamingSyncCheckpoint Checkpoint(long lastOpId, List<BucketChecksum>? buckets = null, List<StreamingSyncCheckpoint>? streams = null)
+    public static StreamingSyncCheckpoint Checkpoint(long lastOpId, List<BucketChecksum>? buckets = null, object[]? streams = null)
     {
         return new StreamingSyncCheckpoint
         {
@@ -76,6 +83,52 @@ public class MockDataFactory
                 WriteCheckpoint = null,
                 Streams = streams?.ToArray() ?? []
             }
+        };
+    }
+
+    public static StreamingSyncCheckpointPartiallyComplete CheckpointPartiallyComplete(string lastOpId, int priority)
+    {
+        return new StreamingSyncCheckpointPartiallyComplete
+        {
+            PartialCheckpointComplete = new PartialCheckpointComplete
+            {
+                LastOpId = lastOpId,
+                Priority = priority
+            }
+        };
+    }
+
+    public static StreamingSyncCheckpointComplete CheckpointComplete(string lastOpId)
+    {
+        return new StreamingSyncCheckpointComplete
+        {
+            CheckpointComplete = new CheckpointComplete
+            {
+                LastOpId = lastOpId
+            }
+        };
+    }
+
+    public static BucketChecksum Bucket(string name, int count, int priority = 3, object? subscriptions = null)
+    {
+        return new BucketChecksum
+        {
+            Bucket = name,
+            Count = count,
+            Checksum = 0,
+            Priority = priority,
+            Subscriptions = subscriptions
+        };
+    }
+
+
+    public static object Stream(string name, bool isDefault, object[]? errors = null)
+    {
+        return new
+        {
+            name = name,
+            is_default = isDefault,
+            errors = errors ?? []
         };
     }
 }
@@ -97,7 +150,6 @@ public class MockRemote : Remote
 
     public override async Task<Stream> PostStreamRaw(SyncStreamOptions options)
     {
-        Console.WriteLine(JsonConvert.SerializeObject(options.Data));
         connectedListeners.Add(options.Data);
 
         var pipe = new Pipe();

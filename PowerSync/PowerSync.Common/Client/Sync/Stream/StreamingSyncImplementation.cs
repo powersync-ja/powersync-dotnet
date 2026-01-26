@@ -232,8 +232,6 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
             {
                 if (status.StatusChanged != null)
                 {
-                    logger.LogWarning("Received status update: {status}", JsonConvert.SerializeObject(status.StatusChanged));
-
                     if (status.StatusChanged.Connected == false)
                     {
                         logger.LogWarning("Initial connect attempt did not successfully connect to server");
@@ -803,6 +801,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                     DownloadProgress = options.DataFlow?.DownloadProgress ?? SyncStatus.DataFlowStatus.DownloadProgress,
                     DownloadError = updateOptions?.ClearDownloadError == true ? null : options.DataFlow?.DownloadError ?? SyncStatus.DataFlowStatus.DownloadError,
                     UploadError = updateOptions?.ClearUploadError == true ? null : options.DataFlow?.UploadError ?? SyncStatus.DataFlowStatus.UploadError,
+                    InternalStreamSubscriptions = options.DataFlow?.InternalStreamSubscriptions ?? SyncStatus.DataFlowStatus.InternalStreamSubscriptions
                 }
             });
 

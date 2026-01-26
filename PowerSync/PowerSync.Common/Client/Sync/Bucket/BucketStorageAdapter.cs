@@ -72,6 +72,9 @@ public class BucketChecksum
     [JsonProperty("bucket")]
     public string Bucket { get; set; } = null!;
 
+    [JsonProperty("priority")]
+    public int? Priority { get; set; }
+
     [JsonProperty("checksum")]
     public long Checksum { get; set; }
 
@@ -80,6 +83,12 @@ public class BucketChecksum
     /// </summary>
     [JsonProperty("count")]
     public int? Count { get; set; }
+
+    /// <summary>
+    /// Test helper field
+    /// </summary>
+    [JsonProperty("subscriptions")]
+    public object? Subscriptions { get; set; }
 }
 
 public static class PSInternalTable
