@@ -4,6 +4,7 @@ class AppSchema
 {
     public static Table Todos = new TableBuilder()
     {
+        Name = "todos",
         Columns =
         {
             ["list_id"] = ColumnType.Text,
@@ -22,6 +23,7 @@ class AppSchema
 
     public static Table Lists = new TableBuilder()
     {
+        Name = "lists",
         Columns =
         {
             ["created_at"] = ColumnType.Text,
@@ -30,9 +32,5 @@ class AppSchema
         }
     }.Build();
 
-    public static Schema PowerSyncSchema = new Schema(new Dictionary<string, Table>
-    {
-        { "todos", Todos },
-        { "lists", Lists }
-    });
+    public static Schema PowerSyncSchema = new SchemaBuilder(Todos, Lists).Build();
 }

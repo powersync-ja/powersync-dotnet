@@ -20,7 +20,7 @@ public class TableOptions(
 
     public bool InsertOnly { get; set; } = insertOnly ?? false;
 
-    public string? ViewName { get; set; } = viewName;
+    public string? ViewName { get; } = viewName;
 
     /// <summary>
     /// Whether to add a hidden `_metadata` column that will be enabled for updates to attach custom
