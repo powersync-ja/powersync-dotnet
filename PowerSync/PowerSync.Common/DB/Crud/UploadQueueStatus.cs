@@ -1,8 +1,8 @@
 namespace PowerSync.Common.DB.Crud;
 
-public class UploadQueueStats(int count, long? size = null)
+public class UploadQueueStats(long count, long? size = null)
 {
-    public int Count { get; set; } = count;
+    public long Count { get; set; } = count;
 
     public long? Size { get; set; } = size;
 
