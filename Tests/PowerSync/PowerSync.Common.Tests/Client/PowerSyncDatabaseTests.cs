@@ -30,8 +30,14 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     }
 
     private record IdResult(string id);
-    private record AssetResult(string id, string description, string? make = null);
-    private record CountResult(int count);
+    private record CountResult(long count);
+
+    private class AssetResult
+    {
+        public string id { get; set; }
+        public string description { get; set; }
+        public string? make { get; set; }
+    }
 
     [Fact]
     public async Task QueryWithoutParamsTest()
@@ -84,10 +90,11 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
             [id, name, null]
         );
 
-        var result = await db.GetAll<AssetResult>("SELECT id, description, make FROM assets WHERE id = ? AND make IS NULL", [id]);
+        var result = await db.GetAll<AssetResult>("SELECT id, description, make FROM assets");
 
         Assert.Single(result);
         var row = result.First();
+        Assert.Equal(id, row.id);
         Assert.Equal(name, row.description);
         Assert.Null(row.make);
     }
@@ -116,7 +123,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
 
         var result = await db.Database.ReadTransaction(async tx =>
         {
-            return await tx.GetAll<IdResult>("SELECT * FROM assets");
+            return await tx.GetAll<IdResult>("SELECT id FROM assets");
         });
 
         Assert.Single(result);
@@ -131,7 +138,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
             await tx.Commit();
         });
 
-        var result = await db.GetAll<IdResult>("SELECT * FROM assets WHERE id = ?", ["O4"]);
+        var result = await db.GetAll<IdResult>("SELECT id FROM assets WHERE id = ?", ["O4"]);
 
         Assert.Single(result);
         Assert.Equal("O4", result.First().id);
@@ -145,7 +152,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
             await tx.Execute("INSERT INTO assets(id) VALUES(?)", ["O41"]);
         });
 
-        var result = await db.GetAll<IdResult>("SELECT * FROM assets WHERE id = ?", ["O41"]);
+        var result = await db.GetAll<IdResult>("SELECT id FROM assets WHERE id = ?", ["O41"]);
 
         Assert.Single(result);
         Assert.Equal("O41", result.First().id);
@@ -160,7 +167,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
             await tx.Rollback();
         });
 
-        var result = await db.GetAll<object>("SELECT * FROM assets");
+        var result = await db.GetAll("SELECT * FROM assets");
         Assert.Empty(result);
     }
 
@@ -182,7 +189,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
             exceptionThrown = true;
         }
 
-        var result = await db.GetAll<IdResult>("SELECT * FROM assets");
+        var result = await db.GetAll("SELECT * FROM assets");
         Assert.Empty(result);
         Assert.True(exceptionThrown);
     }
@@ -193,7 +200,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         var result = await db.WriteTransaction(async tx =>
         {
             await tx.Execute("INSERT INTO assets(id) VALUES(?)", ["O5"]);
-            return await tx.GetAll<IdResult>("SELECT * FROM assets");
+            return await tx.GetAll<IdResult>("SELECT id FROM assets");
         });
 
         Assert.Single(result);
@@ -207,10 +214,10 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         {
             await tx.Execute("INSERT INTO assets(id) VALUES(?)", ["O6"]);
 
-            var txQuery = await tx.GetAll<IdResult>("SELECT * FROM assets");
+            var txQuery = await tx.GetAll("SELECT * FROM assets");
             Assert.Single(txQuery);
 
-            var dbQuery = await db.GetAll<IdResult>("SELECT * FROM assets");
+            var dbQuery = await db.GetAll("SELECT * FROM assets");
             Assert.Empty(dbQuery);
         });
     }
@@ -257,7 +264,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         var tasks = Enumerable.Range(0, numberOfReads)
             .Select(_ => db.ReadLock(async context =>
             {
-                return await context.GetAll<AssetResult>("SELECT id FROM assets WHERE id = ?", [id]);
+                return await context.GetAll<IdResult>("SELECT id FROM assets WHERE id = ?", [id]);
             }))
             .ToArray();
 
@@ -476,7 +483,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         });
 
         // Try and read while the write transaction is still open
-        var result = await db.GetAll<object>("SELECT * FROM assets");
+        var result = await db.GetAll("SELECT * FROM assets");
         Assert.Single(result); // The transaction is not commited yet, we should only read 1 asset
 
         // Let the transaction complete
@@ -484,7 +491,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         await transactionTask;
 
         // Read again after the transaction is committed
-        var afterTx = await db.GetAll<object>("SELECT * FROM assets");
+        var afterTx = await db.GetAll("SELECT * FROM assets");
         Assert.Equal(2, afterTx.Length);
     }
 
@@ -501,4 +508,64 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.NotNull(stats.Size);
     }
 
+    [Fact]
+    public async Task DynamicQueryTest()
+    {
+        string id = Guid.NewGuid().ToString();
+        string description = "new description";
+        string make = "some make";
+        await db.Execute(
+            "insert into assets (id, description, make) values (?, ?, ?)",
+            [id, description, make]
+        );
+
+        var dynamicAsset = await db.Get("select id, description, make from assets");
+        Assert.Equal(id, dynamicAsset.id);
+        Assert.Equal(description, dynamicAsset.description);
+        Assert.Equal(make, dynamicAsset.make);
+    }
+
+    [Fact(Timeout = 2000)]
+    public async Task DynamicWatchTest()
+    {
+        string id = Guid.NewGuid().ToString();
+        string description = "new description";
+        string make = "some make";
+
+        var watched = new TaskCompletionSource<bool>();
+        var cts = new CancellationTokenSource();
+
+        await db.Watch("select id, description, make from assets", null, new WatchHandler<dynamic>
+        {
+            OnResult = (assets) =>
+            {
+                // Only care about results after Execute is called
+                if (assets.Length == 0) return;
+
+                Assert.Single(assets);
+                dynamic dynamicAsset = assets[0];
+                Assert.Equal(id, dynamicAsset.id);
+                Assert.Equal(description, dynamicAsset.description);
+                Assert.Equal(make, dynamicAsset.make);
+
+                watched.SetResult(true);
+                cts.Cancel();
+            },
+            OnError = (ex) => throw ex,
+        },
+        new SQLWatchOptions
+        {
+            Signal = cts.Token
+        });
+
+        await db.WriteTransaction(async tx =>
+        {
+            await tx.Execute(
+                "insert into assets (id, description, make) values (?, ?, ?)",
+                [id, description, make]
+            );
+        });
+
+        await watched.Task;
+    }
 }

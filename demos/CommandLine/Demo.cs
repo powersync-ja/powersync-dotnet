@@ -11,7 +11,13 @@ using Spectre.Console;
 
 class Demo
 {
-    private record ListResult(string id, string name, string owner_id, string created_at);
+    private record ListResult
+    {
+        public string id;
+        public string owner_id;
+        public string name;
+        public string created_at;
+    }
     static async Task Main()
     {
         var db = new PowerSyncDatabase(new PowerSyncDatabaseOptions
