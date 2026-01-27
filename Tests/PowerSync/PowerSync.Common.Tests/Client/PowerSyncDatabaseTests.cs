@@ -568,4 +568,77 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
 
         await watched.Task;
     }
+
+    [Fact(Timeout = 2000)]
+    public async void WatchDisposableSubscriptionTest()
+    {
+        int callCount = 0;
+
+        var subscription = await db.Watch("select id, description, make from assets", null, new()
+        {
+            OnResult = (results) => callCount++,
+            OnError = (ex) => Assert.Fail("An exception occurred: " + ex.ToString())
+        });
+
+        // Initial OnResult call
+        Assert.Equal(1, callCount);
+
+        await db.Execute(
+            "insert into assets(id, description, make) values (?, ?, ?)",
+            [Guid.NewGuid().ToString(), "some desc", "some make"]
+        );
+        Thread.Sleep(500);
+
+        // Calls OnResult again
+        Assert.Equal(2, callCount);
+
+        // Should cancel query internally
+        subscription.Dispose();
+        await db.Execute(
+            "insert into assets(id, description, make) values (?, ?, ?)",
+            [Guid.NewGuid().ToString(), "some desc", "some make"]
+        );
+        Thread.Sleep(500);
+
+        // Shouldn't call OnResult, hence same number
+        Assert.Equal(2, callCount);
+    }
+
+    [Fact(Timeout = 2000)]
+    public async void WatchDisposableCustomTokenTest()
+    {
+        var customTokenSource = new CancellationTokenSource();
+        int callCount = 0;
+
+        using var subscription = await db.Watch("select id, description, make from assets", null, new()
+        {
+            OnResult = (results) => callCount++,
+            OnError = (ex) => Assert.Fail("An exception occurred: " + ex.ToString())
+        }, new()
+        {
+            Signal = customTokenSource.Token
+        });
+
+        // Initial OnResult call
+        Assert.Equal(1, callCount);
+
+        await db.Execute(
+            "insert into assets(id, description, make) values (?, ?, ?)",
+            [Guid.NewGuid().ToString(), "some desc", "some make"]
+        );
+        Thread.Sleep(500);
+
+        // Calls OnResult again
+        Assert.Equal(2, callCount);
+
+        customTokenSource.Cancel();
+        await db.Execute(
+            "insert into assets(id, description, make) values (?, ?, ?)",
+            [Guid.NewGuid().ToString(), "some desc", "some make"]
+        );
+        Thread.Sleep(500);
+
+        // Shouldn't call OnResult, hence same number
+        Assert.Equal(2, callCount);
+    }
 }

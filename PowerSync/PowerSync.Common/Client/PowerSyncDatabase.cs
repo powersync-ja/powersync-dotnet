@@ -671,7 +671,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
     /// Use <see cref="SQLWatchOptions.ThrottleMs"/> to specify the minimum interval between queries.
     /// Source tables are automatically detected using <c>EXPLAIN QUERY PLAN</c>.
     /// </summary>
-    public Task Watch<T>(string query, object?[]? parameters, WatchHandler<T> handler, SQLWatchOptions? options = null)
+    public Task<IDisposable> Watch<T>(string query, object?[]? parameters, WatchHandler<T> handler, SQLWatchOptions? options = null)
         => WatchInternal(query, parameters, handler, options, GetAll<T>);
 
     /// <summary>
@@ -680,10 +680,10 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
     /// Use <see cref="SQLWatchOptions.ThrottleMs"/> to specify the minimum interval between queries.
     /// Source tables are automatically detected using <c>EXPLAIN QUERY PLAN</c>.
     /// </summary>
-    public Task Watch(string query, object?[]? parameters, WatchHandler<dynamic> handler, SQLWatchOptions? options = null)
+    public Task<IDisposable> Watch(string query, object?[]? parameters, WatchHandler<dynamic> handler, SQLWatchOptions? options = null)
         => WatchInternal(query, parameters, handler, options, GetAll);
 
-    private Task WatchInternal<T>(
+    private async Task<IDisposable> WatchInternal<T>(
         string query,
         object?[]? parameters,
         WatchHandler<T> handler,
@@ -691,44 +691,33 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         Func<string, object?[]?, Task<T[]>> getter
     )
     {
-        var tcs = new TaskCompletionSource<bool>();
-        Task.Run(async () =>
-        {
-            try
-            {
-                var resolvedTables = await ResolveTables(query, parameters, options);
-                var result = await getter(query, parameters);
-                handler.OnResult(result);
+        var resolvedTables = await ResolveTables(query, parameters, options);
+        var result = await getter(query, parameters);
+        handler.OnResult(result);
 
-                OnChange(new WatchOnChangeHandler
-                {
-                    OnChange = async (change) =>
-                    {
-                        try
-                        {
-                            var result = await getter(query, parameters);
-                            handler.OnResult(result);
-                        }
-                        catch (Exception ex)
-                        {
-                            handler.OnError?.Invoke(ex);
-                        }
-                    },
-                    OnError = handler.OnError
-                }, new SQLWatchOptions
-                {
-                    Tables = resolvedTables,
-                    Signal = options?.Signal,
-                    ThrottleMs = options?.ThrottleMs
-                });
-                tcs.SetResult(true);
-            }
-            catch (Exception ex)
+        var subscription = OnChange(new WatchOnChangeHandler
+        {
+            OnChange = async (change) =>
             {
-                handler.OnError?.Invoke(ex);
-            }
+                try
+                {
+                    var result = await getter(query, parameters);
+                    handler.OnResult(result);
+                }
+                catch (Exception ex)
+                {
+                    handler.OnError?.Invoke(ex);
+                }
+            },
+            OnError = handler.OnError
+        }, new SQLWatchOptions
+        {
+            Tables = resolvedTables,
+            Signal = options?.Signal,
+            ThrottleMs = options?.ThrottleMs
         });
-        return tcs.Task;
+
+        return subscription;
     }
 
     private class ExplainedResult
@@ -776,7 +765,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
     /// This is preferred over <see cref="Watch"/> when multiple queries need to be performed
     /// together in response to data changes.
     /// </summary>
-    public void OnChange(WatchOnChangeHandler handler, SQLWatchOptions? options = null)
+    public IDisposable OnChange(WatchOnChangeHandler handler, SQLWatchOptions? options = null)
     {
         var resolvedOptions = options ?? new SQLWatchOptions();
 
@@ -811,13 +800,17 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
             }
         });
 
+        // Store registration in order to clean it up later
+        CancellationTokenRegistration? registration = null;
         if (options?.Signal.HasValue == true)
         {
-            options.Signal.Value.Register(() =>
+            registration = options.Signal.Value.Register(() =>
             {
                 cts.Cancel();
             });
         }
+
+        return new WatchSubscription(cts, registration);
     }
 
     private static void HandleTableChanges(HashSet<string> changedTables, HashSet<string> watchedTables, Action<string[]> onDetectedChanges)
@@ -878,4 +871,23 @@ public class WatchOnChangeHandler
 {
     public Func<WatchOnChangeEvent, Task> OnChange { get; set; } = null!;
     public Action<Exception>? OnError { get; set; }
+}
+
+public class WatchSubscription(CancellationTokenSource cts, CancellationTokenRegistration? registration) : IDisposable
+{
+    private readonly CancellationTokenSource _cts = cts;
+    private readonly CancellationTokenRegistration? _registration = registration;
+    private bool _disposed;
+
+    public bool Disposed { get { return _disposed; } }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        _registration?.Dispose();
+        _cts.Cancel();
+        _cts.Dispose();
+    }
 }
