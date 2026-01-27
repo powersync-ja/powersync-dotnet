@@ -94,7 +94,6 @@ public readonly struct StreamPriority : IComparable<StreamPriority>
 {
     private const int Highest = 0;
 
-    [JsonPropertyName("priority")]
     public int PriorityNumber { get; }
 
     public StreamPriority(int priorityNumber)
