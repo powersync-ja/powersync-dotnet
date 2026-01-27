@@ -32,4 +32,8 @@
     <ProjectReference Include="..\..\..\PowerSync\PowerSync.Common\PowerSync.Common.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
