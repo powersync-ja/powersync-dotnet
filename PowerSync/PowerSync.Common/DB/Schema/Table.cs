@@ -67,7 +67,7 @@ public class Table
     public static readonly Regex InvalidSQLCharacters = new Regex(@"[""'%,.#\s\[\]]", RegexOptions.Compiled);
 
     public string Name { get; init; } = null!;
-    protected TableOptions Options { get; init; } = null!; // TODO this feels weird
+    protected TableOptions Options { get; init; } = null!;
 
     public Dictionary<string, ColumnType> Columns;
     public Dictionary<string, List<string>> Indexes;
@@ -177,9 +177,8 @@ public class Table
             view_name = Options.ViewName ?? Name,
             local_only = Options.LocalOnly,
             insert_only = Options.InsertOnly,
-            // TODO is this needed?
-            columns = ColumnsJSON.Select(c => JsonConvert.DeserializeObject<object>(c.ToJSON())).ToList(),
-            indexes = IndexesJSON.Select(i => JsonConvert.DeserializeObject<object>(i.ToJSON(this))).ToList(),
+            columns = ColumnsJSON.Select(c => c.ToJSONObject()).ToList(),
+            indexes = IndexesJSON.Select(i => i.ToJSONObject(this)).ToList(),
 
             include_metadata = Options.TrackMetadata,
             ignore_empty_update = Options.IgnoreEmptyUpdates,

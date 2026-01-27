@@ -1,7 +1,5 @@
 namespace PowerSync.Common.DB.Schema;
 
-using Newtonsoft.Json;
-
 class IndexJSONOptions(string name, List<IndexedColumnJSON>? columns = null)
 {
     public string Name { get; set; } = name;
@@ -14,12 +12,12 @@ class IndexJSON(IndexJSONOptions options)
 
     public List<IndexedColumnJSON> Columns => options.Columns ?? [];
 
-    public string ToJSON(Table table)
+    public object ToJSONObject(Table table)
     {
-        return JsonConvert.SerializeObject(new
+        return new
         {
             name = Name,
             columns = Columns.Select(column => column.ToJSON(table)).ToList()
-        });
+        };
     }
 }

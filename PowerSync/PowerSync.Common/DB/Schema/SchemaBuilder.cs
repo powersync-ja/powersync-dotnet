@@ -9,11 +9,6 @@ public class SchemaBuilder
         _tables = tables.ToList();
     }
 
-    // public SchemaBuilder(params Type[] types)
-    // {
-    //     // TODO
-    // }
-
     public Schema Build()
     {
         Dictionary<string, Table> tableMap = new();

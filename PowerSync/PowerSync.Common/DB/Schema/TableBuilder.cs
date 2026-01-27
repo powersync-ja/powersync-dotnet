@@ -32,35 +32,6 @@ public class TableBuilder()
         );
         return new Table(Name, Columns.Columns, options);
     }
-
-    void Test()
-    {
-        TableBuilder builder = new TableBuilder
-        {
-            Name = "assets",
-            Columns =
-            {
-                ["created_at"] = ColumnType.Text,
-                ["make"] = ColumnType.Text,
-                ["model"] = ColumnType.Text,
-                ["quantity"] = ColumnType.Text,
-            },
-            Indexes =
-            {
-                ["makemodel"] = ["make", "model"]
-            },
-            LocalOnly = true,
-            InsertOnly = false,
-            TrackMetadata = false,
-            TrackPreviousValues = new()
-            {
-                Columns = ["quantity", "model"],
-                OnlyWhenChanged = false,
-            },
-            IgnoreEmptyUpdates = true,
-        };
-        Table assetsSchema = builder.Build();
-    }
 }
 
 public class ColumnMap : IEnumerable

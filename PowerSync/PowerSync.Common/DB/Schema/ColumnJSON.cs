@@ -1,7 +1,5 @@
 namespace PowerSync.Common.DB.Schema;
 
-using Newtonsoft.Json;
-
 public enum ColumnType
 {
     Text,
@@ -21,12 +19,12 @@ class ColumnJSON(ColumnJSONOptions options)
 
     public ColumnType Type { get; set; } = options.Type ?? ColumnType.Text;
 
-    public string ToJSON()
+    public object ToJSONObject()
     {
-        return JsonConvert.SerializeObject(new
+        return new
         {
             name = Name,
             type = Type.ToString()
-        });
+        };
     }
 }
