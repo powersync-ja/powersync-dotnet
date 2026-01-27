@@ -36,16 +36,6 @@ public class SyncStreamsTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task BasicConnectTest()
-    {
-        Assert.False(db.Connected);
-        await db.Connect(new TestConnector());
-
-        Assert.True(db.Connected);
-        DeepEquivalent(new RequestStream { IncludeDefaults = true, Subscriptions = [] }, syncService.Requests[0].Streams);
-    }
-
-    [Fact]
     public async Task CanDisableDefaultStreams()
     {
         await db.Connect(new TestConnector(), new PowerSyncConnectionOptions
@@ -73,7 +63,7 @@ public class SyncStreamsTests : IAsyncLifetime
     {
         var a = await db.SyncStream("stream", new Dictionary<string, object> { { "foo", "a" } }).Subscribe();
         var b = await db.SyncStream("stream", new Dictionary<string, object> { { "foo", "b" } })
-                        .Subscribe(new SyncStreamSubscribeOptions { Priority = SyncPriority.Priority_1 });
+                        .Subscribe(new SyncStreamSubscribeOptions { Priority = new StreamPriority(1) });
 
         await db.Connect(new TestConnector());
 

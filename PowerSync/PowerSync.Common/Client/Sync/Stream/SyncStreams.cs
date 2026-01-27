@@ -1,3 +1,9 @@
+using System.Text.Json.Serialization;
+
+using Newtonsoft.Json;
+
+using PowerSync.Common.DB.Crud;
+
 namespace PowerSync.Common.Client.Sync.Stream;
 
 /// <summary>
@@ -71,28 +77,44 @@ public class SyncSubscriptionDescription : ISyncStreamDescription
 public class SyncStreamSubscribeOptions
 {
     /// <summary>
-    /// A "time to live" for this stream subscription, in seconds.
+    /// A "time to live" for this stream subscription.
     /// The TTL controls when a stream gets evicted after not having an active <see cref="ISyncStreamSubscription"/> object
     /// attached to it.
     /// </summary>
-    public int? Ttl { get; set; }
+    public TimeSpan? Ttl { get; set; }
 
     /// <summary>
     /// A priority to assign to this subscription. This overrides the default priority that may have been set on streams.
     /// For details on priorities, see prioritized sync documentation.
     /// </summary>
-    public SyncPriority? Priority { get; set; }
+    public StreamPriority? Priority { get; set; }
 }
 
-/// <summary>
-/// Priority levels for sync stream subscriptions.
-/// </summary>
-public enum SyncPriority
+public readonly struct StreamPriority : IComparable<StreamPriority>
 {
-    Priority_0 = 0,
-    Priority_1 = 1,
-    Priority_2 = 2,
-    Priority_3 = 3
+    private const int Highest = 0;
+
+    [JsonPropertyName("priority")]
+    public int PriorityNumber { get; }
+
+    public StreamPriority(int priorityNumber)
+    {
+        if (priorityNumber < Highest)
+            throw new ArgumentOutOfRangeException(
+                nameof(priorityNumber),
+                "Priority must be >= 0");
+
+        PriorityNumber = priorityNumber;
+    }
+
+    public int CompareTo(StreamPriority other) =>
+        other.PriorityNumber.CompareTo(PriorityNumber);
+
+    /// <summary>
+    /// The priority used by PowerSync to indicate that a full sync was completed.
+    /// </summary>
+    public static readonly StreamPriority FullSyncPriority =
+        new(SyncProgress.FULL_SYNC_PRIORITY);
 }
 
 /// <summary>
