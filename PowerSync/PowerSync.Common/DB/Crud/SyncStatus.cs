@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
 
 using PowerSync.Common.Client.Sync.Stream;
+using PowerSync.Common.Utils;
 
 public class SyncDataFlowStatus
 {
@@ -213,10 +214,8 @@ public class SyncStatus(SyncStatusOptions options)
             return null;
         }
 
-        var streamParamsJson = JsonConvert.SerializeObject(stream.Parameters);
         var raw = internalStreams.FirstOrDefault(r =>
-            r.Name == stream.Name &&
-            JsonConvert.SerializeObject(r.Parameters) == streamParamsJson
+            r.Name == stream.Name && Equality.DeepEquals(r.Parameters, stream.Parameters)
         );
 
         return raw != null ? new SyncStreamStatusView(this, raw) : null;
