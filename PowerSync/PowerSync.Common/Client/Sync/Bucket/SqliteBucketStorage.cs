@@ -113,13 +113,11 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
         public List<string>? FailedBuckets { get; set; }
     }
 
-
-    private record TargetOpResult(string target_op);
     private record SequenceResult(int seq);
 
     public async Task<bool> UpdateLocalTarget(Func<Task<string>> callback)
     {
-        var rs1 = await db.GetAll<TargetOpResult>(
+        var rs1 = await db.GetAll(
             "SELECT target_op FROM ps_buckets WHERE name = '$local' AND target_op = CAST(? as INTEGER)",
             [GetMaxOpId()]
         );
