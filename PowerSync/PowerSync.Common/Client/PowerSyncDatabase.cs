@@ -691,33 +691,41 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         Func<string, object?[]?, Task<T[]>> getter
     )
     {
-        var resolvedTables = await ResolveTables(query, parameters, options);
-        var result = await getter(query, parameters);
-        handler.OnResult(result);
-
-        var subscription = OnChange(new WatchOnChangeHandler
+        try
         {
-            OnChange = async (change) =>
+            var resolvedTables = await ResolveTables(query, parameters, options);
+            var result = await getter(query, parameters);
+            handler.OnResult(result);
+
+            var subscription = OnChange(new WatchOnChangeHandler
             {
-                try
+                OnChange = async (change) =>
                 {
-                    var result = await getter(query, parameters);
-                    handler.OnResult(result);
-                }
-                catch (Exception ex)
-                {
-                    handler.OnError?.Invoke(ex);
-                }
-            },
-            OnError = handler.OnError
-        }, new SQLWatchOptions
-        {
-            Tables = resolvedTables,
-            Signal = options?.Signal,
-            ThrottleMs = options?.ThrottleMs
-        });
+                    try
+                    {
+                        var result = await getter(query, parameters);
+                        handler.OnResult(result);
+                    }
+                    catch (Exception ex)
+                    {
+                        handler.OnError?.Invoke(ex);
+                    }
+                },
+                OnError = handler.OnError
+            }, new SQLWatchOptions
+            {
+                Tables = resolvedTables,
+                Signal = options?.Signal,
+                ThrottleMs = options?.ThrottleMs
+            });
 
-        return subscription;
+            return subscription;
+        }
+        catch (Exception ex)
+        {
+            handler.OnError?.Invoke(ex);
+            throw;
+        }
     }
 
     private class ExplainedResult
