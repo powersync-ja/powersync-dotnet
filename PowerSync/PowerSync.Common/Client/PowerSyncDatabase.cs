@@ -119,7 +119,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
 
     protected IBucketStorageAdapter BucketStorageAdapter;
 
-    protected SyncStatus CurrentStatus;
+    public SyncStatus CurrentStatus;
 
     public ILogger Logger;
 
