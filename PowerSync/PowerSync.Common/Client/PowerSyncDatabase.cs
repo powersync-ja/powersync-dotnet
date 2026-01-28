@@ -372,6 +372,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
     public void UnsubscribeAllQueries()
     {
         watchSubscriptionCts.Cancel();
+        watchSubscriptionCts.Dispose();
         watchSubscriptionCts = new();
     }
 
@@ -819,7 +820,6 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         });
 
         CancellationTokenSource linkedCts;
-
         if (options?.Signal.HasValue == true)
         {
             // Cancel on global CTS cancellation or user token cancellation
