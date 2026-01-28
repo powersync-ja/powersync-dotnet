@@ -102,6 +102,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
     protected IBucketStorageAdapter BucketStorageAdapter;
 
     protected CancellationTokenSource? syncStreamStatusCts;
+    protected CancellationTokenSource watchSubscriptionCts = new();
 
     protected SyncStatus CurrentStatus;
 
@@ -365,6 +366,15 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         await syncStreamImplementation.Connect(options);
     }
 
+    /// <summary>
+    /// Unsubscribe from all currently watched queries.
+    /// </summary>
+    public void UnsubscribeAllQueries()
+    {
+        watchSubscriptionCts.Cancel();
+        watchSubscriptionCts = new();
+    }
+
     public async Task Disconnect()
     {
         await WaitForReady();
@@ -415,7 +425,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
 
         if (Closed) return;
 
-
+        UnsubscribeAllQueries();
         await Disconnect();
         base.Close();
         syncStreamImplementation?.Close();
@@ -808,15 +818,26 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
             }
         });
 
-        // Store registration in order to clean it up later
-        CancellationTokenRegistration? registration = null;
+        CancellationTokenSource linkedCts;
+
         if (options?.Signal.HasValue == true)
         {
-            registration = options.Signal.Value.Register(() =>
-            {
-                cts.Cancel();
-            });
+            // Cancel on global CTS cancellation or user token cancellation
+            linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+                watchSubscriptionCts.Token,
+                options.Signal.Value
+            );
         }
+        else
+        {
+            // Cancel on global CTS cancellation
+            linkedCts = watchSubscriptionCts;
+        }
+
+        var registration = linkedCts.Token.Register(() =>
+        {
+            cts.Cancel();
+        });
 
         return new WatchSubscription(cts, registration);
     }
@@ -881,10 +902,10 @@ public class WatchOnChangeHandler
     public Action<Exception>? OnError { get; set; }
 }
 
-public class WatchSubscription(CancellationTokenSource cts, CancellationTokenRegistration? registration) : IDisposable
+public class WatchSubscription(CancellationTokenSource cts, CancellationTokenRegistration registration) : IDisposable
 {
     private readonly CancellationTokenSource _cts = cts;
-    private readonly CancellationTokenRegistration? _registration = registration;
+    private readonly CancellationTokenRegistration _registration = registration;
     private bool _disposed;
 
     public bool Disposed { get { return _disposed; } }
@@ -894,7 +915,7 @@ public class WatchSubscription(CancellationTokenSource cts, CancellationTokenReg
         if (_disposed) return;
         _disposed = true;
 
-        _registration?.Dispose();
+        _registration.Dispose();
         _cts.Cancel();
         _cts.Dispose();
     }

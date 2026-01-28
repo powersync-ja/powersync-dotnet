@@ -641,4 +641,10 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         // Shouldn't call OnResult, hence same number
         Assert.Equal(2, callCount);
     }
+
+    [Fact(Timeout = 2000)]
+    public async void WatchMultipleCancelledTest()
+    {
+
+    }
 }
