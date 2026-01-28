@@ -568,4 +568,107 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
 
         await watched.Task;
     }
+
+    [Fact(Timeout = 2000)]
+    public async void WatchDisposableSubscriptionTest()
+    {
+        int callCount = 0;
+
+        var subscription = await db.Watch("select id, description, make from assets", null, new()
+        {
+            OnResult = (results) => callCount++,
+            OnError = (ex) => Assert.Fail("An exception occurred: " + ex.ToString())
+        });
+        Thread.Sleep(200);
+        Assert.Equal(1, callCount);
+
+        // Bump callCount to 2
+        await db.Execute(
+            "insert into assets(id, description, make) values (?, ?, ?)",
+            [Guid.NewGuid().ToString(), "some desc", "some make"]
+        );
+        Thread.Sleep(200);
+        Assert.Equal(2, callCount);
+
+        subscription.Dispose();
+        await db.Execute(
+            "insert into assets(id, description, make) values (?, ?, ?)",
+            [Guid.NewGuid().ToString(), "some desc", "some make"]
+        );
+        Thread.Sleep(200);
+        Assert.Equal(2, callCount);
+    }
+
+    [Fact(Timeout = 2500)]
+    public async void WatchDisposableCustomTokenTest()
+    {
+        var customTokenSource = new CancellationTokenSource();
+        int callCount = 0;
+
+        using var subscription = await db.Watch("select id, description, make from assets", null, new()
+        {
+            OnResult = (results) => callCount++,
+            OnError = (ex) => Assert.Fail("An exception occurred: " + ex.ToString())
+        }, new()
+        {
+            Signal = customTokenSource.Token
+        });
+        Thread.Sleep(200);
+        Assert.Equal(1, callCount);
+
+        await db.Execute(
+            "insert into assets(id, description, make) values (?, ?, ?)",
+            [Guid.NewGuid().ToString(), "some desc", "some make"]
+        );
+        Thread.Sleep(200);
+        Assert.Equal(2, callCount);
+
+        customTokenSource.Cancel();
+        await db.Execute(
+            "insert into assets(id, description, make) values (?, ?, ?)",
+            [Guid.NewGuid().ToString(), "some desc", "some make"]
+        );
+        Thread.Sleep(200);
+        Assert.Equal(2, callCount); // Same value
+    }
+
+    [Fact(Timeout = 2000)]
+    public async void WatchMultipleCancelledTest()
+    {
+        int callCount = 0;
+        var watchHandlerFactory = () => new WatchHandler<IdResult>
+        {
+            OnResult = (result) => callCount++,
+            OnError = (ex) => Assert.Fail("An exception occurred: " + ex.ToString()),
+        };
+
+        var query1 = await db.Watch("select id from assets", null, watchHandlerFactory());
+        var query2 = await db.Watch("select id from customers", null, watchHandlerFactory());
+        Thread.Sleep(200);
+        Assert.Equal(2, callCount);
+
+        await db.Execute(
+            "insert into assets(id, description, make) values (?, ?, ?)",
+            [Guid.NewGuid().ToString(), "some desc", "some make"]
+        );
+        await db.Execute(
+            "insert into assets(id, description, make) values (?, ?, ?)",
+            [Guid.NewGuid().ToString(), "some desc", "some make"]
+        );
+        Thread.Sleep(200);
+        Assert.Equal(4, callCount);
+
+        db.UnsubscribeAllQueries();
+
+        await db.Execute(
+            "insert into assets(id, description, make) values (?, ?, ?)",
+            [Guid.NewGuid().ToString(), "some desc", "some make"]
+        );
+        await db.Execute(
+            "insert into assets(id, description, make) values (?, ?, ?)",
+            [Guid.NewGuid().ToString(), "some desc", "some make"]
+        );
+        Thread.Sleep(200);
+        Assert.Equal(4, callCount);
+    }
 }
