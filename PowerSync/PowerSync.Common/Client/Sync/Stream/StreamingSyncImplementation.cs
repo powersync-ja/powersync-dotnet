@@ -34,24 +34,32 @@ public class RequiredAdditionalConnectionOptions : AdditionalConnectionOptions
     public static RequiredAdditionalConnectionOptions DEFAULT_ADDITIONAL_CONNECTION_OPTIONS = new()
     {
         CrudUploadThrottleMs = 1000,
-        RetryDelayMs = 5000
+        RetryDelayMs = 5000,
+        Subscriptions = []
     };
 
     public new int RetryDelayMs { get; set; }
 
     public new int CrudUploadThrottleMs { get; set; }
+
+    public SubscribedStream[] Subscriptions { get; init; } = null!;
+
 }
 
 public class StreamingSyncImplementationOptions : AdditionalConnectionOptions
 {
     public IBucketStorageAdapter Adapter { get; init; } = null!;
+
+    public SubscribedStream[] Subscriptions { get; init; } = null!;
+
     public Func<Task> UploadCrud { get; init; } = null!;
+
     public Remote Remote { get; init; } = null!;
 
     public ILogger? Logger { get; init; }
 }
 
-public class BaseConnectionOptions(Dictionary<string, object>? parameters = null, Dictionary<string, string>? appMetadata = null)
+public class BaseConnectionOptions(Dictionary<string, object>? parameters = null, Dictionary<string, string>? appMetadata = null, bool? includeDefaultStreams = true)
 {
     /// <summary>
     /// A set of metadata to be included in service logs.
@@ -62,6 +70,13 @@ public class BaseConnectionOptions(Dictionary<string, object>? parameters = null
     /// These parameters are passed to the sync rules and will be available under the `user_parameters` object.
     /// </summary>
     public Dictionary<string, object>? Params { get; set; } = parameters;
+
+    /// <summary>
+    /// Whether to include streams that have `auto_subscribe: true` in their definition.
+    /// 
+    /// This defaults to `true`.
+    /// </summary>
+    public bool? IncludeDefaultStreams { get; set; } = includeDefaultStreams;
 }
 
 public class RequiredPowerSyncConnectionOptions : BaseConnectionOptions
@@ -70,6 +85,8 @@ public class RequiredPowerSyncConnectionOptions : BaseConnectionOptions
     public new Dictionary<string, string> AppMetadata { get; set; } = new();
 
     public new Dictionary<string, object> Params { get; set; } = new();
+
+    public new bool IncludeDefaultStreams { get; set; } = default;
 }
 
 public class StreamingSyncImplementationEvent
@@ -88,8 +105,10 @@ public class StreamingSyncImplementationEvent
 public class PowerSyncConnectionOptions(
     Dictionary<string, object>? @params = null,
     int? retryDelayMs = null,
-    int? crudUploadThrottleMs = null
-) : BaseConnectionOptions(@params)
+    int? crudUploadThrottleMs = null,
+    Dictionary<string, string>? appMetadata = null,
+    bool? includeDefaultStreams = true
+) : BaseConnectionOptions(@params, appMetadata, includeDefaultStreams)
 {
     /// <summary>
     /// Delay for retrying sync streaming operations from the PowerSync backend after an error occurs.
@@ -102,12 +121,23 @@ public class PowerSyncConnectionOptions(
     public int? CrudUploadThrottleMs { get; set; } = crudUploadThrottleMs;
 }
 
+public class SubscribedStream
+{
+    [JsonProperty("name")]
+    public string Name { get; set; } = null!;
+
+    [JsonProperty("params")]
+    public Dictionary<string, object>? Params { get; set; }
+
+}
+
 public class StreamingSyncImplementation : EventStream<StreamingSyncImplementationEvent>
 {
     public static RequiredPowerSyncConnectionOptions DEFAULT_STREAM_CONNECTION_OPTIONS = new()
     {
         AppMetadata = [],
         Params = [],
+        IncludeDefaultStreams = true
     };
 
     public static readonly int DEFAULT_CRUD_UPLOAD_THROTTLE_MS = 1000;
@@ -121,8 +151,12 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
     public Action TriggerCrudUpload { get; }
     private CancellationTokenSource? crudUpdateCts;
 
+    private readonly ILogger logger;
+    private SubscribedStream[] activeStreams;
+
     private bool isUploadingCrud;
-    private Action? notifyCompletedUploads; private readonly ILogger logger;
+    private Action? notifyCompletedUploads;
+    private Action? handleActiveStreamsChange;
 
     private readonly StreamingSyncLocks locks;
 
@@ -140,6 +174,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                 Downloading = false
             }
         });
+        activeStreams = options.Subscriptions;
 
         locks = new StreamingSyncLocks();
         logger = options.Logger ?? NullLogger.Instance;
@@ -167,12 +202,13 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
     /// <summary>
     /// Indicates if the sync service is connected.
     /// </summary>
-    public bool IsConnected { get; protected set; }
+    public bool IsConnected => SyncStatus.Connected;
+
 
     /// <summary>
     /// The timestamp of the last successful sync.
     /// </summary>
-    public DateTime? LastSyncedAt { get; protected set; }
+    public DateTime? LastSyncedAt => SyncStatus.LastSyncedAt;
 
     /// <summary>
     /// The current synchronization status.
@@ -187,8 +223,6 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
         }
         CancellationTokenSource = new CancellationTokenSource();
 
-        streamingSyncTask = StreamingSync(CancellationTokenSource.Token, options);
-
         var tcs = new TaskCompletionSource<bool>();
         var cts = new CancellationTokenSource();
 
@@ -196,21 +230,20 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
         {
             foreach (var status in Listen(cts.Token))
             {
-                if (status.StatusUpdated != null)
+                if (status.StatusChanged != null)
                 {
-                    if (status.StatusUpdated.Connected != null)
+                    if (status.StatusChanged.Connected == false)
                     {
-                        if (status.StatusUpdated.Connected == false)
-                        {
-                            logger.LogWarning("Initial connect attempt did not successfully connect to server");
-                        }
-
-                        tcs.SetResult(true);
-                        cts.Cancel();
+                        logger.LogWarning("Initial connect attempt did not successfully connect to server");
                     }
+
+                    tcs.SetResult(true);
+                    cts.Cancel();
                 }
             }
         });
+
+        streamingSyncTask = StreamingSync(CancellationTokenSource.Token, options);
 
         await tcs.Task;
     }
@@ -240,7 +273,6 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
             // The operation might have failed, all we care about is if it has completed
             logger.LogWarning("{Message}", ex.Message);
         }
-
         streamingSyncTask = null;
         CancellationTokenSource = null;
 
@@ -393,8 +425,8 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                 {
                     AppMetadata = options?.AppMetadata ?? DEFAULT_STREAM_CONNECTION_OPTIONS.AppMetadata,
                     Params = options?.Params ?? DEFAULT_STREAM_CONNECTION_OPTIONS.Params,
+                    IncludeDefaultStreams = options?.IncludeDefaultStreams ?? DEFAULT_STREAM_CONNECTION_OPTIONS.IncludeDefaultStreams,
                 };
-
 
                 return await RustStreamingSyncIteration(signal, resolvedOptions);
             }
@@ -451,15 +483,37 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                     Connected = true
                 });
 
-                string? line;
-                while ((line = await reader.ReadLineAsync()) != null)
+                // Read lines in a cancellation-aware manner.
+                // ReadLineAsync() doesn't support CancellationToken on all .NET versions,
+                // so we use WhenAny to check for cancellation between reads.
+                while (!syncOptions.CancellationToken.IsCancellationRequested)
                 {
+                    var readTask = reader.ReadLineAsync();
+
+                    // Create a task that completes when cancellation is requested
+                    var cancellationTcs = new TaskCompletionSource<bool>();
+                    using var registration = syncOptions.CancellationToken.Register(() => cancellationTcs.TrySetResult(true));
+
+                    var completedTask = await Task.WhenAny(readTask, cancellationTcs.Task);
+
+                    if (completedTask == cancellationTcs.Task)
+                    {
+                        // Cancellation was requested, exit the loop
+                        break;
+                    }
+
+                    var line = await readTask;
+                    if (line == null)
+                    {
+                        // Stream ended
+                        break;
+                    }
+
                     controlInvocations?.Emit(new EnqueuedCommand
                     {
                         Command = PowerSyncControlCommand.PROCESS_TEXT_LINE,
                         Payload = line
                     });
-
                 }
             }
             finally
@@ -516,6 +570,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                     {
                         throw new Exception("Unexpected request to establish sync stream, already connected");
                     }
+
                     receivingLines = Connect(establishSyncStream);
                     break;
                 case FetchCredentials fetchCredentials:
@@ -543,9 +598,9 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
 
                     }
                     break;
-                case CloseSyncStream:
+                case CloseSyncStream closeSyncStream:
                     nestedCts.Cancel();
-                    hideDisconnectOnRestart = true;
+                    hideDisconnectOnRestart = closeSyncStream.HideDisconnect;
                     logger.LogWarning("Closing stream");
                     break;
                 case FlushFileSystem:
@@ -561,7 +616,14 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
 
         try
         {
-            await Control(PowerSyncControlCommand.START, JsonConvert.SerializeObject(new { parameters = resolvedOptions.Params, app_metadata = resolvedOptions.AppMetadata }));
+            var options = new
+            {
+                parameters = resolvedOptions.Params,
+                active_streams = activeStreams,
+                include_defaults = resolvedOptions.IncludeDefaultStreams,
+                app_metadata = resolvedOptions.AppMetadata
+            };
+            await Control(PowerSyncControlCommand.START, JsonConvert.SerializeObject(options));
 
             notifyCompletedUploads = () =>
             {
@@ -577,6 +639,18 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                 });
             };
 
+            handleActiveStreamsChange = () =>
+            {
+                if (controlInvocations != null && !controlInvocations.Closed)
+                {
+                    controlInvocations?.Emit(new EnqueuedCommand
+                    {
+                        Command = PowerSyncControlCommand.UPDATE_SUBSCRIPTIONS,
+                        Payload = JsonConvert.SerializeObject(activeStreams)
+                    });
+                }
+            };
+
             if (receivingLines != null)
             {
                 await receivingLines;
@@ -585,6 +659,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
         finally
         {
             notifyCompletedUploads = null;
+            handleActiveStreamsChange = null;
             await Stop();
         }
 
@@ -726,13 +801,14 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                     DownloadProgress = options.DataFlow?.DownloadProgress ?? SyncStatus.DataFlowStatus.DownloadProgress,
                     DownloadError = updateOptions?.ClearDownloadError == true ? null : options.DataFlow?.DownloadError ?? SyncStatus.DataFlowStatus.DownloadError,
                     UploadError = updateOptions?.ClearUploadError == true ? null : options.DataFlow?.UploadError ?? SyncStatus.DataFlowStatus.UploadError,
+                    InternalStreamSubscriptions = options.DataFlow?.InternalStreamSubscriptions ?? SyncStatus.DataFlowStatus.InternalStreamSubscriptions
                 }
             });
 
             if (!SyncStatus.Equals(updatedStatus))
             {
                 SyncStatus = updatedStatus;
-                logger.LogDebug("[Sync status updated]: {message}", updatedStatus.ToJSON());
+                logger.LogDebug("[Sync status changed]: {message}", updatedStatus.ToJSON());
                 // Only trigger this if there was a change
                 Emit(new StreamingSyncImplementationEvent { StatusChanged = updatedStatus });
             }
@@ -752,6 +828,13 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
         {
             await Task.Delay(Options.RetryDelayMs.Value);
         }
+    }
+
+
+    public void UpdateSubscriptions(SubscribedStream[] subscriptions)
+    {
+        activeStreams = subscriptions;
+        handleActiveStreamsChange?.Invoke();
     }
 }
 

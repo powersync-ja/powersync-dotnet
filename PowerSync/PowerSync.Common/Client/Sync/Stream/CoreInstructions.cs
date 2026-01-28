@@ -72,6 +72,50 @@ public class UpdateSyncStatus : Instruction
     public CoreSyncStatus Status { get; set; } = null!;
 }
 
+
+public class StreamSubscriptionProgress
+{
+    [JsonProperty("total")]
+    public int Total { get; set; }
+
+    [JsonProperty("downloaded")]
+    public int Downloaded { get; set; }
+}
+
+/// <summary>
+/// An `ActiveStreamSubscription` from the core extension + serialized progress information.
+/// </summary>
+public class CoreStreamSubscription
+{
+    [JsonProperty("progress")]
+    public StreamSubscriptionProgress Progress { get; set; } = null!;
+
+    [JsonProperty("name")]
+    public string Name { get; set; } = null!;
+
+    [JsonProperty("parameters")]
+    public Dictionary<string, object> Parameters { get; set; } = null!;
+
+    [JsonProperty("priority")]
+    public int? Priority { get; set; }
+
+    [JsonProperty("active")]
+    public bool Active { get; set; }
+
+    [JsonProperty("is_default")]
+    public bool IsDefault { get; set; }
+
+    [JsonProperty("has_explicit_subscription")]
+    public bool HasExplicitSubscription { get; set; }
+
+    [JsonProperty("expires_at")]
+    public long? ExpiresAt { get; set; }
+
+    [JsonProperty("last_synced_at")]
+    public long? LastSyncedAt { get; set; }
+}
+
+
 public class CoreSyncStatus
 {
     [JsonProperty("connected")]
@@ -86,6 +130,8 @@ public class CoreSyncStatus
     [JsonProperty("downloading")]
     public DownloadProgress? Downloading { get; set; }
 
+    [JsonProperty("streams")]
+    public List<CoreStreamSubscription> Streams { get; set; } = [];
 }
 
 public class SyncPriorityStatus
@@ -127,7 +173,12 @@ public class FetchCredentials : Instruction
     public bool DidExpire { get; set; }
 }
 
-public class CloseSyncStream : Instruction { }
+public class CloseSyncStream : Instruction
+{
+    [JsonProperty("hide_disconnect")]
+    public bool HideDisconnect { get; set; }
+}
+
 public class FlushFileSystem : Instruction { }
 public class DidCompleteSync : Instruction { }
 
@@ -163,7 +214,8 @@ public class CoreInstructionHelpers
                 // We expose downloading as a boolean field, the core extension reports download information as a nullable
                 // download status. When that status is non-null, a download is in progress.
                 Downloading = status.Downloading != null,
-                DownloadProgress = status.Downloading?.Buckets
+                DownloadProgress = status.Downloading?.Buckets,
+                InternalStreamSubscriptions = status.Streams.ToArray()
             },
             LastSyncedAt = completeSync?.LastSyncedAt,
             HasSynced = completeSync?.HasSynced,

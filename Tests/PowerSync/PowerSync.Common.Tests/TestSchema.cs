@@ -2,6 +2,37 @@ namespace PowerSync.Common.Tests;
 
 using PowerSync.Common.DB.Schema;
 
+public class TestSchemaTodoList
+{
+
+    public static Table Todos = new Table(new Dictionary<string, ColumnType>
+    {
+        { "list_id", ColumnType.TEXT },
+        { "created_at", ColumnType.TEXT },
+        { "completed_at", ColumnType.TEXT },
+        { "description", ColumnType.TEXT },
+        { "created_by", ColumnType.TEXT },
+        { "completed_by", ColumnType.TEXT },
+        { "completed", ColumnType.INTEGER }
+    }, new TableOptions
+    {
+        Indexes = new Dictionary<string, List<string>> { { "list", new List<string> { "list_id" } } }
+    });
+
+    public static Table Lists = new Table(new Dictionary<string, ColumnType>
+    {
+        { "created_at", ColumnType.TEXT },
+        { "name", ColumnType.TEXT },
+        { "owner_id", ColumnType.TEXT }
+    });
+
+    public static readonly Schema AppSchema = new Schema(new Dictionary<string, Table>
+        {
+            { "lists", Lists },
+            { "todos", Todos }
+        });
+}
+
 public class TestSchema
 {
     public static readonly Dictionary<string, ColumnType> AssetsColumns = new Dictionary<string, ColumnType>
