@@ -100,14 +100,14 @@ public interface IPowerSyncDatabase : IEventStream<PowerSyncDBEvent>
 
 public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDatabase
 {
-    public IDBAdapter Database;
+    public IDBAdapter Database { get; protected set; }
     private Schema schema;
 
     private static readonly int DEFAULT_WATCH_THROTTLE_MS = 30;
     private static readonly Regex POWERSYNC_TABLE_MATCH = new Regex(@"(^ps_data__|^ps_data_local__)", RegexOptions.Compiled);
 
-    public new bool Closed;
-    public bool Ready;
+    public new bool Closed { get; protected set; }
+    public bool Ready { get; protected set; }
 
     protected Task IsReadyTask;
     protected ConnectionManager ConnectionManager;
@@ -115,13 +115,13 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
     private readonly InternalSubscriptionManager subscriptions;
 
     private StreamingSyncImplementation? syncStreamImplementation;
-    public string SdkVersion;
+    public string SdkVersion { get; protected set; }
 
     protected IBucketStorageAdapter BucketStorageAdapter;
 
-    public SyncStatus CurrentStatus;
+    public SyncStatus CurrentStatus { get; protected set; }
 
-    public ILogger Logger;
+    public ILogger Logger { get; protected set; }
 
     private readonly AsyncLock runExclusive = new();
     private readonly Func<IPowerSyncBackendConnector, Remote> remoteFactory;
@@ -563,7 +563,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
     ///
     /// Use this from the <see cref="IPowerSyncBackendConnector.UploadData"/> callback.
     /// <para />
-    /// Once the data have been successfully uploaded, CrudTransaction.Complete() before
+    /// Once the data have been successfully uploaded, call <see cref="CrudTransaction.Complete"/> before
     /// requesting the next transaction.
     /// <para />
     /// Unlike <see cref="GetCrudBatch"/>, this only returns data from a single transaction at a time.
