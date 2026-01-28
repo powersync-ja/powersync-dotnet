@@ -1,16 +1,16 @@
 namespace PowerSync.Common.DB.Schema;
 
-class IndexJSONOptions(string name, List<IndexedColumnJSON>? columns = null)
+class IndexJSONOptions(string name, IndexedColumnJSON[]? columns = null)
 {
     public string Name { get; set; } = name;
-    public List<IndexedColumnJSON>? Columns { get; set; } = columns ?? new List<IndexedColumnJSON>();
+    public IndexedColumnJSON[]? Columns { get; set; } = columns ?? [];
 }
 
 class IndexJSON(IndexJSONOptions options)
 {
     public string Name { get; set; } = options.Name;
 
-    public List<IndexedColumnJSON> Columns => options.Columns ?? [];
+    public IndexedColumnJSON[] Columns => options.Columns ?? [];
 
     public object ToJSONObject(Table table)
     {

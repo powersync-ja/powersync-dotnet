@@ -1,6 +1,7 @@
 namespace PowerSync.Common.DB.Schema;
 
 using System.Text.RegularExpressions;
+using System.Collections.Generic;
 
 using Newtonsoft.Json;
 
@@ -68,20 +69,18 @@ public class Table
 
     public string Name { get; init; } = null!;
     protected TableOptions Options { get; init; } = null!;
+    public IReadOnlyDictionary<string, ColumnType> Columns { get; init; }
+    public IReadOnlyDictionary<string, List<string>> Indexes { get; init; }
 
-    public Dictionary<string, ColumnType> Columns;
-    public Dictionary<string, List<string>> Indexes;
-
-    // TODO recalculate when Columns or Indexes changes, or make Columns and Indexes readonly?
-    private readonly List<ColumnJSON> ColumnsJSON;
-    private readonly List<IndexJSON> IndexesJSON;
+    private readonly ColumnJSON[] ColumnsJSON;
+    private readonly IndexJSON[] IndexesJSON;
 
     public Table(string name, Dictionary<string, ColumnType> columns, TableOptions? options = null)
     {
         ColumnsJSON =
             columns
             .Select(kvp => new ColumnJSON(new ColumnJSONOptions(kvp.Key, kvp.Value)))
-            .ToList();
+            .ToArray();
 
         IndexesJSON =
             (Options?.Indexes ?? [])
@@ -91,10 +90,10 @@ public class Table
                     kvp.Value.Select(name =>
                         new IndexedColumnJSON(new IndexedColumnJSONOptions(
                             name.Replace("-", ""), !name.StartsWith("-")))
-                    ).ToList()
+                    ).ToArray()
                 ))
             )
-            .ToList();
+            .ToArray();
 
         Options = options ?? new TableOptions();
 
