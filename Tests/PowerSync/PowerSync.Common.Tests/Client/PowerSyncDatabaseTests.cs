@@ -579,32 +579,31 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
             OnResult = (results) => callCount++,
             OnError = (ex) => Assert.Fail("An exception occurred: " + ex.ToString())
         });
-
-        // Initial OnResult call
+        Thread.Sleep(200);
         Assert.Equal(1, callCount);
 
+        // Bump callCount to 2
         await db.Execute(
             "insert into assets(id, description, make) values (?, ?, ?)",
             [Guid.NewGuid().ToString(), "some desc", "some make"]
         );
-        Thread.Sleep(500);
-
-        // Calls OnResult again
+        Thread.Sleep(200);
         Assert.Equal(2, callCount);
 
-        // Should cancel query internally
+        // Cancel query
         subscription.Dispose();
+        Thread.Sleep(200);
+
+        // Shouldn't call OnResult, hence callCount still == 2
         await db.Execute(
             "insert into assets(id, description, make) values (?, ?, ?)",
             [Guid.NewGuid().ToString(), "some desc", "some make"]
         );
-        Thread.Sleep(500);
-
-        // Shouldn't call OnResult, hence same number
+        Thread.Sleep(200);
         Assert.Equal(2, callCount);
     }
 
-    [Fact(Timeout = 2000)]
+    [Fact(Timeout = 2500)]
     public async void WatchDisposableCustomTokenTest()
     {
         var customTokenSource = new CancellationTokenSource();
@@ -618,6 +617,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         {
             Signal = customTokenSource.Token
         });
+        Thread.Sleep(500);
 
         // Initial OnResult call
         Assert.Equal(1, callCount);

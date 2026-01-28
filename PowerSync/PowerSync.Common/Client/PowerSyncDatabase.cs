@@ -682,7 +682,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
     /// Source tables are automatically detected using <c>EXPLAIN QUERY PLAN</c>.
     /// </summary>
     public Task<IDisposable> Watch<T>(string query, object?[]? parameters, WatchHandler<T> handler, SQLWatchOptions? options = null)
-        => WatchInternal(query, parameters, handler, options, GetAll<T>);
+        => Task.Run(() => WatchInternal(query, parameters, handler, options, GetAll<T>));
 
     /// <summary>
     /// Executes a read query every time the source tables are modified.
@@ -691,7 +691,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
     /// Source tables are automatically detected using <c>EXPLAIN QUERY PLAN</c>.
     /// </summary>
     public Task<IDisposable> Watch(string query, object?[]? parameters, WatchHandler<dynamic> handler, SQLWatchOptions? options = null)
-        => WatchInternal(query, parameters, handler, options, GetAll);
+        => Task.Run(() => WatchInternal(query, parameters, handler, options, GetAll));
 
     private async Task<IDisposable> WatchInternal<T>(
         string query,
