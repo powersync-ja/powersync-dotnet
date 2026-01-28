@@ -28,6 +28,11 @@ public class MockSyncService : EventStream<string>
         Emit(JsonConvert.SerializeObject(line));
     }
 
+    public void PushLine(string line)
+    {
+        Emit(line);
+    }
+
     public PowerSyncDatabase CreateDatabase()
     {
         var connector = new TestConnector();

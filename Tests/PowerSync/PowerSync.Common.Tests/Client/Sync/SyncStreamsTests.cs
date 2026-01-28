@@ -43,7 +43,7 @@ public class SyncStreamsTests : IAsyncLifetime
             IncludeDefaultStreams = false
         });
 
-        DeepEquivalent(new RequestStream { IncludeDefaults = false, Subscriptions = [] }, syncService.Requests[0].Streams);
+        TestUtils.DeepEquivalent(new RequestStream { IncludeDefaults = false, Subscriptions = [] }, syncService.Requests[0].Streams);
     }
 
     [Fact]
@@ -69,7 +69,7 @@ public class SyncStreamsTests : IAsyncLifetime
 
         Assert.True(syncService.Requests[0]?.Streams?.IncludeDefaults);
         Assert.Equal(2, syncService.Requests[0]?.Streams?.Subscriptions.Count);
-        DeepEquivalent(
+        TestUtils.DeepEquivalent(
             new RequestStreamSubscription
             {
                 Stream = "stream",
@@ -78,7 +78,7 @@ public class SyncStreamsTests : IAsyncLifetime
             },
             syncService.Requests[0]?.Streams?.Subscriptions[0]
         );
-        DeepEquivalent(
+        TestUtils.DeepEquivalent(
             new RequestStreamSubscription
             {
                 Stream = "stream",
@@ -158,7 +158,7 @@ public class SyncStreamsTests : IAsyncLifetime
         await Task.Delay(100);
         var subscription = await db.SyncStream("a").Subscribe();
 
-        await WaitForAsync(() => syncService.Requests.Count > 1);
+        await TestUtils.WaitForAsync(() => syncService.Requests.Count > 1);
         Assert.Single(syncService.Requests[1]?.Streams?.Subscriptions);
 
         // Given that the subscription has a TTL, dropping the handle should not re-subscribe.
@@ -204,35 +204,8 @@ public class SyncStreamsTests : IAsyncLifetime
         await db.SyncStream("a").UnsubscribeAll();
 
         await db.Connect(new TestConnector(), new PowerSyncConnectionOptions());
-        DeepEquivalent(new RequestStream { IncludeDefaults = true, Subscriptions = [] }, syncService.Requests[0].Streams);
+        TestUtils.DeepEquivalent(new RequestStream { IncludeDefaults = true, Subscriptions = [] }, syncService.Requests[0].Streams);
     }
 
-    /// <summary>
-    /// Deep equivalence assertion with line number on failure.
-    /// </summary>
-    /// 
-    private void DeepEquivalent(object? expected, object? actual, [CallerLineNumber] int lineNumber = 0)
-    {
-        try
-        {
-            Assert.Equivalent(expected, actual, strict: true);
-        }
-        catch (Exception ex)
-        {
-            throw new Exception($"Equivalence assertion failed at line {lineNumber}: {ex.Message}", ex);
-        }
-    }
 
-    private static async Task WaitForAsync(Func<bool> condition, TimeSpan? timeout = null)
-    {
-        timeout ??= TimeSpan.FromSeconds(5);
-        var start = DateTime.UtcNow;
-        while (DateTime.UtcNow - start < timeout)
-        {
-            if (condition())
-                return;
-            await Task.Delay(50);
-        }
-        throw new TimeoutException("Condition not met within timeout");
-    }
 }

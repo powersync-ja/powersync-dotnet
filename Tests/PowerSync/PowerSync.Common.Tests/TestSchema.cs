@@ -5,17 +5,26 @@ using PowerSync.Common.DB.Schema;
 public class TestSchemaTodoList
 {
 
-    public static readonly Table Lists = new Table(new Dictionary<string, ColumnType>
+    public static Table Todos = new Table(new Dictionary<string, ColumnType>
     {
-        { "name",  ColumnType.TEXT }
-
+        { "list_id", ColumnType.TEXT },
+        { "created_at", ColumnType.TEXT },
+        { "completed_at", ColumnType.TEXT },
+        { "description", ColumnType.TEXT },
+        { "created_by", ColumnType.TEXT },
+        { "completed_by", ColumnType.TEXT },
+        { "completed", ColumnType.INTEGER }
+    }, new TableOptions
+    {
+        Indexes = new Dictionary<string, List<string>> { { "list", new List<string> { "list_id" } } }
     });
 
-    public static readonly Table Todos = new Table(new Dictionary<string, ColumnType>
-        {
-            { "content", ColumnType.TEXT },
-            { "list_id", ColumnType.TEXT }
-        });
+    public static Table Lists = new Table(new Dictionary<string, ColumnType>
+    {
+        { "created_at", ColumnType.TEXT },
+        { "name", ColumnType.TEXT },
+        { "owner_id", ColumnType.TEXT }
+    });
 
     public static readonly Schema AppSchema = new Schema(new Dictionary<string, Table>
         {

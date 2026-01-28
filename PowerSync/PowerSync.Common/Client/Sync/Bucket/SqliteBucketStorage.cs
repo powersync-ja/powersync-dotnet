@@ -113,7 +113,7 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
         public List<string>? FailedBuckets { get; set; }
     }
 
-    private record SequenceResult(int seq);
+    private record SequenceResult(long seq);
 
     public async Task<bool> UpdateLocalTarget(Func<Task<string>> callback)
     {
@@ -138,7 +138,7 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
             return false;
         }
 
-        int seqBefore = rs[0].seq;
+        long seqBefore = rs[0].seq;
         string opId = await callback();
 
         logger.LogDebug("[updateLocalTarget] Updating target to checkpoint {message}", opId);
@@ -161,7 +161,7 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
                 throw new Exception("SQLite Sequence should not be empty");
             }
 
-            int seqAfter = rsAfter[0].seq;
+            long seqAfter = rsAfter[0].seq;
             logger.LogDebug("[updateLocalTarget] seqAfter: {seq}", seqAfter);
 
             if (seqAfter != seqBefore)
