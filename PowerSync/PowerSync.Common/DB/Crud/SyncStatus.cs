@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
 
 using PowerSync.Common.Client.Sync.Stream;
+using PowerSync.Common.Utils;
 
 public class SyncDataFlowStatus
 {
@@ -31,6 +32,8 @@ public class SyncDataFlowStatus
     /// Internal information about how far we are downloading operations in buckets.
     /// </summary>
     public Dictionary<string, BucketProgress>? DownloadProgress { get; set; } = null;
+
+    public CoreStreamSubscription[]? InternalStreamSubscriptions { get; set; } = null;
 }
 
 public class SyncPriorityStatus
@@ -175,6 +178,50 @@ public class SyncStatus(SyncStatusOptions options)
         return new SyncStatus(parsedOptions);
     }
 
+    /// <summary>
+    /// All sync streams currently being tracked in the database.
+    /// This returns null when the database is currently being opened and we don't have reliable information about all
+    /// included streams yet.
+    /// 
+    /// Sync streams are currently in alpha.
+    /// </summary>
+    public SyncStreamStatusView[]? SyncStreams
+    {
+        get
+        {
+            var internalStreams = Options.DataFlow?.InternalStreamSubscriptions;
+            if (internalStreams == null)
+            {
+                return null;
+            }
+
+            return internalStreams
+           .Select(core => new SyncStreamStatusView(this, core))
+           .ToArray();
+        }
+    }
+
+    /// <summary>
+    /// If the stream appears in <see cref="SyncStreams"/>, returns the current status for that stream.
+    /// 
+    /// Sync streams are currently in alpha.
+    /// </summary>
+    public SyncStreamStatus? ForStream(ISyncStreamDescription stream)
+    {
+        var internalStreams = Options.DataFlow?.InternalStreamSubscriptions;
+        if (internalStreams == null)
+        {
+            return null;
+        }
+
+        var raw = internalStreams.FirstOrDefault(r =>
+            r.Name == stream.Name && Equality.DeepEquals(r.Parameters, stream.Parameters)
+        );
+
+        return raw != null ? new SyncStreamStatusView(this, raw) : null;
+    }
+
+
     private string SerializeObject()
     {
         return JsonConvert.SerializeObject(new { Options, UploadErrorMessage = Options.DataFlow?.UploadError?.Message, DownloadErrorMessage = DataFlowStatus.DownloadError?.Message });
@@ -182,7 +229,7 @@ public class SyncStatus(SyncStatusOptions options)
 
     public bool IsEqual(SyncStatus status)
     {
-        return this.SerializeObject() == status.SerializeObject();
+        return SerializeObject() == status.SerializeObject();
     }
 
     public string GetMessage()
@@ -201,4 +248,64 @@ public class SyncStatus(SyncStatusOptions options)
     {
         return b.Priority - a.Priority; // Reverse because higher priorities have lower numbers
     }
+}
+
+/// <summary>
+/// Information about a sync stream subscription.
+/// </summary>
+public class SyncStreamStatus
+{
+    public ProgressWithOperations? Progress { get; init; }
+    public SyncSubscriptionDescription Subscription { get; init; } = null!;
+    public int? Priority { get; init; }
+}
+
+
+public class SyncStreamStatusView : SyncStreamStatus
+{
+    private readonly SyncStatus Status;
+    private readonly CoreStreamSubscription Core;
+
+    public SyncStreamStatusView(SyncStatus status, CoreStreamSubscription core)
+    {
+        Status = status;
+        Core = core;
+
+        Subscription = new SyncSubscriptionDescription
+        {
+            Name = core.Name,
+            Parameters = core.Parameters,
+            Active = core.Active,
+            IsDefault = core.IsDefault,
+            HasExplicitSubscription = core.HasExplicitSubscription,
+            ExpiresAt = core.ExpiresAt != null ? DateTimeOffset.FromUnixTimeSeconds((long)core.ExpiresAt).DateTime : null,
+            HasSynced = core.LastSyncedAt != null,
+            LastSyncedAt = core.LastSyncedAt != null ? DateTimeOffset.FromUnixTimeSeconds((long)core.LastSyncedAt).DateTime : null
+        };
+    }
+
+    public new ProgressWithOperations? Progress
+    {
+        get
+        {
+            if (Status.DataFlowStatus.DownloadProgress == null)
+            {
+                // Don't make download progress public if we're not currently downloading.
+                return null;
+            }
+
+            var total = Core.Progress.Total;
+            var downloaded = Core.Progress.Downloaded;
+            var progress = total == 0 ? 0.0 : (double)downloaded / total;
+
+            return new ProgressWithOperations
+            {
+                TotalOperations = total,
+                DownloadedOperations = downloaded,
+                DownloadedFraction = progress
+            };
+        }
+    }
+
+    public new int? Priority => Core.Priority;
 }

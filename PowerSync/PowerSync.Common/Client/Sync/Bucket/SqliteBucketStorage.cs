@@ -21,7 +21,6 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
 
     private readonly IDBAdapter db;
     private bool hasCompletedSync;
-    private readonly bool pendingBucketDeletes;
     private readonly HashSet<string> tableNames;
     private string? clientId;
 
@@ -36,7 +35,6 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
         this.db = db;
         this.logger = logger ?? NullLogger.Instance; ;
         hasCompletedSync = false;
-        pendingBucketDeletes = true;
         tableNames = [];
 
         updateCts = new CancellationTokenSource();
@@ -115,13 +113,11 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
         public List<string>? FailedBuckets { get; set; }
     }
 
-
-    private record TargetOpResult(string target_op);
-    private record SequenceResult(int seq);
+    private record SequenceResult(long seq);
 
     public async Task<bool> UpdateLocalTarget(Func<Task<string>> callback)
     {
-        var rs1 = await db.GetAll<TargetOpResult>(
+        var rs1 = await db.GetAll(
             "SELECT target_op FROM ps_buckets WHERE name = '$local' AND target_op = CAST(? as INTEGER)",
             [GetMaxOpId()]
         );
@@ -142,7 +138,7 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
             return false;
         }
 
-        int seqBefore = rs[0].seq;
+        long seqBefore = rs[0].seq;
         string opId = await callback();
 
         logger.LogDebug("[updateLocalTarget] Updating target to checkpoint {message}", opId);
@@ -165,7 +161,7 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
                 throw new Exception("SQLite Sequence should not be empty");
             }
 
-            int seqAfter = rsAfter[0].seq;
+            long seqAfter = rsAfter[0].seq;
             logger.LogDebug("[updateLocalTarget] seqAfter: {seq}", seqAfter);
 
             if (seqAfter != seqBefore)

@@ -131,6 +131,19 @@ Only run integration tests, without any unit tests.
 RUN_INTEGRATION_TESTS=true dotnet test -v n --framework net8.0 --filter "Category=Integration"
 ```
 
+### Performance Tests
+Performance tests in `PowerSync.Common.PerformanceTests` are disabled by default, define the following environment variable when running the tests.
+
+```bash
+RUN_PERFORMANCE_TESTS=true dotnet test -v n --framework net8.0
+```
+
+Only run performance tests, without any unit tests.
+
+```bash
+RUN_PERFORMANCE_TESTS=true dotnet test -v n --framework net8.0 --filter "Category=Performance"
+```
+
 ## Using the PowerSync.Common package in your project
 ```bash
 dotnet add package PowerSync.Common --prerelease
