@@ -278,18 +278,18 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     [Fact(Timeout = 2000)]
     public async Task ReadWhileWriteIsRunningTest()
     {
-        var tcs = new TaskCompletionSource<bool>();
+        var sem = new TaskCompletionSource<bool>();
 
         // This wont resolve or free until another connection free's it
         var writeTask = db.WriteLock(async context =>
         {
-            await tcs.Task; // Wait until read lock signals to proceed
+            await sem.Task; // Wait until read lock signals to proceed
         });
 
         var readTask = db.ReadLock(async context =>
         {
             // Read logic could execute here while writeLock is still open
-            tcs.SetResult(true);
+            sem.SetResult(true);
             await Task.CompletedTask;
             return 42;
         });
@@ -469,7 +469,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     public async Task TestConcurrentReadsTest()
     {
         await db.Execute("INSERT INTO assets(id) VALUES(?)", ["O6-conccurent-1"]);
-        var tcs = new TaskCompletionSource<bool>();
+        var sem = new TaskCompletionSource<bool>();
 
         // Start a long-running write transaction
         var transactionTask = Task.Run(async () =>
@@ -477,7 +477,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
             await db.WriteTransaction(async tx =>
             {
                 await tx.Execute("INSERT INTO assets(id) VALUES(?)", ["O6-conccurent-2"]);
-                await tcs.Task;
+                await sem.Task;
                 await tx.Commit();
             });
         });
@@ -487,7 +487,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.Single(result); // The transaction is not commited yet, we should only read 1 asset
 
         // Let the transaction complete
-        tcs.SetResult(true);
+        sem.SetResult(true);
         await transactionTask;
 
         // Read again after the transaction is committed
@@ -509,7 +509,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task DynamicQueryTest()
+    public async Task QueryDynamicTest()
     {
         string id = Guid.NewGuid().ToString();
         string description = "new description";
@@ -526,7 +526,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     }
 
     [Fact(Timeout = 2000)]
-    public async Task DynamicWatchTest()
+    public async Task WatchDynamicTest()
     {
         string id = Guid.NewGuid().ToString();
         string description = "new description";
@@ -567,5 +567,128 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         });
 
         await watched.Task;
+    }
+
+    [Fact(Timeout = 2000)]
+    public async void WatchDisposableSubscriptionTest()
+    {
+        int callCount = 0;
+        var semaphore = new SemaphoreSlim(0);
+
+        var query = await db.Watch("select id from assets", null, new()
+        {
+            OnResult = (results) =>
+            {
+                callCount++;
+                semaphore.Release();
+            },
+            OnError = (ex) => Assert.Fail(ex.ToString())
+        });
+        await semaphore.WaitAsync();
+        Assert.Equal(1, callCount);
+
+        await db.Execute(
+            "insert into assets(id, description, make) values (?, ?, ?)",
+            [Guid.NewGuid().ToString(), "some desc", "some make"]
+        );
+        await semaphore.WaitAsync();
+        Assert.Equal(2, callCount);
+
+        query.Dispose();
+
+        await db.Execute(
+            "insert into assets(id, description, make) values (?, ?, ?)",
+            [Guid.NewGuid().ToString(), "some desc", "some make"]
+        );
+        bool receivedResult = await semaphore.WaitAsync(100);
+        Assert.False(receivedResult, "Received update after disposal");
+        Assert.Equal(2, callCount);
+    }
+
+    [Fact(Timeout = 2000)]
+    public async void WatchDisposableCustomTokenTest()
+    {
+        var customTokenSource = new CancellationTokenSource();
+        int callCount = 0;
+        var sem = new SemaphoreSlim(0);
+
+        using var query = await db.Watch("select id, description, make from assets", null, new()
+        {
+            OnResult = (results) =>
+            {
+                callCount++;
+                sem.Release();
+            },
+            OnError = (ex) => Assert.Fail(ex.ToString())
+        }, new()
+        {
+            Signal = customTokenSource.Token
+        });
+        await sem.WaitAsync();
+        Assert.Equal(1, callCount);
+
+        await db.Execute(
+            "insert into assets(id, description, make) values (?, ?, ?)",
+            [Guid.NewGuid().ToString(), "some desc", "some make"]
+        );
+        await sem.WaitAsync();
+        Assert.Equal(2, callCount);
+
+        customTokenSource.Cancel();
+
+        await db.Execute(
+            "insert into assets(id, description, make) values (?, ?, ?)",
+            [Guid.NewGuid().ToString(), "some desc", "some make"]
+        );
+        bool receivedResult = await sem.WaitAsync(100);
+        Assert.False(receivedResult, "Received update after disposal");
+
+        Assert.Equal(2, callCount);
+    }
+
+    [Fact(Timeout = 2000)]
+    public async void WatchSingleCancelledTest()
+    {
+        int callCount = 0;
+
+        var watchHandlerFactory = (SemaphoreSlim sem) => new WatchHandler<IdResult>
+        {
+            OnResult = (result) =>
+            {
+                Interlocked.Increment(ref callCount);
+                sem.Release();
+            },
+            OnError = (ex) => Assert.Fail(ex.ToString()),
+        };
+
+        var semAlwaysRunning = new SemaphoreSlim(0);
+        var semCancelled = new SemaphoreSlim(0);
+        using var queryAlwaysRunning = await db.Watch("select id from assets", null, watchHandlerFactory(semAlwaysRunning));
+        using var queryCancelled = await db.Watch("select id from assets", null, watchHandlerFactory(semCancelled));
+
+        await Task.WhenAll(semAlwaysRunning.WaitAsync(), semCancelled.WaitAsync());
+        Assert.Equal(2, callCount);
+
+        await db.Execute(
+            "insert into assets(id, description, make) values (?, ?, ?)",
+            [Guid.NewGuid().ToString(), "some desc", "some make"]
+        );
+        await Task.WhenAll(semAlwaysRunning.WaitAsync(), semCancelled.WaitAsync());
+        Assert.Equal(4, callCount);
+
+        // Close one query
+        queryCancelled.Dispose();
+
+        await db.Execute(
+            "insert into assets(id, description, make) values (?, ?, ?)",
+            [Guid.NewGuid().ToString(), "some desc", "some make"]
+        );
+
+        // Ensure nothing received from cancelled result
+        bool receivedResult = await semCancelled.WaitAsync(100);
+        Assert.False(receivedResult, "Received update after disposal");
+
+        await semAlwaysRunning.WaitAsync();
+        Assert.Equal(5, callCount);
     }
 }

@@ -1,6 +1,7 @@
 # PowerSync.Common Changelog
 
 ## 0.0.8-alpha.1
+- Return an `IDisposable` from `PowerSync.Watch`, allowing for easier cancellation of watched queries.
 - Replaced the old JSON-based method of extracting type information from queries with using Dapper internally for queries, improving memory usage and execution time for querying.
 - Added non-generic overloads for `GetAll()`, `GetOptional()`, `Get()`, `Watch()` which return `dynamic`:
 
