@@ -138,12 +138,15 @@ public class EventStream<T> : IEventStream<T>
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                if (channel.Reader.WaitToReadAsync(cancellationToken).AsTask().Result)
+                if (!channel.Reader.WaitToReadAsync(cancellationToken).AsTask().Result)
                 {
-                    while (channel.Reader.TryRead(out var item))
-                    {
-                        yield return item;
-                    }
+                    // Channel was completed, exit the loop
+                    break;
+                }
+
+                while (channel.Reader.TryRead(out var item))
+                {
+                    yield return item;
                 }
             }
         }
