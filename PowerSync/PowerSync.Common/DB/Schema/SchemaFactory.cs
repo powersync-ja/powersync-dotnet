@@ -2,7 +2,7 @@ namespace PowerSync.Common.DB.Schema;
 
 public class SchemaFactory
 {
-    private List<Table> _tables;
+    private readonly List<Table> _tables;
 
     public SchemaFactory(params Table[] tables)
     {

@@ -131,7 +131,7 @@ public class ConnectionManager : EventStream<ConnectionManagerEvent>
     /// </summary>
     protected Action? SyncDisposer;
 
-    Func<IPowerSyncBackendConnector, CreateSyncImplementationOptions, Task<ConnectionManagerSyncImplementationResult>> CreateSyncImplementation;
+    readonly Func<IPowerSyncBackendConnector, CreateSyncImplementationOptions, Task<ConnectionManagerSyncImplementationResult>> CreateSyncImplementation;
 
     protected ILogger Logger;
 
