@@ -278,18 +278,18 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     [Fact(Timeout = 2000)]
     public async Task ReadWhileWriteIsRunningTest()
     {
-        var tcs = new TaskCompletionSource<bool>();
+        var sem = new TaskCompletionSource<bool>();
 
         // This wont resolve or free until another connection free's it
         var writeTask = db.WriteLock(async context =>
         {
-            await tcs.Task; // Wait until read lock signals to proceed
+            await sem.Task; // Wait until read lock signals to proceed
         });
 
         var readTask = db.ReadLock(async context =>
         {
             // Read logic could execute here while writeLock is still open
-            tcs.SetResult(true);
+            sem.SetResult(true);
             await Task.CompletedTask;
             return 42;
         });
@@ -469,7 +469,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     public async Task TestConcurrentReadsTest()
     {
         await db.Execute("INSERT INTO assets(id) VALUES(?)", ["O6-conccurent-1"]);
-        var tcs = new TaskCompletionSource<bool>();
+        var sem = new TaskCompletionSource<bool>();
 
         // Start a long-running write transaction
         var transactionTask = Task.Run(async () =>
@@ -477,7 +477,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
             await db.WriteTransaction(async tx =>
             {
                 await tx.Execute("INSERT INTO assets(id) VALUES(?)", ["O6-conccurent-2"]);
-                await tcs.Task;
+                await sem.Task;
                 await tx.Commit();
             });
         });
@@ -487,7 +487,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.Single(result); // The transaction is not commited yet, we should only read 1 asset
 
         // Let the transaction complete
-        tcs.SetResult(true);
+        sem.SetResult(true);
         await transactionTask;
 
         // Read again after the transaction is committed
@@ -509,7 +509,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task DynamicQueryTest()
+    public async Task QueryDynamicTest()
     {
         string id = Guid.NewGuid().ToString();
         string description = "new description";
@@ -526,7 +526,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     }
 
     [Fact(Timeout = 2000)]
-    public async Task DynamicWatchTest()
+    public async Task WatchDynamicTest()
     {
         string id = Guid.NewGuid().ToString();
         string description = "new description";
@@ -569,40 +569,29 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         await watched.Task;
     }
 
-    private class WrappedTCS
-    {
-        public TaskCompletionSource<bool> TCS { get; protected set; } = new();
-        public Task<bool> Task => TCS.Task;
-
-        public void Complete() => TCS.TrySetResult(true);
-        public void Reset() => TCS = new();
-    }
-
     [Fact(Timeout = 2000)]
     public async void WatchDisposableSubscriptionTest()
     {
         int callCount = 0;
-        var tcs = new WrappedTCS();
+        var semaphore = new SemaphoreSlim(0);
 
         var query = await db.Watch("select id from assets", null, new()
         {
             OnResult = (results) =>
             {
                 callCount++;
-                tcs.Complete();
+                semaphore.Release();
             },
             OnError = (ex) => Assert.Fail(ex.ToString())
         });
-        await tcs.Task;
-        tcs.Reset();
+        await semaphore.WaitAsync();
         Assert.Equal(1, callCount);
 
         await db.Execute(
             "insert into assets(id, description, make) values (?, ?, ?)",
             [Guid.NewGuid().ToString(), "some desc", "some make"]
         );
-        await tcs.Task;
-        tcs.Reset();
+        await semaphore.WaitAsync();
         Assert.Equal(2, callCount);
 
         query.Dispose();
@@ -611,8 +600,9 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
             "insert into assets(id, description, make) values (?, ?, ?)",
             [Guid.NewGuid().ToString(), "some desc", "some make"]
         );
-        await Task.Delay(100);
-        Assert.Equal(2, callCount); // Same value
+        bool receivedResult = await semaphore.WaitAsync(100);
+        Assert.False(receivedResult, "Received update after disposal");
+        Assert.Equal(2, callCount);
     }
 
     [Fact(Timeout = 2000)]
@@ -620,30 +610,28 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     {
         var customTokenSource = new CancellationTokenSource();
         int callCount = 0;
-        var tcs = new WrappedTCS();
+        var sem = new SemaphoreSlim(0);
 
         using var query = await db.Watch("select id, description, make from assets", null, new()
         {
             OnResult = (results) =>
             {
                 callCount++;
-                tcs.Complete();
+                sem.Release();
             },
             OnError = (ex) => Assert.Fail(ex.ToString())
         }, new()
         {
             Signal = customTokenSource.Token
         });
-        await tcs.Task;
-        tcs.Reset();
+        await sem.WaitAsync();
         Assert.Equal(1, callCount);
 
         await db.Execute(
             "insert into assets(id, description, make) values (?, ?, ?)",
             [Guid.NewGuid().ToString(), "some desc", "some make"]
         );
-        await tcs.Task;
-        tcs.Reset();
+        await sem.WaitAsync();
         Assert.Equal(2, callCount);
 
         customTokenSource.Cancel();
@@ -652,47 +640,40 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
             "insert into assets(id, description, make) values (?, ?, ?)",
             [Guid.NewGuid().ToString(), "some desc", "some make"]
         );
-        await Task.Delay(100);
-        Assert.Equal(2, callCount); // Same value
+        bool receivedResult = await sem.WaitAsync(100);
+        Assert.False(receivedResult, "Received update after disposal");
+
+        Assert.Equal(2, callCount);
     }
 
     [Fact(Timeout = 2000)]
     public async void WatchSingleCancelledTest()
     {
         int callCount = 0;
-        object lockObject = new object();
 
-        var watchHandlerFactory = (WrappedTCS tcs) => new WatchHandler<IdResult>
+        var watchHandlerFactory = (SemaphoreSlim sem) => new WatchHandler<IdResult>
         {
             OnResult = (result) =>
             {
-                lock (lockObject)
-                {
-                    callCount++;
-                }
-                tcs.Complete();
+                Interlocked.Increment(ref callCount);
+                sem.Release();
             },
             OnError = (ex) => Assert.Fail(ex.ToString()),
         };
 
-        var tcsAlwaysRunning = new WrappedTCS();
-        var tcsCancelled = new WrappedTCS();
-        // Make queryAlwaysRunning slightly more expensive
-        using var queryAlwaysRunning = await db.Watch("select id from assets order by id", null, watchHandlerFactory(tcsAlwaysRunning));
-        using var queryCancelled = await db.Watch("select id from assets", null, watchHandlerFactory(tcsCancelled));
+        var semAlwaysRunning = new SemaphoreSlim(0);
+        var semCancelled = new SemaphoreSlim(0);
+        using var queryAlwaysRunning = await db.Watch("select id from assets", null, watchHandlerFactory(semAlwaysRunning));
+        using var queryCancelled = await db.Watch("select id from assets", null, watchHandlerFactory(semCancelled));
 
-        await Task.WhenAll(tcsAlwaysRunning.Task, tcsCancelled.Task);
-        tcsAlwaysRunning.Reset();
-        tcsCancelled.Reset();
+        await Task.WhenAll(semAlwaysRunning.WaitAsync(), semCancelled.WaitAsync());
         Assert.Equal(2, callCount);
 
         await db.Execute(
             "insert into assets(id, description, make) values (?, ?, ?)",
             [Guid.NewGuid().ToString(), "some desc", "some make"]
         );
-        await Task.WhenAll(tcsAlwaysRunning.Task, tcsCancelled.Task);
-        tcsAlwaysRunning.Reset();
-        tcsCancelled.Reset();
+        await Task.WhenAll(semAlwaysRunning.WaitAsync(), semCancelled.WaitAsync());
         Assert.Equal(4, callCount);
 
         // Close one query
@@ -702,11 +683,12 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
             "insert into assets(id, description, make) values (?, ?, ?)",
             [Guid.NewGuid().ToString(), "some desc", "some make"]
         );
-        // Because queryAlwaysRunning is more expensive than queryCancelled, we would expect 
-        // queryCancelled to complete before it if the cancellation failed, hence we can just
-        // wait for queryAlwaysRunning to complete.
-        await tcsAlwaysRunning.Task;
 
+        // Ensure nothing received from cancelled result
+        bool receivedResult = await semCancelled.WaitAsync(100);
+        Assert.False(receivedResult, "Received update after disposal");
+
+        await semAlwaysRunning.WaitAsync();
         Assert.Equal(5, callCount);
     }
 
@@ -714,38 +696,30 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     public async void WatchMultipleCancelledTest()
     {
         int callCount = 0;
-        object lockObject = new object();
 
-        var watchHandlerFactory = (WrappedTCS tcs) => new WatchHandler<IdResult>
+        var watchHandlerFactory = (SemaphoreSlim sem) => new WatchHandler<IdResult>
         {
             OnResult = (result) =>
             {
-                lock (lockObject)
-                {
-                    callCount++;
-                }
-                tcs.Complete();
+                Interlocked.Increment(ref callCount);
+                sem.Release();
             },
             OnError = (ex) => Assert.Fail(ex.ToString()),
         };
 
-        var tcs1 = new WrappedTCS();
-        var tcs2 = new WrappedTCS();
-        using var query1 = await db.Watch("select id from assets", null, watchHandlerFactory(tcs1));
-        using var query2 = await db.Watch("select id from assets", null, watchHandlerFactory(tcs2));
+        var sem1 = new SemaphoreSlim(0);
+        var sem2 = new SemaphoreSlim(0);
+        using var query1 = await db.Watch("select id from assets", null, watchHandlerFactory(sem1));
+        using var query2 = await db.Watch("select id from assets", null, watchHandlerFactory(sem2));
 
-        await Task.WhenAll(tcs1.Task, tcs2.Task);
-        tcs1.Reset();
-        tcs2.Reset();
+        await Task.WhenAll(sem1.WaitAsync(), sem2.WaitAsync());
         Assert.Equal(2, callCount);
 
         await db.Execute(
             "insert into assets(id, description, make) values (?, ?, ?)",
             [Guid.NewGuid().ToString(), "some desc", "some make"]
         );
-        await Task.WhenAll(tcs1.Task, tcs2.Task);
-        tcs1.Reset();
-        tcs2.Reset();
+        await Task.WhenAll(sem1.WaitAsync(), sem2.WaitAsync());
         Assert.Equal(4, callCount);
 
         db.UnsubscribeAllQueries();
@@ -754,8 +728,10 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
             "insert into assets(id, description, make) values (?, ?, ?)",
             [Guid.NewGuid().ToString(), "some desc", "some make"]
         );
-        // Short wait to ensure unsubscription was successful
-        await Task.Delay(100);
+        // Ensure no result received from either query
+        bool receivedResult = await sem1.WaitAsync(100) || await sem2.WaitAsync(100);
+        Assert.False(receivedResult, "Received update after disposal");
+
         Assert.Equal(4, callCount);
     }
 }
