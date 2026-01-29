@@ -38,6 +38,8 @@ public class ColumnMap : IEnumerable
 {
     public Dictionary<string, ColumnType> Columns { get; } = new();
 
+    public void Add(string key, ColumnType value) => Columns.Add(key, value);
+
     public ColumnType this[string name] { set { Columns[name] = value; } }
     public IEnumerator GetEnumerator() => Columns.GetEnumerator();
 }
@@ -45,6 +47,8 @@ public class ColumnMap : IEnumerable
 public class IndexMap : IEnumerable
 {
     public Dictionary<string, List<string>> Indexes { get; } = new();
+
+    public void Add(string key, List<string> value) => Indexes.Add(key, value);
 
     public List<string> this[string name] { set { Indexes[name] = value; } }
     public IEnumerator GetEnumerator() => Indexes.GetEnumerator();
