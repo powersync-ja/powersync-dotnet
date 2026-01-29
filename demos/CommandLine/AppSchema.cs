@@ -22,7 +22,7 @@ class AppSchema
             ["list"] = ["list_id"],
             ["created_at"] = ["created_at"],
         }
-    }.Create();
+    };
 
     public static Table Lists = new TableFactory()
     {
@@ -32,7 +32,7 @@ class AppSchema
             ["name"] = ColumnType.Text,
             ["owner_id"] = ColumnType.Text
         }
-    }.Create();
+    };
 
     public static Schema PowerSyncSchema = new SchemaFactory(Todos, Lists).Create();
 }
