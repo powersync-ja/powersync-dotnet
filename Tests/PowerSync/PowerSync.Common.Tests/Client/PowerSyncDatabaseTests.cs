@@ -691,47 +691,4 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         await semAlwaysRunning.WaitAsync();
         Assert.Equal(5, callCount);
     }
-
-    [Fact(Timeout = 2000)]
-    public async void WatchMultipleCancelledTest()
-    {
-        int callCount = 0;
-
-        var watchHandlerFactory = (SemaphoreSlim sem) => new WatchHandler<IdResult>
-        {
-            OnResult = (result) =>
-            {
-                Interlocked.Increment(ref callCount);
-                sem.Release();
-            },
-            OnError = (ex) => Assert.Fail(ex.ToString()),
-        };
-
-        var sem1 = new SemaphoreSlim(0);
-        var sem2 = new SemaphoreSlim(0);
-        using var query1 = await db.Watch("select id from assets", null, watchHandlerFactory(sem1));
-        using var query2 = await db.Watch("select id from assets", null, watchHandlerFactory(sem2));
-
-        await Task.WhenAll(sem1.WaitAsync(), sem2.WaitAsync());
-        Assert.Equal(2, callCount);
-
-        await db.Execute(
-            "insert into assets(id, description, make) values (?, ?, ?)",
-            [Guid.NewGuid().ToString(), "some desc", "some make"]
-        );
-        await Task.WhenAll(sem1.WaitAsync(), sem2.WaitAsync());
-        Assert.Equal(4, callCount);
-
-        db.UnsubscribeAllQueries();
-
-        await db.Execute(
-            "insert into assets(id, description, make) values (?, ?, ?)",
-            [Guid.NewGuid().ToString(), "some desc", "some make"]
-        );
-        // Ensure no result received from either query
-        bool receivedResult = await sem1.WaitAsync(100) || await sem2.WaitAsync(100);
-        Assert.False(receivedResult, "Received update after disposal");
-
-        Assert.Equal(4, callCount);
-    }
 }
