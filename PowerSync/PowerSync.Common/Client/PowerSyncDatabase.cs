@@ -369,7 +369,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
     /// <summary>
     /// Unsubscribe from all currently watched queries.
     /// </summary>
-    public void UnsubscribeAllQueries()
+    protected void UnsubscribeAllQueries()
     {
         watchSubscriptionCts.Cancel();
         watchSubscriptionCts.Dispose();
