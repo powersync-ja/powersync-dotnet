@@ -9,6 +9,11 @@ public class SchemaFactory
         _tables = tables.ToList();
     }
 
+    public SchemaFactory(params TableFactory[] tableFactories)
+    {
+        _tables = tableFactories.Select((f) => f.Create()).ToList();
+    }
+
     public Schema Create()
     {
         Dictionary<string, Table> tableMap = new();
