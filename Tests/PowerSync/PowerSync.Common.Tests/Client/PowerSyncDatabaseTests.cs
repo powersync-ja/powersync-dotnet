@@ -569,93 +569,183 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         await watched.Task;
     }
 
+    private class WrappedTCS
+    {
+        public TaskCompletionSource<bool> TCS { get; protected set; } = new();
+        public Task<bool> Task => TCS.Task;
+
+        public void Complete() => TCS.TrySetResult(true);
+        public void Reset() => TCS = new();
+    }
+
     [Fact(Timeout = 2000)]
     public async void WatchDisposableSubscriptionTest()
     {
         int callCount = 0;
+        var tcs = new WrappedTCS();
 
-        var subscription = await db.Watch("select id, description, make from assets", null, new()
+        var query = await db.Watch("select id from assets", null, new()
         {
-            OnResult = (results) => callCount++,
-            OnError = (ex) => Assert.Fail("An exception occurred: " + ex.ToString())
+            OnResult = (results) =>
+            {
+                callCount++;
+                tcs.Complete();
+            },
+            OnError = (ex) => Assert.Fail(ex.ToString())
         });
-        Thread.Sleep(200);
+        await tcs.Task;
+        tcs.Reset();
         Assert.Equal(1, callCount);
 
-        // Bump callCount to 2
         await db.Execute(
             "insert into assets(id, description, make) values (?, ?, ?)",
             [Guid.NewGuid().ToString(), "some desc", "some make"]
         );
-        Thread.Sleep(200);
+        await tcs.Task;
+        tcs.Reset();
         Assert.Equal(2, callCount);
 
-        subscription.Dispose();
+        query.Dispose();
+
         await db.Execute(
             "insert into assets(id, description, make) values (?, ?, ?)",
             [Guid.NewGuid().ToString(), "some desc", "some make"]
         );
-        Thread.Sleep(200);
-        Assert.Equal(2, callCount);
+        await Task.Delay(100);
+        Assert.Equal(2, callCount); // Same value
     }
 
-    [Fact(Timeout = 2500)]
+    [Fact(Timeout = 2000)]
     public async void WatchDisposableCustomTokenTest()
     {
         var customTokenSource = new CancellationTokenSource();
         int callCount = 0;
+        var tcs = new WrappedTCS();
 
-        using var subscription = await db.Watch("select id, description, make from assets", null, new()
+        using var query = await db.Watch("select id, description, make from assets", null, new()
         {
-            OnResult = (results) => callCount++,
-            OnError = (ex) => Assert.Fail("An exception occurred: " + ex.ToString())
+            OnResult = (results) =>
+            {
+                callCount++;
+                tcs.Complete();
+            },
+            OnError = (ex) => Assert.Fail(ex.ToString())
         }, new()
         {
             Signal = customTokenSource.Token
         });
-        Thread.Sleep(200);
+        await tcs.Task;
+        tcs.Reset();
         Assert.Equal(1, callCount);
 
         await db.Execute(
             "insert into assets(id, description, make) values (?, ?, ?)",
             [Guid.NewGuid().ToString(), "some desc", "some make"]
         );
-        Thread.Sleep(200);
+        await tcs.Task;
+        tcs.Reset();
         Assert.Equal(2, callCount);
 
         customTokenSource.Cancel();
+
         await db.Execute(
             "insert into assets(id, description, make) values (?, ?, ?)",
             [Guid.NewGuid().ToString(), "some desc", "some make"]
         );
-        Thread.Sleep(200);
+        await Task.Delay(100);
         Assert.Equal(2, callCount); // Same value
+    }
+
+    [Fact(Timeout = 2000)]
+    public async void WatchSingleCancelledTest()
+    {
+        int callCount = 0;
+        object lockObject = new object();
+
+        var watchHandlerFactory = (WrappedTCS tcs) => new WatchHandler<IdResult>
+        {
+            OnResult = (result) =>
+            {
+                lock (lockObject)
+                {
+                    callCount++;
+                }
+                tcs.Complete();
+            },
+            OnError = (ex) => Assert.Fail(ex.ToString()),
+        };
+
+        var tcsAlwaysRunning = new WrappedTCS();
+        var tcsCancelled = new WrappedTCS();
+        // Make queryAlwaysRunning slightly more expensive
+        using var queryAlwaysRunning = await db.Watch("select id from assets order by id", null, watchHandlerFactory(tcsAlwaysRunning));
+        using var queryCancelled = await db.Watch("select id from assets", null, watchHandlerFactory(tcsCancelled));
+
+        await Task.WhenAll(tcsAlwaysRunning.Task, tcsCancelled.Task);
+        tcsAlwaysRunning.Reset();
+        tcsCancelled.Reset();
+        Assert.Equal(2, callCount);
+
+        await db.Execute(
+            "insert into assets(id, description, make) values (?, ?, ?)",
+            [Guid.NewGuid().ToString(), "some desc", "some make"]
+        );
+        await Task.WhenAll(tcsAlwaysRunning.Task, tcsCancelled.Task);
+        tcsAlwaysRunning.Reset();
+        tcsCancelled.Reset();
+        Assert.Equal(4, callCount);
+
+        // Close one query
+        queryCancelled.Dispose();
+
+        await db.Execute(
+            "insert into assets(id, description, make) values (?, ?, ?)",
+            [Guid.NewGuid().ToString(), "some desc", "some make"]
+        );
+        // Because queryAlwaysRunning is more expensive than queryCancelled, we would expect 
+        // queryCancelled to complete before it if the cancellation failed, hence we can just
+        // wait for queryAlwaysRunning to complete.
+        await tcsAlwaysRunning.Task;
+
+        Assert.Equal(5, callCount);
     }
 
     [Fact(Timeout = 2000)]
     public async void WatchMultipleCancelledTest()
     {
         int callCount = 0;
-        var watchHandlerFactory = () => new WatchHandler<IdResult>
+        object lockObject = new object();
+
+        var watchHandlerFactory = (WrappedTCS tcs) => new WatchHandler<IdResult>
         {
-            OnResult = (result) => callCount++,
-            OnError = (ex) => Assert.Fail("An exception occurred: " + ex.ToString()),
+            OnResult = (result) =>
+            {
+                lock (lockObject)
+                {
+                    callCount++;
+                }
+                tcs.Complete();
+            },
+            OnError = (ex) => Assert.Fail(ex.ToString()),
         };
 
-        var query1 = await db.Watch("select id from assets", null, watchHandlerFactory());
-        var query2 = await db.Watch("select id from customers", null, watchHandlerFactory());
-        Thread.Sleep(200);
+        var tcs1 = new WrappedTCS();
+        var tcs2 = new WrappedTCS();
+        using var query1 = await db.Watch("select id from assets", null, watchHandlerFactory(tcs1));
+        using var query2 = await db.Watch("select id from assets", null, watchHandlerFactory(tcs2));
+
+        await Task.WhenAll(tcs1.Task, tcs2.Task);
+        tcs1.Reset();
+        tcs2.Reset();
         Assert.Equal(2, callCount);
 
         await db.Execute(
             "insert into assets(id, description, make) values (?, ?, ?)",
             [Guid.NewGuid().ToString(), "some desc", "some make"]
         );
-        await db.Execute(
-            "insert into assets(id, description, make) values (?, ?, ?)",
-            [Guid.NewGuid().ToString(), "some desc", "some make"]
-        );
-        Thread.Sleep(200);
+        await Task.WhenAll(tcs1.Task, tcs2.Task);
+        tcs1.Reset();
+        tcs2.Reset();
         Assert.Equal(4, callCount);
 
         db.UnsubscribeAllQueries();
@@ -664,11 +754,8 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
             "insert into assets(id, description, make) values (?, ?, ?)",
             [Guid.NewGuid().ToString(), "some desc", "some make"]
         );
-        await db.Execute(
-            "insert into assets(id, description, make) values (?, ?, ?)",
-            [Guid.NewGuid().ToString(), "some desc", "some make"]
-        );
-        Thread.Sleep(200);
+        // Short wait to ensure unsubscription was successful
+        await Task.Delay(100);
         Assert.Equal(4, callCount);
     }
 }
