@@ -691,4 +691,26 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         await semAlwaysRunning.WaitAsync();
         Assert.Equal(5, callCount);
     }
+
+    [Fact(Timeout = 2000)]
+    public async Task ResetWatchOnSchemaChange()
+    {
+        var sem = new SemaphoreSlim(0);
+        using var query = db.Watch("select id from assets", null, new()
+        {
+            OnResult = (_) => sem.Release(),
+            OnError = (ex) => Assert.Fail(ex.ToString()),
+        });
+        await sem.WaitAsync();
+
+        // Should reset watched queries
+        await db.UpdateSchema(TestSchema.AppSchema);
+        await db.Execute(
+            "insert into assets(id, description, make) values (?, ?, ?)",
+            [Guid.NewGuid().ToString(), "some desc", "some make"]
+        );
+
+        bool receivedResult = await sem.WaitAsync(100);
+        Assert.False(receivedResult, "Received update after disposal");
+    }
 }

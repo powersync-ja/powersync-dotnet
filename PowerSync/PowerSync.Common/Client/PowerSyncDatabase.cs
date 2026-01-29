@@ -102,7 +102,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
     protected IBucketStorageAdapter BucketStorageAdapter;
 
     protected CancellationTokenSource? syncStreamStatusCts;
-    protected CancellationTokenSource watchSubscriptionCts = new();
+    protected CancellationTokenSource watchSubscriptionCts = null!;
 
     protected SyncStatus CurrentStatus;
 
@@ -225,6 +225,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         await UpdateSchema(schema);
         await ResolveOfflineSyncStatus();
         await Database.Execute("PRAGMA RECURSIVE_TRIGGERS=TRUE");
+        UnsubscribeAllQueries();
         Ready = true;
         Emit(new PowerSyncDBEvent { Initialized = true });
     }
@@ -294,6 +295,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
             Logger.LogWarning("Schema validation failed. Unexpected behavior could occur: {Exception}", ex);
         }
 
+        UnsubscribeAllQueries();
         this.schema = schema;
         await Database.Execute("SELECT powersync_replace_schema(?)", [schema.ToJSON()]);
         await Database.RefreshSchema();
@@ -371,8 +373,11 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
     /// </summary>
     protected void UnsubscribeAllQueries()
     {
-        watchSubscriptionCts.Cancel();
-        watchSubscriptionCts.Dispose();
+        if (watchSubscriptionCts != null)
+        {
+            watchSubscriptionCts.Cancel();
+            watchSubscriptionCts.Dispose();
+        }
         watchSubscriptionCts = new();
     }
 
@@ -824,14 +829,14 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         {
             // Cancel on global CTS cancellation or user token cancellation
             linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
-                watchSubscriptionCts.Token,
+                watchSubscriptionCts!.Token,
                 options.Signal.Value
             );
         }
         else
         {
             // Cancel on global CTS cancellation
-            linkedCts = watchSubscriptionCts;
+            linkedCts = watchSubscriptionCts!;
         }
 
         var registration = linkedCts.Token.Register(() =>
