@@ -2,7 +2,7 @@ namespace PowerSync.Common.DB.Schema;
 
 using System.Collections;
 
-public class TableBuilder()
+public class TableFactory()
 {
     public ColumnMap Columns { get; set; } = new();
     public IndexMap Indexes { get; set; } = new();
@@ -15,7 +15,7 @@ public class TableBuilder()
     TrackPreviousOptions? TrackPreviousValues { get; set; }
     bool? IgnoreEmptyUpdates { get; set; }
 
-    public Table Build()
+    public Table Create()
     {
         if (string.IsNullOrWhiteSpace(Name))
         {

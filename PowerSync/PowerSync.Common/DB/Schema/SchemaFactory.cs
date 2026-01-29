@@ -1,15 +1,15 @@
 namespace PowerSync.Common.DB.Schema;
 
-public class SchemaBuilder
+public class SchemaFactory
 {
     private List<Table> _tables;
 
-    public SchemaBuilder(params Table[] tables)
+    public SchemaFactory(params Table[] tables)
     {
         _tables = tables.ToList();
     }
 
-    public Schema Build()
+    public Schema Create()
     {
         Dictionary<string, Table> tableMap = new();
         foreach (Table table in _tables)

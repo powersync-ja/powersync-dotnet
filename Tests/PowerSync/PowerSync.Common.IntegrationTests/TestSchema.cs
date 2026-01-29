@@ -4,7 +4,7 @@ using PowerSync.Common.DB.Schema;
 
 public class TestSchema
 {
-    public static Table Todos = new TableBuilder()
+    public static Table Todos = new TableFactory()
     {
         Name = "todos",
         Columns =
@@ -21,10 +21,10 @@ public class TestSchema
         {
             ["list"] = ["list_id"],
         }
-    }.Build();
+    }.Create();
 
 
-    public static Table Lists = new TableBuilder()
+    public static Table Lists = new TableFactory()
     {
         Name = "lists",
         Columns =
@@ -33,7 +33,7 @@ public class TestSchema
             ["name"] = ColumnType.Text,
             ["owner_id"] = ColumnType.Text
         }
-    }.Build();
+    }.Create();
 
-    public static Schema PowerSyncSchema = new SchemaBuilder(Todos, Lists).Build();
+    public static Schema PowerSyncSchema = new SchemaFactory(Todos, Lists).Create();
 }

@@ -16,7 +16,7 @@ public class TestSchema
         ["description"] = ColumnType.Text,
     };
 
-    public static readonly Table Assets = new TableBuilder()
+    public static readonly Table Assets = new TableFactory()
     {
         Name = "assets",
         Columns = AssetsColumns,
@@ -24,9 +24,9 @@ public class TestSchema
         {
             ["makemodel"] = ["make", "model"]
         }
-    }.Build();
+    }.Create();
 
-    public static readonly Table Customers = new TableBuilder()
+    public static readonly Table Customers = new TableFactory()
     {
         Name = "customers",
         Columns =
@@ -34,14 +34,14 @@ public class TestSchema
             ["name"] = ColumnType.Text,
             ["email"] = ColumnType.Text,
         }
-    }.Build();
+    }.Create();
 
-    public static readonly Schema AppSchema = new SchemaBuilder(Assets, Customers).Build();
+    public static readonly Schema AppSchema = new SchemaFactory(Assets, Customers).Create();
 
     public static Schema GetSchemaWithCustomAssetOptions(TableOptions? assetOptions = null)
     {
         var customAssets = new Table("assets", AssetsColumns.Columns, assetOptions);
 
-        return new SchemaBuilder(customAssets, Customers).Build();
+        return new SchemaFactory(customAssets, Customers).Create();
     }
 }
