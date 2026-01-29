@@ -1,3 +1,7 @@
+using System.Dynamic;
+using System.IO.Pipelines;
+using System.Text;
+
 using Microsoft.Extensions.Logging;
 
 using Newtonsoft.Json;
@@ -8,10 +12,6 @@ using PowerSync.Common.Client.Sync.Bucket;
 using PowerSync.Common.Client.Sync.Stream;
 using PowerSync.Common.DB.Crud;
 using PowerSync.Common.Utils;
-
-using System.Dynamic;
-using System.IO.Pipelines;
-using System.Text;
 
 
 namespace PowerSync.Common.Tests.Utils.Sync;

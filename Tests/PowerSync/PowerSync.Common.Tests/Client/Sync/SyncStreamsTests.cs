@@ -2,15 +2,15 @@ namespace PowerSync.Common.Tests.Client.Sync;
 
 using System.Runtime.CompilerServices;
 
-using PowerSync.Common.Client;
-using PowerSync.Common.DB.Schema;
-using PowerSync.Common.Tests.Utils;
-using PowerSync.Common.Tests.Utils.Sync;
-
 using Common.Client.Sync.Stream;
 
 using Newtonsoft.Json;
+
+using PowerSync.Common.Client;
 using PowerSync.Common.DB.Crud;
+using PowerSync.Common.DB.Schema;
+using PowerSync.Common.Tests.Utils;
+using PowerSync.Common.Tests.Utils.Sync;
 
 /// <summary>
 /// dotnet test -v n --framework net8.0 --filter "SyncStreamsTests"
