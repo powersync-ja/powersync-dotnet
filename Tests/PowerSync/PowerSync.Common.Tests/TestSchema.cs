@@ -4,74 +4,79 @@ using PowerSync.Common.DB.Schema;
 
 public class TestSchemaTodoList
 {
-
-    public static Table Todos = new Table(new Dictionary<string, ColumnType>
+    public static TableFactory Todos = new TableFactory()
     {
-        { "list_id", ColumnType.TEXT },
-        { "created_at", ColumnType.TEXT },
-        { "completed_at", ColumnType.TEXT },
-        { "description", ColumnType.TEXT },
-        { "created_by", ColumnType.TEXT },
-        { "completed_by", ColumnType.TEXT },
-        { "completed", ColumnType.INTEGER }
-    }, new TableOptions
-    {
-        Indexes = new Dictionary<string, List<string>> { { "list", new List<string> { "list_id" } } }
-    });
-
-    public static Table Lists = new Table(new Dictionary<string, ColumnType>
-    {
-        { "created_at", ColumnType.TEXT },
-        { "name", ColumnType.TEXT },
-        { "owner_id", ColumnType.TEXT }
-    });
-
-    public static readonly Schema AppSchema = new Schema(new Dictionary<string, Table>
+        Name = "todos",
+        Columns =
         {
-            { "lists", Lists },
-            { "todos", Todos }
-        });
+            ["list_id"] = ColumnType.Text,
+            ["created_at"] = ColumnType.Text,
+            ["completed_at"] = ColumnType.Text,
+            ["description"] = ColumnType.Text,
+            ["created_by"] = ColumnType.Text,
+            ["completed_by"] = ColumnType.Text,
+            ["completed"] = ColumnType.Integer,
+        },
+        Indexes =
+        {
+            ["list"] = ["list_id"]
+        }
+    };
+
+    public static TableFactory Lists = new TableFactory()
+    {
+        Name = "lists",
+        Columns =
+        {
+            ["created_at"] = ColumnType.Text,
+            ["name"] = ColumnType.Text,
+            ["owner_id"] = ColumnType.Text,
+        }
+    };
+
+    public static readonly Schema AppSchema = new SchemaFactory(Todos, Lists).Create();
 }
 
 public class TestSchema
 {
-    public static readonly Dictionary<string, ColumnType> AssetsColumns = new Dictionary<string, ColumnType>
-        {
-            { "created_at", ColumnType.TEXT },
-            { "make", ColumnType.TEXT },
-            { "model", ColumnType.TEXT },
-            { "serial_number", ColumnType.TEXT },
-            { "quantity", ColumnType.INTEGER },
-            { "user_id", ColumnType.TEXT },
-            { "customer_id", ColumnType.TEXT },
-            { "description", ColumnType.TEXT },
-        };
-
-    public static readonly Table Assets = new Table(AssetsColumns, new TableOptions
+    public static readonly ColumnMap AssetsColumns = new ColumnMap
     {
-        Indexes = new Dictionary<string, List<string>> { { "makemodel", new List<string> { "make", "model" } } },
-    });
+        ["created_at"] = ColumnType.Text,
+        ["make"] = ColumnType.Text,
+        ["model"] = ColumnType.Text,
+        ["serial_number"] = ColumnType.Text,
+        ["quantity"] = ColumnType.Integer,
+        ["user_id"] = ColumnType.Text,
+        ["customer_id"] = ColumnType.Text,
+        ["description"] = ColumnType.Text,
+    };
 
-    public static readonly Table Customers = new Table(new Dictionary<string, ColumnType>
+    public static readonly Table Assets = new TableFactory()
+    {
+        Name = "assets",
+        Columns = AssetsColumns,
+        Indexes =
         {
-            { "name", ColumnType.TEXT },
-            { "email", ColumnType.TEXT }
-        });
+            ["makemodel"] = ["make", "model"]
+        }
+    }.Create();
 
-    public static readonly Schema AppSchema = new Schema(new Dictionary<string, Table>
+    public static readonly Table Customers = new TableFactory()
+    {
+        Name = "customers",
+        Columns =
         {
-            { "assets", Assets },
-            { "customers", Customers }
-        });
+            ["name"] = ColumnType.Text,
+            ["email"] = ColumnType.Text,
+        }
+    }.Create();
+
+    public static readonly Schema AppSchema = new SchemaFactory(Assets, Customers).Create();
 
     public static Schema GetSchemaWithCustomAssetOptions(TableOptions? assetOptions = null)
     {
-        var customAssets = new Table(AssetsColumns, assetOptions);
+        var customAssets = new Table("assets", AssetsColumns.Columns, assetOptions);
 
-        return new Schema(new Dictionary<string, Table>
-        {
-            { "assets", customAssets },
-            { "customers", Customers }
-        });
+        return new SchemaFactory(customAssets, Customers).Create();
     }
 }

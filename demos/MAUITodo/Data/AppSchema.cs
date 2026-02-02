@@ -2,30 +2,35 @@ using PowerSync.Common.DB.Schema;
 
 class AppSchema
 {
-    public static Table Todos = new Table(new Dictionary<string, ColumnType>
+    public static TableFactory Todos = new TableFactory()
     {
-        { "list_id", ColumnType.TEXT },
-        { "created_at", ColumnType.TEXT },
-        { "completed_at", ColumnType.TEXT },
-        { "description", ColumnType.TEXT },
-        { "created_by", ColumnType.TEXT },
-        { "completed_by", ColumnType.TEXT },
-        { "completed", ColumnType.INTEGER }
-    }, new TableOptions
-    {
-        Indexes = new Dictionary<string, List<string>> { { "list", new List<string> { "list_id" } } }
-    });
+        Name = "todos",
+        Columns =
+        {
+            ["list_id"] = ColumnType.Text,
+            ["created_at"] = ColumnType.Text,
+            ["completed_at"] = ColumnType.Text,
+            ["description"] = ColumnType.Text,
+            ["created_by"] = ColumnType.Text,
+            ["completed_by"] = ColumnType.Text,
+            ["completed"] = ColumnType.Integer,
+        },
+        Indexes =
+        {
+            ["list"] = ["list_id"],
+        }
+    };
 
-    public static Table Lists = new Table(new Dictionary<string, ColumnType>
+    public static TableFactory Lists = new TableFactory()
     {
-        { "created_at", ColumnType.TEXT },
-        { "name", ColumnType.TEXT },
-        { "owner_id", ColumnType.TEXT }
-    });
+        Name = "lists",
+        Columns =
+        {
+            ["created_at"] = ColumnType.Text,
+            ["name"] = ColumnType.Text,
+            ["owner_id"] = ColumnType.Text
+        }
+    };
 
-    public static Schema PowerSyncSchema = new Schema(new Dictionary<string, Table>
-    {
-        { "todos", Todos },
-        { "lists", Lists }
-    });
+    public static Schema PowerSyncSchema = new SchemaFactory(Todos, Lists).Create();
 }
