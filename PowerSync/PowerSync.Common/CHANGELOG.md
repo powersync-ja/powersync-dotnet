@@ -1,6 +1,8 @@
 # PowerSync.Common Changelog
 
 ## 0.0.8-alpha.1
+
+- Updated the syntax for defining the app schema to use a factory pattern.
 - Add support for [sync streams](https://docs.powersync.com/sync/streams/overview).
 - Return an `IDisposable` from `PowerSync.Watch`, allowing for easier cancellation of watched queries.
 - Replaced the old JSON-based method of extracting type information from queries with using Dapper internally for queries, improving memory usage and execution time for querying.
@@ -12,10 +14,11 @@ Console.WriteLine($"Asset ID: {asset.id}");
 ```
 
 ## 0.0.7-alpha.1
+
 - Added fallback to check the application's root directory for the PowerSync extension - fixing compatibility with WPF/WAP, .NET Framework <= 4.8, and other platforms that flatten DLLs into the base folder.
 - Added `ExecuteBatch()` implementation.
 - Added `GetUploadQueueStats()` to `PowerSyncDatabase`.
-- Altered query methods, `Execute()`, `GetAll()`, `GetOptional()`, `Get()`, `Watch()`,  to support null parameters in their parameters list, for example: 
+- Altered query methods, `Execute()`, `GetAll()`, `GetOptional()`, `Get()`, `Watch()`, to support null parameters in their parameters list, for example:
 
 ```csharp
 db.Execute(
@@ -25,6 +28,7 @@ db.Execute(
 ```
 
 ## 0.0.6-alpha.1
+
 - Updated to the latest version (0.4.10) of the core extension.
 - Dropping support for the legacy C# sync implementation.
 - Add `trackPreviousValues` option on `TableOptions` which sets `CrudEntry.PreviousValues` to previous values on updates.
@@ -49,12 +53,15 @@ db.Connect(connector, new PowerSync.Common.Client.Sync.Stream.PowerSyncConnectio
 ```
 
 ## 0.0.5-alpha.1
+
 - Using the latest version (0.4.9) of the core extension, it introduces support for the Rust Sync implementation and also makes it the default - users can still opt out and use the legacy C# sync implementation as option when calling `connect()`.
 
 ## 0.0.4-alpha.1
-- Fixed MAUI issues related to extension loading when installing package outside of the monorepo. 
+
+- Fixed MAUI issues related to extension loading when installing package outside of the monorepo.
 
 ## 0.0.3-alpha.1
+
 - Minor changes to accommodate PowerSync.MAUI package extension.
 
 ## 0.0.2-alpha.2
@@ -69,8 +76,9 @@ db.Connect(connector, new PowerSync.Common.Client.Sync.Stream.PowerSyncConnectio
 - Introduce package. Support for Desktop .NET use cases.
 
 ### Platform Runtime Support Added
-* linux-arm64
-* linux-x64
-* osx-arm64
-* osx-x64
-* wind-x64
+
+- linux-arm64
+- linux-x64
+- osx-arm64
+- osx-x64
+- wind-x64
