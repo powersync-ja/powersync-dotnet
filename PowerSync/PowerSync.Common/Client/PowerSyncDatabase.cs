@@ -101,7 +101,7 @@ public interface IPowerSyncDatabase : IEventStream<PowerSyncDBEvent>
 public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDatabase
 {
     public IDBAdapter Database { get; protected set; }
-    private Schema schema;
+    private CompiledSchema schema;
 
     private static readonly int DEFAULT_WATCH_THROTTLE_MS = 30;
     private static readonly Regex POWERSYNC_TABLE_MATCH = new Regex(@"(^ps_data__|^ps_data_local__)", RegexOptions.Compiled);
@@ -168,7 +168,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         Closed = false;
         Ready = false;
 
-        schema = options.Schema;
+        schema = options.Schema.Compile();
         SdkVersion = "";
 
         remoteFactory = options.RemoteFactory ?? (connector => new Remote(connector));
@@ -223,7 +223,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
             }
         }, logger: Logger);
 
-        IsReadyTask = Initialize();
+        IsReadyTask = Initialize(options);
     }
 
     protected IBucketStorageAdapter generateBucketStorageAdapter()
@@ -307,11 +307,11 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         await tcs.Task;
     }
 
-    protected async Task Initialize()
+    protected async Task Initialize(PowerSyncDatabaseOptions options)
     {
         await BucketStorageAdapter.Init();
         await LoadVersion();
-        await UpdateSchema(schema);
+        await UpdateSchema(options.Schema);
         await ResolveOfflineSyncStatus();
         await Database.Execute("PRAGMA RECURSIVE_TRIGGERS=TRUE");
         Ready = true;
@@ -369,6 +369,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
     /// </summary>
     public async Task UpdateSchema(Schema schema)
     {
+        CompiledSchema compiledSchema = schema.Compile();
         if (syncStreamImplementation != null)
         {
             throw new Exception("Cannot update schema while connected");
@@ -376,15 +377,15 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
 
         try
         {
-            schema.Validate();
+            compiledSchema.Validate();
         }
         catch (Exception ex)
         {
             Logger.LogWarning("Schema validation failed. Unexpected behavior could occur: {Exception}", ex);
         }
 
-        this.schema = schema;
-        await Database.Execute("SELECT powersync_replace_schema(?)", [schema.ToJSON()]);
+        this.schema = compiledSchema;
+        await Database.Execute("SELECT powersync_replace_schema(?)", [compiledSchema.ToJSON()]);
         await Database.RefreshSchema();
         Emit(new PowerSyncDBEvent { SchemaChanged = schema });
     }
