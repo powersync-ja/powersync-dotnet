@@ -2,7 +2,9 @@
 
 ## 0.0.8-alpha.1
 
-- Updated the syntax for defining the app schema to use a factory pattern.
+- _Breaking:_ Updated schema definition syntax: `Table` requires the table name to be passed in the constructor. Added `TableFactory` and `SchemaFactory` classes.
+- _Breaking:_ Further updated schema definition syntax: Renamed `Schema` and `Table` to `CompiledSchema` and `CompiledTable` and renamed `SchemaFactory` and `TableFactory` to `Schema` and `Table`. Made `CompiledSchema` and `CompiledTable` internal classes.
+  - These are the last breaking changes to the schema definition before entering beta.
 - Add support for [sync streams](https://docs.powersync.com/sync/streams/overview).
 - Return an `IDisposable` from `PowerSync.Watch`, allowing for easier cancellation of watched queries.
 - Replaced the old JSON-based method of extracting type information from queries with using Dapper internally for queries, improving memory usage and execution time for querying.
