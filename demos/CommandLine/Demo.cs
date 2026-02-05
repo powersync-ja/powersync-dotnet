@@ -3,6 +3,7 @@
 using System.Reflection;
 
 using CommandLine.Utils;
+using CommandLine.Schema;
 
 using PowerSync.Common.Client;
 using PowerSync.Common.Client.Connection;
@@ -11,13 +12,6 @@ using Spectre.Console;
 
 class Demo
 {
-    private record ListResult
-    {
-        public string id;
-        public string owner_id;
-        public string name;
-        public string created_at;
-    }
     static async Task Main()
     {
         var db = new PowerSyncDatabase(new PowerSyncDatabaseOptions
@@ -66,7 +60,7 @@ class Demo
 
         bool running = true;
 
-        await db.Watch("select * from lists", null, new WatchHandler<ListResult>
+        await db.Watch("select * from lists", null, new WatchHandler<List>
         {
             OnResult = (results) =>
             {
