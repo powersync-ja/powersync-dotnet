@@ -51,7 +51,11 @@ internal class AttributeParser
                 continue;
             }
 
-            var columnType = PropertyTypeToColumnType(prop.PropertyType);
+
+            var columnAttr = prop.GetCustomAttribute<ColumnAttribute>();
+            var columnType = columnAttr != null
+                ? columnAttr.ColumnType
+                : PropertyTypeToColumnType(prop.PropertyType);
             columns.Add(name, columnType);
         }
 
@@ -84,8 +88,6 @@ internal class AttributeParser
     private ColumnType PropertyTypeToColumnType(Type propertyType)
     {
         var innerType = Nullable.GetUnderlyingType(propertyType);
-
-        // TODO: First try to read column type from ColumnAttribute
 
         return propertyType switch
         {
