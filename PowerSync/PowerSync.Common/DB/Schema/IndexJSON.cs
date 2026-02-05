@@ -12,7 +12,7 @@ class IndexJSON(IndexJSONOptions options)
 
     public IndexedColumnJSON[] Columns => options.Columns ?? [];
 
-    public object ToJSONObject(Table table)
+    public object ToJSONObject(CompiledTable table)
     {
         return new
         {

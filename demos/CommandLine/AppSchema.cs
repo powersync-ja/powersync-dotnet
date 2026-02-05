@@ -30,5 +30,5 @@ class List
 
 class AppSchema
 {
-    public static Schema PowerSyncSchema = new SchemaFactory(typeof(Todo), typeof(List)).Create();
+    public static Schema PowerSyncSchema = new Schema(typeof(Todo), typeof(List));
 }

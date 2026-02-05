@@ -1,8 +1,5 @@
 namespace PowerSync.Common.DB.Schema;
 
-using System.Collections.Generic;
-using System.Text.RegularExpressions;
-
 using Newtonsoft.Json;
 
 public class TableOptions(
@@ -21,7 +18,7 @@ public class TableOptions(
 
     public bool InsertOnly { get; set; } = insertOnly ?? false;
 
-    public string? ViewName { get; } = viewName;
+    public string? ViewName { get; set; } = viewName;
 
     /// <summary>
     /// Whether to add a hidden `_metadata` column that will be enabled for updates to attach custom
@@ -65,131 +62,69 @@ public class Table
 {
     public const int MAX_AMOUNT_OF_COLUMNS = 1999;
 
-    public static readonly Regex InvalidSQLCharacters = new Regex(@"[""'%,.#\s\[\]]", RegexOptions.Compiled);
+    public Dictionary<string, ColumnType> Columns { get; set; } = new();
 
-    public string Name { get; init; } = null!;
-    protected TableOptions Options { get; init; } = null!;
-    public IReadOnlyDictionary<string, ColumnType> Columns { get; init; }
-    public IReadOnlyDictionary<string, List<string>> Indexes { get; init; }
+    public TableOptions Options { get; set; }
 
-    private readonly ColumnJSON[] ColumnsJSON;
-    private readonly IndexJSON[] IndexesJSON;
+    public string Name { get; set; } = null!;
 
-    public Table(string name, Dictionary<string, ColumnType> columns, TableOptions? options = null)
+    public Dictionary<string, List<string>> Indexes
     {
-        ColumnsJSON =
-            columns
-            .Select(kvp => new ColumnJSON(new ColumnJSONOptions(kvp.Key, kvp.Value)))
-            .ToArray();
-
-        IndexesJSON =
-            (Options?.Indexes ?? [])
-            .Select(kvp =>
-                new IndexJSON(new IndexJSONOptions(
-                    kvp.Key,
-                    kvp.Value.Select(name =>
-                        new IndexedColumnJSON(new IndexedColumnJSONOptions(
-                            name.Replace("-", ""), !name.StartsWith("-")))
-                    ).ToArray()
-                ))
-            )
-            .ToArray();
-
-        Options = options ?? new TableOptions();
-
-        Name = name;
-        Columns = columns;
-        Indexes = Options?.Indexes ?? [];
+        get { return Options.Indexes; }
+        set { Options.Indexes = value; }
+    }
+    public bool LocalOnly
+    {
+        get { return Options.LocalOnly; }
+        set { Options.LocalOnly = value; }
+    }
+    public bool InsertOnly
+    {
+        get { return Options.InsertOnly; }
+        set { Options.InsertOnly = value; }
+    }
+    string? ViewName
+    {
+        get { return Options.ViewName; }
+        set { Options.ViewName = value; }
+    }
+    bool TrackMetadata
+    {
+        get { return Options.TrackMetadata; }
+        set { Options.TrackMetadata = value; }
+    }
+    TrackPreviousOptions? TrackPreviousValues
+    {
+        get { return Options.TrackPreviousValues; }
+        set { Options.TrackPreviousValues = value; }
+    }
+    bool IgnoreEmptyUpdates
+    {
+        get { return Options.IgnoreEmptyUpdates; }
+        set { Options.IgnoreEmptyUpdates = value; }
     }
 
-    public void Validate()
+    public Table()
+    {
+        Options = new TableOptions();
+    }
+
+    // Mirrors the legacy syntax, as well as the syntax found in the other SDKs.
+    public Table(string name, Dictionary<string, ColumnType> columns, TableOptions? options = null)
+    {
+        Name = name;
+        Columns = columns;
+        Options = options ?? new TableOptions();
+    }
+
+    internal CompiledTable Compile()
     {
         if (string.IsNullOrWhiteSpace(Name))
         {
-            throw new Exception($"Table name is required.");
+            throw new InvalidOperationException("Table name is required.");
         }
 
-        if (!string.IsNullOrWhiteSpace(Options.ViewName) && InvalidSQLCharacters.IsMatch(Options.ViewName!))
-        {
-            throw new Exception($"Invalid characters in view name: {Options.ViewName}");
-        }
-
-        if (Columns.Count > MAX_AMOUNT_OF_COLUMNS)
-        {
-            throw new Exception(
-                $"Table has too many columns. The maximum number of columns is {MAX_AMOUNT_OF_COLUMNS}.");
-        }
-
-        if (Options.TrackMetadata && Options.LocalOnly)
-        {
-            throw new Exception("Can't include metadata for local-only tables.");
-        }
-
-        if (Options.TrackPreviousValues != null && Options.LocalOnly)
-        {
-            throw new Exception("Can't include old values for local-only tables.");
-        }
-
-        var columnNames = new HashSet<string> { "id" };
-
-        foreach (var columnName in Columns.Keys)
-        {
-            if (columnName == "id")
-            {
-                throw new Exception("An id column is automatically added, custom id columns are not supported");
-            }
-
-            if (InvalidSQLCharacters.IsMatch(columnName))
-            {
-                throw new Exception($"Invalid characters in column name: {columnName}");
-            }
-
-            columnNames.Add(columnName);
-        }
-
-        foreach (var kvp in Indexes)
-        {
-            var indexName = kvp.Key;
-            var indexColumns = kvp.Value;
-
-            if (InvalidSQLCharacters.IsMatch(indexName))
-            {
-                throw new Exception($"Invalid characters in index name: {indexName}");
-            }
-
-            foreach (var indexColumn in indexColumns)
-            {
-                if (!columnNames.Contains(indexColumn))
-                {
-                    throw new Exception($"Column {indexColumn} not found for index {indexName}");
-                }
-            }
-        }
-    }
-
-    public string ToJSON(string Name = "")
-    {
-        var trackPrevious = Options.TrackPreviousValues;
-
-        var jsonObject = new
-        {
-            view_name = Options.ViewName ?? Name,
-            local_only = Options.LocalOnly,
-            insert_only = Options.InsertOnly,
-            columns = ColumnsJSON.Select(c => c.ToJSONObject()).ToList(),
-            indexes = IndexesJSON.Select(i => i.ToJSONObject(this)).ToList(),
-
-            include_metadata = Options.TrackMetadata,
-            ignore_empty_update = Options.IgnoreEmptyUpdates,
-            include_old = (object)(trackPrevious switch
-            {
-                null => false,
-                { Columns: null } => true,
-                { Columns: var cols } => cols
-            }),
-            include_old_only_when_changed = trackPrevious?.OnlyWhenChanged ?? false
-        };
-
-        return JsonConvert.SerializeObject(jsonObject);
+        return new CompiledTable(Name, Columns, Options);
     }
 }
+

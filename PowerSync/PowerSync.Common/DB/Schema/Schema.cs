@@ -1,41 +1,35 @@
 namespace PowerSync.Common.DB.Schema;
 
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using PowerSync.Common.DB.Schema.Attributes;
 
-public class Schema(Dictionary<string, Table> tables)
+public class Schema
 {
-    private readonly Dictionary<string, Table> Tables = tables;
+    private readonly List<Table> _tables;
 
-    public void Validate()
+    public Schema(params Table[] tables)
     {
-        foreach (var kvp in Tables)
+        _tables = tables.ToList();
+    }
+
+    public Schema(params Type[] types)
+    {
+        _tables = new();
+        var indexes = new Dictionary<string, List<string>>();
+        foreach (Type type in types)
         {
-            var tableName = kvp.Key;
-            var table = kvp.Value;
-
-            if (Table.InvalidSQLCharacters.IsMatch(tableName))
-            {
-                throw new Exception($"Invalid characters in table name: {tableName}");
-            }
-
-            table.Validate();
+            var parser = new AttributeParser(type);
+            _tables.Add(parser.GetTable());
         }
     }
 
-    public string ToJSON()
+    internal CompiledSchema Compile()
     {
-        var jsonObject = new
+        Dictionary<string, CompiledTable> tableMap = new();
+        foreach (Table table in _tables)
         {
-            tables = Tables.Select(kv =>
-            {
-                var json = JObject.Parse(kv.Value.ToJSON(kv.Key));
-                var orderedJson = new JObject { ["name"] = kv.Key };
-                orderedJson.Merge(json, new JsonMergeSettings { MergeArrayHandling = MergeArrayHandling.Concat });
-                return orderedJson;
-            }).ToList()
-        };
-
-        return JsonConvert.SerializeObject(jsonObject);
+            var compiled = table.Compile();
+            tableMap[compiled.Name] = compiled;
+        }
+        return new CompiledSchema(tableMap);
     }
 }

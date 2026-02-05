@@ -4,7 +4,7 @@ using PowerSync.Common.DB.Schema;
 
 public class TestSchemaTodoList
 {
-    public static TableFactory Todos = new TableFactory()
+    public static Table Todos = new Table
     {
         Name = "todos",
         Columns =
@@ -23,7 +23,7 @@ public class TestSchemaTodoList
         }
     };
 
-    public static TableFactory Lists = new TableFactory()
+    public static Table Lists = new Table
     {
         Name = "lists",
         Columns =
@@ -34,12 +34,12 @@ public class TestSchemaTodoList
         }
     };
 
-    public static readonly Schema AppSchema = new SchemaFactory(Todos, Lists).Create();
+    public static readonly Schema AppSchema = new Schema(Todos, Lists);
 }
 
 public class TestSchema
 {
-    public static readonly ColumnMap AssetsColumns = new ColumnMap
+    public static readonly Dictionary<string, ColumnType> AssetsColumns = new()
     {
         ["created_at"] = ColumnType.Text,
         ["make"] = ColumnType.Text,
@@ -51,7 +51,7 @@ public class TestSchema
         ["description"] = ColumnType.Text,
     };
 
-    public static readonly Table Assets = new TableFactory()
+    public static readonly Table Assets = new Table
     {
         Name = "assets",
         Columns = AssetsColumns,
@@ -59,9 +59,9 @@ public class TestSchema
         {
             ["makemodel"] = ["make", "model"]
         }
-    }.Create();
+    };
 
-    public static readonly Table Customers = new TableFactory()
+    public static readonly Table Customers = new Table
     {
         Name = "customers",
         Columns =
@@ -69,14 +69,14 @@ public class TestSchema
             ["name"] = ColumnType.Text,
             ["email"] = ColumnType.Text,
         }
-    }.Create();
+    };
 
-    public static readonly Schema AppSchema = new SchemaFactory(Assets, Customers).Create();
+    public static readonly Schema AppSchema = new Schema(Assets, Customers);
 
     public static Schema GetSchemaWithCustomAssetOptions(TableOptions? assetOptions = null)
     {
-        var customAssets = new Table("assets", AssetsColumns.Columns, assetOptions);
+        var customAssets = new Table("assets", AssetsColumns, assetOptions);
 
-        return new SchemaFactory(customAssets, Customers).Create();
+        return new Schema(customAssets, Customers);
     }
 }

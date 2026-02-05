@@ -14,7 +14,7 @@ class IndexedColumnJSON(IndexedColumnJSONOptions options)
 
     protected bool Ascending { get; set; } = options.Ascending;
 
-    public string ToJSON(Table table)
+    public string ToJSON(CompiledTable table)
     {
         var colType = table.Columns.TryGetValue(Name, out var value) ? value : default;
 
