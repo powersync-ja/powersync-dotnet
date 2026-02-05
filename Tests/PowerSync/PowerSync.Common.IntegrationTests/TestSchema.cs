@@ -24,7 +24,7 @@ public class TestSchema
     };
 
 
-    public static Table Lists = new Table()
+    public static Table Lists = new Table
     {
         Name = "lists",
         Columns =

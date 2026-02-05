@@ -7,6 +7,43 @@
   - Made `CompiledSchema` and `CompiledTable` internal classes.
   - These are the last breaking changes to schema definition before entering beta.
 
+```csharp
+public AppSchema
+{
+    public static Table Todos = new Table
+    {
+        Name = "todos",
+        Columns =
+        {
+            ["list_id"] = ColumnType.Text,
+            ["description"] = ColumnType.Text,
+            // ...
+        },
+        Indexes =
+        {
+            ["list"] = ["list_id"],
+            // Also supports multi-column indexes
+            // ["list_desc"] = ["list_id", "description"],
+        },
+        // Set other options here
+        // LocalOnly = false,
+    };
+
+    public static Table Lists = new Table
+    {
+        Name = "lists",
+        Columns =
+        {
+            ["name"] = ColumnType.Text,
+            ["owner_id"] = ColumnType.Text,
+            // ...
+        },
+    };
+
+    public static Schema PowerSyncSchema = new Schema(Todos, Lists);
+}
+```
+
 ## 0.0.8-alpha.1
 
 - Updated the syntax for defining the app schema to use a factory pattern.
