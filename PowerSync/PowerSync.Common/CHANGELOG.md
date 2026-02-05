@@ -8,40 +8,31 @@
   - These are the last breaking changes to schema definition before entering beta.
 
 ```csharp
-public AppSchema
+public static Table Assets = new Table
 {
-    public static Table Todos = new Table
+    Name = "assets",
+    Columns =
     {
-        Name = "todos",
-        Columns =
-        {
-            ["list_id"] = ColumnType.Text,
-            ["description"] = ColumnType.Text,
-            // ...
-        },
-        Indexes =
-        {
-            ["list"] = ["list_id"],
-            // Also supports multi-column indexes
-            // ["list_desc"] = ["list_id", "description"],
-        },
-        // Set other options here
-        // LocalOnly = false,
-    };
-
-    public static Table Lists = new Table
+        ["make"] = ColumnType.Text,
+        ["model"] = ColumnType.Text,
+        // ...
+    },
+    Indexes =
     {
-        Name = "lists",
-        Columns =
-        {
-            ["name"] = ColumnType.Text,
-            ["owner_id"] = ColumnType.Text,
-            // ...
-        },
-    };
+        ["makemodel"] = ["make", "model"],
+    },
+};
 
-    public static Schema PowerSyncSchema = new Schema(Todos, Lists);
-}
+public static Table Customers = new Table
+{
+    Name = "customers",
+    Columns =
+    {
+        ["name"] = ColumnType.Text,
+    },
+};
+
+public static Schema PowerSyncSchema = new Schema(Assets, Customers);
 ```
 
 ## 0.0.8-alpha.1
