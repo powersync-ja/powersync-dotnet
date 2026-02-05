@@ -297,10 +297,7 @@ public class CRUDTests : IAsyncLifetime
             InsertOnly = true
         });
 
-        Schema insertOnlySchema = new Schema(new Dictionary<string, Table>
-        {
-            { "logs", logs },
-        });
+        Schema insertOnlySchema = new Schema(logs);
 
         var uniqueDbName = $"test-{Guid.NewGuid()}.db";
 

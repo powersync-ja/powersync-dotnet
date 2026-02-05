@@ -1,5 +1,40 @@
 # PowerSync.Common Changelog
 
+## 0.0.9-alpha.1
+
+- _Breaking:_ Further updated schema definition syntax.
+  - Renamed `Schema` and `Table` to `CompiledSchema` and `CompiledTable` and renamed `SchemaFactory` and `TableFactory` to `Schema` and `Table`.
+  - Made `CompiledSchema` and `CompiledTable` internal classes.
+  - These are the last breaking changes to schema definition before entering beta.
+
+```csharp
+public static Table Assets = new Table
+{
+    Name = "assets",
+    Columns =
+    {
+        ["make"] = ColumnType.Text,
+        ["model"] = ColumnType.Text,
+        // ...
+    },
+    Indexes =
+    {
+        ["makemodel"] = ["make", "model"],
+    },
+};
+
+public static Table Customers = new Table
+{
+    Name = "customers",
+    Columns =
+    {
+        ["name"] = ColumnType.Text,
+    },
+};
+
+public static Schema PowerSyncSchema = new Schema(Assets, Customers);
+```
+
 ## 0.0.8-alpha.1
 
 - Updated the syntax for defining the app schema to use a factory pattern.
