@@ -1,6 +1,7 @@
 namespace PowerSync.Common.DB.Schema;
 
 using Newtonsoft.Json;
+using PowerSync.Common.DB.Schema.Attributes;
 
 public class TableOptions(
     Dictionary<string, List<string>>? indexes = null,
@@ -62,7 +63,7 @@ public class Table
 {
     public const int MAX_AMOUNT_OF_COLUMNS = 1999;
 
-    public Dictionary<string, ColumnType> Columns { get; set; } = new();
+    public Dictionary<string, ColumnType> Columns { get; set; }
 
     public TableOptions Options { get; set; }
 
@@ -106,7 +107,16 @@ public class Table
 
     public Table()
     {
+        Columns = new Dictionary<string, ColumnType>();
         Options = new TableOptions();
+    }
+
+    public Table(Type type, TableOptions? options = null)
+    {
+        var parser = new AttributeParser(type);
+        Name = parser.TableName;
+        Columns = parser.GetColumns();
+        Options = options ?? parser.GetTableOptions();
     }
 
     // Mirrors the legacy syntax, as well as the syntax found in the other SDKs.

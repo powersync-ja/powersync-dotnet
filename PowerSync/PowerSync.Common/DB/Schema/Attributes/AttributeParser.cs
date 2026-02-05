@@ -10,6 +10,11 @@ internal class AttributeParser
     private readonly Dictionary<string, List<string>> _indexes;
     private readonly TableOptions _options;
 
+    public string TableName
+    {
+        get { return _tableAttr.Name; }
+    }
+
     public AttributeParser(Type type)
     {
         _type = type;
@@ -34,7 +39,7 @@ internal class AttributeParser
         );
     }
 
-    private Dictionary<string, ColumnType> GetColumns()
+    public Dictionary<string, ColumnType> GetColumns()
     {
         var columns = new Dictionary<string, ColumnType>();
         PropertyInfo? idProperty = null;
@@ -72,7 +77,7 @@ internal class AttributeParser
         return columns;
     }
 
-    private Dictionary<string, List<string>> GetIndexes()
+    public Dictionary<string, List<string>> GetIndexes()
     {
         var indexes = new Dictionary<string, List<string>>();
         var indexAttrs = _type.GetCustomAttributes<IndexAttribute>();
@@ -123,7 +128,7 @@ internal class AttributeParser
         };
     }
 
-    private TableOptions GetTableOptions()
+    public TableOptions GetTableOptions()
     {
         return new TableOptions(
             indexes: _indexes,
