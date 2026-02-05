@@ -26,33 +26,3 @@ public sealed class TableAttribute : Attribute
         Name = name;
     }
 }
-
-[
-    Table(
-        "test",
-        LocalOnly = true,
-        InsertOnly = false,
-        ViewName = "test_local",
-        TrackPreviousValues = TrackPrevious.Columns | TrackPrevious.OnlyWhenChanged
-    ),
-    Index("list", [nameof(list_id)]),
-    Index("completed", [nameof(completed), nameof(completed_by)])
-]
-public class Test
-{
-    public string id { get; set; }
-
-    [Column(ColumnType.Integer)] // ColumnType overrides
-    public string list_id { get; set; }
-
-    public DateTime created_at { get; set; }
-
-    [Column(ColumnType.Text, TrackPrevious = true)] // Column-wise track previous
-    public DateTime? completed_at { get; set; }
-
-    public string created_by { get; set; }
-
-    public string? completed_by { get; set; }
-
-    public bool completed { get; set; }
-}
