@@ -64,11 +64,10 @@ public class Table
     public const int MAX_AMOUNT_OF_COLUMNS = 1999;
 
     public Dictionary<string, ColumnType> Columns { get; set; }
-
     public TableOptions Options { get; set; }
-
     public string Name { get; set; } = null!;
 
+    // Accessors
     public Dictionary<string, List<string>> Indexes
     {
         get { return Options.Indexes; }
@@ -117,6 +116,15 @@ public class Table
         Name = parser.TableName;
         Columns = parser.GetColumns();
         Options = options ?? parser.GetTableOptions();
+    }
+
+    public Table(Table other, TableOptions? options = null)
+    {
+        if (other == null) throw new ArgumentNullException(nameof(other));
+
+        Name = other.Name;
+        Columns = other.Columns;
+        Options = options ?? other.Options;
     }
 
     // Mirrors the legacy syntax, as well as the syntax found in the other SDKs.
