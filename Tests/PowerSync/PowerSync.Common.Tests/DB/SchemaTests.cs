@@ -36,7 +36,7 @@ public class SchemaTests
 
         public int quantity { get; set; }
 
-        public string description { get; set; }
+        public string? description { get; set; }
     }
 
     [Fact]
