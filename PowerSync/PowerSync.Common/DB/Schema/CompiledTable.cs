@@ -50,6 +50,11 @@ class CompiledTable
             throw new Exception($"Table name is required.");
         }
 
+        if (InvalidSQLCharacters.IsMatch(Name))
+        {
+            throw new Exception($"Invalid characters in table name: {Name}");
+        }
+
         if (!string.IsNullOrWhiteSpace(Options.ViewName) && InvalidSQLCharacters.IsMatch(Options.ViewName!))
         {
             throw new Exception($"Invalid characters in view name: {Options.ViewName}");
@@ -73,11 +78,19 @@ class CompiledTable
 
         var columnNames = new HashSet<string> { "id" };
 
-        foreach (var columnName in Columns.Keys)
+        foreach (var kvp in Columns)
         {
+            string columnName = kvp.Key;
+            ColumnType columnType = kvp.Value;
+
             if (columnName == "id")
             {
                 throw new Exception("An id column is automatically added, custom id columns are not supported");
+            }
+
+            if (columnType == ColumnType.Inferred)
+            {
+                throw new Exception($"Invalid ColumnType for {kvp.Key}: ColumnType.Inferred. ColumnType.Inferred is only supported when using the schema attribute syntax for defining tables.");
             }
 
             if (InvalidSQLCharacters.IsMatch(columnName))

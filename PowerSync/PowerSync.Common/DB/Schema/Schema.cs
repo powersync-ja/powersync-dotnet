@@ -18,7 +18,7 @@ public class Schema
         foreach (Type type in types)
         {
             var parser = new AttributeParser(type);
-            _tables.Add(parser.GetTable());
+            _tables.Add(parser.ParseTable());
         }
     }
 

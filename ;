@@ -1,0 +1,32 @@
+namespace PowerSync.Common.Tests.DB.Schema;
+
+namespace PowerSync.Common.Tests.DB.Schema.Attributes;
+
+using System.Diagnostics;
+
+using PowerSync.Common.Client;
+
+// TODO: Schema comparer - or can we re-use DeepEquals utility?
+
+/// <summary>
+/// dotnet test -v n --framework net8.0 --filter "SchemaTests"
+/// </summary>
+public class SchemaTests : IAsyncLifetime
+{
+    public async Task InitializeAsync()
+    {
+        // TODO
+    }
+
+    public async Task DisposeAsync()
+    {
+        // TODO
+    }
+
+    // TODO AttributeParser tests
+    public void AttributeParser_ParseOptions_Test()
+    {
+        var parser = new AttributeParser
+    }
+
+}

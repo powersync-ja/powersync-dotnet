@@ -6,9 +6,6 @@ internal class AttributeParser
 {
     private readonly Type _type;
     private readonly TableAttribute _tableAttr;
-    private readonly Dictionary<string, ColumnType> _columns;
-    private readonly Dictionary<string, List<string>> _indexes;
-    private readonly TableOptions _options;
 
     public string TableName
     {
@@ -24,22 +21,18 @@ internal class AttributeParser
         {
             throw new CustomAttributeFormatException("Table classes must be marked with TableAttribute.");
         }
-
-        _columns = GetColumns();
-        _indexes = GetIndexes();
-        _options = GetTableOptions();
     }
 
-    public Table GetTable()
+    public Table ParseTable()
     {
         return new Table(
-            _tableAttr.Name,
-            _columns,
-            _options
+            name: _tableAttr.Name,
+            columns: ParseColumns(),
+            options: ParseTableOptions()
         );
     }
 
-    public Dictionary<string, ColumnType> GetColumns()
+    public Dictionary<string, ColumnType> ParseColumns()
     {
         var columns = new Dictionary<string, ColumnType>();
         PropertyInfo? idProperty = null;
@@ -50,34 +43,49 @@ internal class AttributeParser
             var name = prop.Name;
 
             // Handle 'id' field separately
-            if (name.ToLowerInvariant() == "id")
+            // TODO prevent defining multiple id columns (eg. 'id', 'Id', 'ID')
+            if (idProperty == null && name.ToLowerInvariant() == "id")
             {
                 idProperty = prop;
                 continue;
             }
 
-
             var columnAttr = prop.GetCustomAttribute<ColumnAttribute>();
-            var columnType = columnAttr != null
-                ? columnAttr.ColumnType
-                : PropertyTypeToColumnType(prop.PropertyType);
+            var userColumnType = columnAttr?.ColumnType ?? ColumnType.Inferred;
+
+            // Infer column type from property's type
+            var columnType = userColumnType == ColumnType.Inferred
+                ? PropertyTypeToColumnType(prop.PropertyType)
+                : userColumnType;
             columns.Add(name, columnType);
         }
 
-        // Validate 'id' property
+        // Validate 'id' property exists and is a string
         if (idProperty == null)
         {
             throw new InvalidOperationException("A public string 'id' property is required.");
         }
         if (idProperty.PropertyType != typeof(string))
         {
-            throw new InvalidOperationException("Property 'id' must be of type string.");
+            throw new InvalidOperationException($"Property '{idProperty.Name}' must be of type string.");
+        }
+        var idAttr = idProperty.GetCustomAttribute<ColumnAttribute>();
+        if (idAttr != null)
+        {
+            // ID column only supports Text and Inferred as options
+            if (idAttr.ColumnType != ColumnType.Text || idAttr.ColumnType != ColumnType.Inferred)
+            {
+                throw new InvalidOperationException
+                (
+                    $"Property '{idProperty.Name}' must have ColumnType set to either ColumnType.Text or ColumnType.Inferred."
+                );
+            }
         }
 
         return columns;
     }
 
-    public Dictionary<string, List<string>> GetIndexes()
+    public Dictionary<string, List<string>> ParseIndexes()
     {
         var indexes = new Dictionary<string, List<string>>();
         var indexAttrs = _type.GetCustomAttributes<IndexAttribute>();
@@ -102,6 +110,9 @@ internal class AttributeParser
             _ when propertyType == typeof(Guid) => ColumnType.Text,
             _ when propertyType == typeof(DateTime) => ColumnType.Text,
             _ when propertyType == typeof(DateTimeOffset) => ColumnType.Text,
+            _ when propertyType == typeof(TimeSpan) => ColumnType.Text,
+            // 'decimal' is 128-bit, ColumnType.Real is only 64-bit
+            _ when propertyType == typeof(decimal) => ColumnType.Text,
 
             // INTEGER types
             _ when propertyType == typeof(Enum) => ColumnType.Integer,
@@ -114,34 +125,35 @@ internal class AttributeParser
             _ when propertyType == typeof(uint) => ColumnType.Integer,   // u32
             _ when propertyType == typeof(long) => ColumnType.Integer,   // i64
             _ when propertyType == typeof(ulong) => ColumnType.Integer,  // u64
-            // .NET 5.0+, but we need to support .NET Standard 2.0
+            // .NET 5.0+ only
             // _ when propertyType == typeof(nint) => ColumnType.Integer,   // isize
             // _ when propertyType == typeof(nuint) => ColumnType.Integer,  // usize
 
             // REAL types
             _ when propertyType == typeof(float) => ColumnType.Real,
             _ when propertyType == typeof(double) => ColumnType.Real,
-            _ when propertyType == typeof(decimal) => ColumnType.Real,
 
             // Fallback
+            // TODO: Maybe raise a console warning / throw an error if unable to infer type?
             _ => ColumnType.Text
         };
     }
 
-    public TableOptions GetTableOptions()
+    public TableOptions ParseTableOptions()
     {
         return new TableOptions(
-            indexes: _indexes,
+            indexes: ParseIndexes(),
             localOnly: _tableAttr.LocalOnly,
             insertOnly: _tableAttr.InsertOnly,
             viewName: _tableAttr.ViewName,
             trackMetadata: _tableAttr.TrackMetadata,
-            trackPreviousValues: GetTrackPreviousOptions(),
+            trackPreviousValues: ParseTrackPreviousOptions(),
             ignoreEmptyUpdates: _tableAttr.IgnoreEmptyUpdates
         );
     }
 
-    private TrackPreviousOptions? GetTrackPreviousOptions()
+    // TODO: Make public?
+    private TrackPreviousOptions? ParseTrackPreviousOptions()
     {
         TrackPrevious trackPrevious = _tableAttr.TrackPreviousValues;
         if (trackPrevious == TrackPrevious.None)
@@ -166,12 +178,13 @@ internal class AttributeParser
 
         return new TrackPreviousOptions
         {
-            Columns = trackWholeTable ? null : GetTrackedColumns(),
+            Columns = trackWholeTable ? null : ParseTrackedColumns(),
             OnlyWhenChanged = onlyWhenChanged,
         };
     }
 
-    private List<string> GetTrackedColumns()
+    // TODO: Make public?
+    private List<string> ParseTrackedColumns()
     {
         var trackedColumns = new List<string>();
         foreach (var prop in _type.GetProperties())

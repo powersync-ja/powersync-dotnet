@@ -114,8 +114,8 @@ public class Table
     {
         var parser = new AttributeParser(type);
         Name = parser.TableName;
-        Columns = parser.GetColumns();
-        Options = options ?? parser.GetTableOptions();
+        Columns = parser.ParseColumns();
+        Options = options ?? parser.ParseTableOptions();
     }
 
     public Table(Table other, TableOptions? options = null)

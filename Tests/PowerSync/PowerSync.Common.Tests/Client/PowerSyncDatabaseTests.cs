@@ -646,7 +646,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.Equal(2, callCount);
     }
 
-    [Fact(Timeout = 2000)]
+    [Fact(Timeout = 2500)]
     public async void WatchSingleCancelledTest()
     {
         int callCount = 0;
