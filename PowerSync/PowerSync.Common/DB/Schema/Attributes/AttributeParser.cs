@@ -1,6 +1,7 @@
 namespace PowerSync.Common.DB.Schema.Attributes;
 
 using System.Reflection;
+using Dapper;
 
 internal class AttributeParser
 {
@@ -39,25 +40,24 @@ internal class AttributeParser
 
         foreach (var prop in _type.GetProperties())
         {
-            // TODO: Allow setting name via ColumnAttribute?
-            var name = prop.Name;
+            var columnAttr = prop.GetCustomAttribute<ColumnAttribute>();
+            var columnName = columnAttr?.Name ?? prop.Name;
 
             // Handle 'id' field separately
             // TODO prevent defining multiple id columns (eg. 'id', 'Id', 'ID')
-            if (idProperty == null && name.ToLowerInvariant() == "id")
+            if (columnName.ToLowerInvariant() == "id")
             {
                 idProperty = prop;
                 continue;
             }
 
-            var columnAttr = prop.GetCustomAttribute<ColumnAttribute>();
             var userColumnType = columnAttr?.ColumnType ?? ColumnType.Inferred;
 
             // Infer column type from property's type
             var columnType = userColumnType == ColumnType.Inferred
                 ? PropertyTypeToColumnType(prop.PropertyType)
                 : userColumnType;
-            columns.Add(name, columnType);
+            columns.Add(columnName, columnType);
         }
 
         // Validate 'id' property exists and is a string
@@ -73,7 +73,7 @@ internal class AttributeParser
         if (idAttr != null)
         {
             // ID column only supports Text and Inferred as options
-            if (idAttr.ColumnType != ColumnType.Text || idAttr.ColumnType != ColumnType.Inferred)
+            if (idAttr.ColumnType != ColumnType.Text && idAttr.ColumnType != ColumnType.Inferred)
             {
                 throw new InvalidOperationException
                 (
@@ -152,8 +152,7 @@ internal class AttributeParser
         );
     }
 
-    // TODO: Make public?
-    private TrackPreviousOptions? ParseTrackPreviousOptions()
+    public TrackPreviousOptions? ParseTrackPreviousOptions()
     {
         TrackPrevious trackPrevious = _tableAttr.TrackPreviousValues;
         if (trackPrevious == TrackPrevious.None)
@@ -183,8 +182,32 @@ internal class AttributeParser
         };
     }
 
-    // TODO: Make public?
-    private List<string> ParseTrackedColumns()
+    public CustomPropertyTypeMap ParseDapperTypeMap()
+    {
+        return new(
+            _type,
+            (type, columnName) => type.GetProperties()
+                .FirstOrDefault(prop => prop.GetCustomAttributes()
+                    .OfType<ColumnAttribute>()
+                    .Any(columnAttr => columnAttr.Name == columnName))
+        );
+    }
+
+    public void RegisterDapperTypeMap()
+    {
+        // Only register type map if some Column("custom_name") is found
+        if (_type
+                .GetProperties()
+                .Any(prop => prop
+                    .GetCustomAttributes()
+                    .OfType<ColumnAttribute>()
+                    .Any(attr => attr.Name != null)))
+        {
+            Dapper.SqlMapper.SetTypeMap(_type, ParseDapperTypeMap());
+        }
+    }
+
+    public List<string> ParseTrackedColumns()
     {
         var trackedColumns = new List<string>();
         foreach (var prop in _type.GetProperties())

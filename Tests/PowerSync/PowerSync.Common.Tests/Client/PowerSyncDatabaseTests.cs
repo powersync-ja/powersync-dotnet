@@ -5,6 +5,7 @@ using System.Diagnostics;
 using Microsoft.Data.Sqlite;
 
 using PowerSync.Common.Client;
+using PowerSync.Common.Tests.Models;
 
 /// <summary>
 /// dotnet test -v n --framework net8.0 --filter "PowerSyncDatabaseTests"
@@ -83,11 +84,11 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     public async Task QueryWithNullParams()
     {
         var id = Guid.NewGuid().ToString();
-        var name = "Test user";
+        var description = "Test description";
 
         await db.Execute(
             "INSERT INTO assets(id, description, make) VALUES(?, ?, ?)",
-            [id, name, null]
+            [id, description, null]
         );
 
         var result = await db.GetAll<AssetResult>("SELECT id, description, make FROM assets");
@@ -95,8 +96,30 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.Single(result);
         var row = result.First();
         Assert.Equal(id, row.id);
-        Assert.Equal(name, row.description);
+        Assert.Equal(description, row.description);
         Assert.Null(row.make);
+    }
+
+    [Fact]
+    public async Task QueryModelResult()
+    {
+        var id = Guid.NewGuid().ToString();
+        var description = "Test description";
+        var make = "Test make";
+        var createdAt = DateTimeOffset.Now;
+
+        await db.Execute(
+            "INSERT INTO assets(id, description, make, created_at) VALUES(?, ?, ?, ?)",
+            [id, description, make, createdAt]
+        );
+
+        var results = await db.GetAll<Asset>("SELECT * FROM assets");
+        Assert.Single(results);
+        var row = results.First();
+        Assert.Equal(id, row.AssetId);
+        Assert.Equal(description, row.Description);
+        Assert.Equal(make, row.Make);
+        Assert.Equal(createdAt, row.CreatedAt);
     }
 
     [Fact]

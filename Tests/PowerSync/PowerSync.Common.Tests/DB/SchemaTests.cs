@@ -8,8 +8,6 @@ using System.Diagnostics;
 
 using PowerSync.Common.Client;
 
-// TODO: Schema comparer - or can we re-use DeepEquals utility?
-
 /// <summary>
 /// dotnet test -v n --framework net8.0 --filter "SchemaTests"
 /// </summary>
@@ -84,7 +82,7 @@ public class SchemaTests
         public string id { get; set; }
 
         [Column(ColumnType = ColumnType.Real)]
-        public string created_at { get; set; }
+        public DateTime created_at { get; set; }
 
         public string description { get; set; }
 

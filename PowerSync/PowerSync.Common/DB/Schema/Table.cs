@@ -116,6 +116,7 @@ public class Table
         Name = parser.TableName;
         Columns = parser.ParseColumns();
         Options = options ?? parser.ParseTableOptions();
+        parser.RegisterDapperTypeMap();
     }
 
     public Table(Table other, TableOptions? options = null)

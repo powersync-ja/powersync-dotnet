@@ -18,6 +18,7 @@ public class Schema
         foreach (Type type in types)
         {
             var parser = new AttributeParser(type);
+            parser.RegisterDapperTypeMap();
             _tables.Add(parser.ParseTable());
         }
     }
