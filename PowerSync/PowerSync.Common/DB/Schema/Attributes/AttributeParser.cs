@@ -1,6 +1,7 @@
 namespace PowerSync.Common.DB.Schema.Attributes;
 
 using System.Reflection;
+
 using Dapper;
 
 internal class AttributeParser

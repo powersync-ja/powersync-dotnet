@@ -1,6 +1,6 @@
-using PowerSync.Common.DB.Schema;
-
 using MAUITodo.Models;
+
+using PowerSync.Common.DB.Schema;
 
 class AppSchema
 {

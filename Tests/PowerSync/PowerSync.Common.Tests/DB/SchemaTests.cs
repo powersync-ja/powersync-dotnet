@@ -1,12 +1,11 @@
 namespace PowerSync.Common.Tests.DB.Schema;
 
-using PowerSync.Common.Tests.Utils;
-using PowerSync.Common.DB.Schema;
-using PowerSync.Common.DB.Schema.Attributes;
-
 using System.Diagnostics;
 
 using PowerSync.Common.Client;
+using PowerSync.Common.DB.Schema;
+using PowerSync.Common.DB.Schema.Attributes;
+using PowerSync.Common.Tests.Utils;
 
 /// <summary>
 /// dotnet test -v n --framework net8.0 --filter "SchemaTests"

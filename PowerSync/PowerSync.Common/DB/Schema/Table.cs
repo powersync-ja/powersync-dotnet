@@ -1,6 +1,7 @@
 namespace PowerSync.Common.DB.Schema;
 
 using Newtonsoft.Json;
+
 using PowerSync.Common.DB.Schema.Attributes;
 
 public class TableOptions(
