@@ -34,6 +34,9 @@ public class SchemaTests
         public int quantity { get; set; }
 
         public string? description { get; set; }
+
+        [Ignored]
+        public string non_table_field { get; set; }
     }
 
     [Fact]
