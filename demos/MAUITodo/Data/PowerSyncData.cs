@@ -41,7 +41,7 @@ public class PowerSyncData
         Db.Connect(nodeConnector);
     }
 
-    public async Task SaveListAsync(List list)
+    public async Task SaveListAsync(TodoList list)
     {
         if (list.ID != "")
         {
@@ -57,7 +57,7 @@ public class PowerSyncData
         }
     }
 
-    public async Task DeleteListAsync(Todo list)
+    public async Task DeleteListAsync(TodoList list)
     {
         var listId = list.ID;
         // First delete all todo items in this list
@@ -65,7 +65,7 @@ public class PowerSyncData
         await Db.Execute("DELETE FROM lists WHERE id = ?", [listId]);
     }
 
-    public async Task SaveItemAsync(Todo item)
+    public async Task SaveItemAsync(TodoItem item)
     {
         if (item.ID != "")
         {
@@ -88,7 +88,7 @@ public class PowerSyncData
                   (id, list_id, description, created_at, created_by, completed, completed_at, completed_by)
                   VALUES (uuid(), ?, ?, datetime(), ?, ?, ?, ?)",
                 [
-                    item.ListID,
+                    item.ListId,
                     item.Description,
                     UserId,
                     item.Completed ? 1 : 0,
@@ -123,7 +123,7 @@ public class PowerSyncData
         }
     }
 
-    public async Task DeleteItemAsync(Todo item)
+    public async Task DeleteItemAsync(TodoItem item)
     {
         await Db.Execute("DELETE FROM todos WHERE id = ?", [item.ID]);
     }

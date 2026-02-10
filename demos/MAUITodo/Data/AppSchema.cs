@@ -4,5 +4,8 @@ using MAUITodo.Models;
 
 class AppSchema
 {
-    public static Schema PowerSyncSchema = new Schema(typeof(List), typeof(Todo));
+    public static Table Todos = new Table(typeof(TodoItem));
+    public static Table Lists = new Table(typeof(TodoList));
+
+    public static Schema PowerSyncSchema = new Schema(Todos, Lists);
 }

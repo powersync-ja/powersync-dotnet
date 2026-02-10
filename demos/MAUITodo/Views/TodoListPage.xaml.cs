@@ -24,7 +24,7 @@ public partial class TodoListPage
     {
         base.OnAppearing();
 
-        await database.Db.Watch("select * from todos where list_id = ?", [selectedList.ID], new WatchHandler<Todo>
+        await database.Db.Watch("select * from todos where list_id = ?", [selectedList.ID], new WatchHandler<TodoItem>
         {
             OnResult = (results) =>
             {
@@ -42,10 +42,10 @@ public partial class TodoListPage
         var description = await DisplayPromptAsync("New Todo", "Enter todo description:");
         if (!string.IsNullOrWhiteSpace(description))
         {
-            var todo = new Todo
+            var todo = new TodoItem
             {
                 Description = description,
-                ListID = selectedList.ID
+                ListId = selectedList.ID
             };
             await database.SaveItemAsync(todo);
         }
