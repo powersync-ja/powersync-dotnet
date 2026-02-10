@@ -21,7 +21,7 @@ internal class AttributeParser
         _tableAttr = _type.GetCustomAttribute<TableAttribute>();
         if (_tableAttr == null)
         {
-            throw new CustomAttributeFormatException("Table classes must be marked with TableAttribute.");
+            throw new InvalidOperationException("Table classes must be marked with TableAttribute.");
         }
     }
 
@@ -167,14 +167,14 @@ internal class AttributeParser
 
         if (trackPrevious.HasFlag(TrackPrevious.Columns) && trackPrevious.HasFlag(TrackPrevious.Table))
         {
-            throw new CustomAttributeFormatException("Cannot specify both TrackPrevious.Columns and TrackPrevious.Table on the same table.");
+            throw new InvalidOperationException("Cannot specify both TrackPrevious.Columns and TrackPrevious.Table on the same table.");
         }
 
         if (!trackPrevious.HasFlag(TrackPrevious.Columns)
             && !trackPrevious.HasFlag(TrackPrevious.Table)
             && trackPrevious.HasFlag(TrackPrevious.OnlyWhenChanged))
         {
-            throw new CustomAttributeFormatException("Cannot specify TrackPrevious.OnlyWhenChanged without also specifying either TrackPrevious.Columns or TrackPrevious.Table.");
+            throw new InvalidOperationException("Cannot specify TrackPrevious.OnlyWhenChanged without also specifying either TrackPrevious.Columns or TrackPrevious.Table.");
         }
 
         bool trackWholeTable = _tableAttr.TrackPreviousValues.HasFlag(TrackPrevious.Table);

@@ -12,6 +12,13 @@ using PowerSync.Common.Tests.Utils;
 /// </summary>
 public class SchemaTests
 {
+    private void TestParser(Type type, CompiledTable expected)
+    {
+        var parser = new AttributeParser(type);
+        var table = parser.ParseTable().Compile();
+        Assert.Equivalent(expected, table, strict: true);
+    }
+
     [
         Table(
             "test_assets",
@@ -132,6 +139,14 @@ public class SchemaTests
         TestParser(typeof(Product), expected);
     }
 
+    enum LogLevel
+    {
+        Info,
+        Debug,
+        Warning,
+        Error
+    }
+
     [
         Table(
             "test_logs",
@@ -141,11 +156,22 @@ public class SchemaTests
             IgnoreEmptyUpdates = true
         )
     ]
-    class Logs
+    class Log
     {
-        public string id { get; set; }
-        public string description { get; set; }
-        public DateTimeOffset timestamp { get; set; }
+        [Column("id")]
+        public string LogId { get; set; }
+
+        [Column("description")]
+        public string Description { get; set; }
+
+        [Column("timestamp")]
+        public DateTimeOffset Timestamp { get; set; }
+
+        [Column("log_level")]
+        public LogLevel LogLevel { get; set; }
+
+        [Ignored]
+        public string LogLevelString { get { return LogLevel.ToString(); } }
     }
 
     [Fact]
@@ -157,6 +183,7 @@ public class SchemaTests
             {
                 ["description"] = ColumnType.Text,
                 ["timestamp"] = ColumnType.Text,
+                ["log_level"] = ColumnType.Integer,
             },
             new TableOptions
             {
@@ -170,13 +197,121 @@ public class SchemaTests
             }
         );
 
-        TestParser(typeof(Logs), expected);
+        TestParser(typeof(Log), expected);
     }
 
-    private void TestParser(Type type, CompiledTable expected)
+    class Invalid1 { public string id { get; set; } }
+    [Fact]
+    public async void AttributeParser_InvalidSchema_1()
     {
-        var parser = new AttributeParser(type);
-        var table = parser.ParseTable().Compile();
-        Assert.Equivalent(expected, table, strict: true);
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            new AttributeParser(typeof(Invalid1)).ParseTable();
+        });
+        Assert.Contains("must be marked with TableAttribute", ex.Message);
+    }
+
+    [Table("invalid")]
+    class Invalid2 { }
+    [Fact]
+    public async void AttributeParser_InvalidSchema_2()
+    {
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            new AttributeParser(typeof(Invalid2)).ParseTable();
+        });
+        Assert.Contains("'id' property is required", ex.Message);
+    }
+
+    [Table("invalid")]
+    class Invalid3 { public int id { get; set; } }
+    [Fact]
+    public async void AttributeParser_InvalidSchema_3()
+    {
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            new AttributeParser(typeof(Invalid3)).ParseTable();
+        });
+        Assert.Contains("must be of type string", ex.Message);
+    }
+
+    [Table("invalid")]
+    class Invalid4
+    {
+        [Column(ColumnType = ColumnType.Real)]
+        public string id { get; set; }
+    }
+    [Fact]
+    public async void AttributeParser_InvalidSchema_4()
+    {
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            new AttributeParser(typeof(Invalid4)).ParseTable();
+        });
+        Assert.Contains("must have ColumnType set to ColumnType.Text or ColumnType.Inferred", ex.Message);
+    }
+
+    [Table("invalid")]
+    class Invalid5
+    {
+        public string id { get; set; }
+        public Invalid1 invalid_type { get; set; }
+    }
+    [Fact]
+    public async void AttributeParser_InvalidSchema_5()
+    {
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            new AttributeParser(typeof(Invalid5)).ParseTable();
+        });
+        Assert.Contains("Unable to automatically infer ColumnType", ex.Message);
+    }
+
+    [Table("invalid", TrackPreviousValues = TrackPrevious.Columns | TrackPrevious.Table)]
+    class Invalid6
+    {
+        public string id { get; set; }
+    }
+    [Fact]
+    public async void AttributeParser_InvalidSchema_6()
+    {
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            new AttributeParser(typeof(Invalid6)).ParseTable();
+        });
+        Assert.Contains("Cannot specify both TrackPrevious.Columns and TrackPrevious.Table", ex.Message);
+    }
+
+    [Table("invalid", TrackPreviousValues = TrackPrevious.OnlyWhenChanged)]
+    class Invalid7
+    {
+        public string id { get; set; }
+    }
+    [Fact]
+    public async void AttributeParser_InvalidSchema_7()
+    {
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            new AttributeParser(typeof(Invalid7)).ParseTable();
+        });
+        Assert.Contains("Cannot specify TrackPrevious.OnlyWhenChanged without also specifying", ex.Message);
+    }
+
+    [Fact]
+    public async void AttributeParser_TypeMap_CustomRegistered()
+    {
+        // Log has Column aliases
+        new AttributeParser(typeof(Log)).RegisterDapperTypeMap();
+        var typeMap = Dapper.SqlMapper.GetTypeMap(typeof(Log));
+        Assert.False(typeMap is Dapper.DefaultTypeMap);
+    }
+
+    [Fact]
+    public async void AttributeParser_TypeMap_DefaultRegistered()
+    {
+        // Asset has no Column aliases
+        new AttributeParser(typeof(Asset)).RegisterDapperTypeMap();
+        var typeMap = Dapper.SqlMapper.GetTypeMap(typeof(Asset));
+        Assert.True(typeMap is Dapper.DefaultTypeMap);
     }
 }
