@@ -106,41 +106,41 @@ internal class AttributeParser
 
     private ColumnType PropertyTypeToColumnType(Type propertyType)
     {
-        var innerType = Nullable.GetUnderlyingType(propertyType);
+        Type underlyingType = Nullable.GetUnderlyingType(propertyType) ?? propertyType;
 
-        return propertyType switch
+        return underlyingType switch
         {
             // TEXT types
-            _ when propertyType == typeof(string) => ColumnType.Text,
-            _ when propertyType == typeof(char) => ColumnType.Text,
-            _ when propertyType == typeof(Guid) => ColumnType.Text,
-            _ when propertyType == typeof(DateTime) => ColumnType.Text,
-            _ when propertyType == typeof(DateTimeOffset) => ColumnType.Text,
-            _ when propertyType == typeof(TimeSpan) => ColumnType.Text,
+            Type t when t == typeof(string) => ColumnType.Text,
+            Type t when t == typeof(char) => ColumnType.Text,
+            Type t when t == typeof(Guid) => ColumnType.Text,
+            Type t when t == typeof(DateTime) => ColumnType.Text,
+            Type t when t == typeof(DateTimeOffset) => ColumnType.Text,
+            Type t when t == typeof(TimeSpan) => ColumnType.Text,
             // 'decimal' is 128-bit, ColumnType.Real is only 64-bit
-            _ when propertyType == typeof(decimal) => ColumnType.Text,
+            Type t when t == typeof(decimal) => ColumnType.Text,
 
             // INTEGER types
-            _ when propertyType == typeof(Enum) => ColumnType.Integer,
-            _ when propertyType == typeof(bool) => ColumnType.Integer,   // bool
-            _ when propertyType == typeof(sbyte) => ColumnType.Integer,  // i8
-            _ when propertyType == typeof(byte) => ColumnType.Integer,   // u8
-            _ when propertyType == typeof(short) => ColumnType.Integer,  // i16
-            _ when propertyType == typeof(ushort) => ColumnType.Integer, // u16
-            _ when propertyType == typeof(int) => ColumnType.Integer,    // i32
-            _ when propertyType == typeof(uint) => ColumnType.Integer,   // u32
-            _ when propertyType == typeof(long) => ColumnType.Integer,   // i64
-            _ when propertyType == typeof(ulong) => ColumnType.Integer,  // u64
+            Type t when t.IsEnum => ColumnType.Integer,
+            Type t when t == typeof(bool) => ColumnType.Integer,   // bool
+            Type t when t == typeof(sbyte) => ColumnType.Integer,  // i8
+            Type t when t == typeof(byte) => ColumnType.Integer,   // u8
+            Type t when t == typeof(short) => ColumnType.Integer,  // i16
+            Type t when t == typeof(ushort) => ColumnType.Integer, // u16
+            Type t when t == typeof(int) => ColumnType.Integer,    // i32
+            Type t when t == typeof(uint) => ColumnType.Integer,   // u32
+            Type t when t == typeof(long) => ColumnType.Integer,   // i64
+            Type t when t == typeof(ulong) => ColumnType.Integer,  // u64
             // .NET 5.0+ only
-            // _ when propertyType == typeof(nint) => ColumnType.Integer,   // isize
-            // _ when propertyType == typeof(nuint) => ColumnType.Integer,  // usize
+            // Type t when t == typeof(nint) => ColumnType.Integer,   // isize
+            // Type t when t == typeof(nuint) => ColumnType.Integer,  // usize
 
             // REAL types
-            _ when propertyType == typeof(float) => ColumnType.Real,
-            _ when propertyType == typeof(double) => ColumnType.Real,
+            Type t when t == typeof(float) => ColumnType.Real,
+            Type t when t == typeof(double) => ColumnType.Real,
 
             // Fallback
-            _ => throw new InvalidOperationException($"Unable to automatically infer ColumnType of property type '{propertyType.Name}'."),
+            _ => throw new InvalidOperationException($"Unable to automatically infer ColumnType of property type '{underlyingType.Name}'."),
         };
     }
 
