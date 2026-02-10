@@ -41,13 +41,18 @@ internal class AttributeParser
 
         foreach (var prop in _type.GetProperties())
         {
+            if (prop.GetCustomAttribute<IgnoredAttribute>() != null) continue;
+
             var columnAttr = prop.GetCustomAttribute<ColumnAttribute>();
             var columnName = columnAttr?.Name ?? prop.Name;
 
             // Handle 'id' field separately
-            // TODO prevent defining multiple id columns (eg. 'id', 'Id', 'ID')
             if (columnName.ToLowerInvariant() == "id")
             {
+                if (idProperty != null)
+                {
+                    throw new InvalidOperationException($"Cannot define multiple ID columns for table '{_tableAttr.Name}'.");
+                }
                 idProperty = prop;
                 continue;
             }
@@ -64,11 +69,11 @@ internal class AttributeParser
         // Validate 'id' property exists and is a string
         if (idProperty == null)
         {
-            throw new InvalidOperationException("A public string 'id' property is required.");
+            throw new InvalidOperationException($"An 'id' property is required for table '{_tableAttr.Name}'.");
         }
         if (idProperty.PropertyType != typeof(string))
         {
-            throw new InvalidOperationException($"Property '{idProperty.Name}' must be of type string.");
+            throw new InvalidOperationException($"ID Property '{idProperty.Name}' must be of type string.");
         }
         var idAttr = idProperty.GetCustomAttribute<ColumnAttribute>();
         if (idAttr != null)
@@ -78,7 +83,7 @@ internal class AttributeParser
             {
                 throw new InvalidOperationException
                 (
-                    $"Property '{idProperty.Name}' must have ColumnType set to either ColumnType.Text or ColumnType.Inferred."
+                    $"ID Property '{idProperty.Name}' must have ColumnType set to ColumnType.Text or ColumnType.Inferred."
                 );
             }
         }
@@ -135,8 +140,7 @@ internal class AttributeParser
             _ when propertyType == typeof(double) => ColumnType.Real,
 
             // Fallback
-            // TODO: Maybe raise a console warning / throw an error if unable to infer type?
-            _ => ColumnType.Text
+            _ => throw new InvalidOperationException($"Unable to automatically infer ColumnType of property type '{propertyType.Name}'."),
         };
     }
 

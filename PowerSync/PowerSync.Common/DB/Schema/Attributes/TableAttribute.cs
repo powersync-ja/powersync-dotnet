@@ -3,7 +3,6 @@ namespace PowerSync.Common.DB.Schema.Attributes;
 [Flags]
 public enum TrackPrevious
 {
-    // TODO: Consider finding a method that can't represent invalid states (eg. TrackPrevious.Table | TrackPrevious.Columns)
     None = 0,
     Table = 1 << 0,
     Columns = 1 << 1,

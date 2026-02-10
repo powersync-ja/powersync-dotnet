@@ -26,8 +26,7 @@ class ColumnJSON(ColumnJSONOptions options)
 
     public object ToJSONObject()
     {
-        // TODO find good exception type / message, or catch/throw somewhere else
-        if (Type == ColumnType.Inferred) throw new InvalidOperationException("Attempted to serialise Inferred column.");
+        if (Type == ColumnType.Inferred) throw new InvalidOperationException("Attempted to serialise Inferred column. ColumnType.Inferred is only valid as an argument to ColumnAttribute.");
 
         return new
         {
