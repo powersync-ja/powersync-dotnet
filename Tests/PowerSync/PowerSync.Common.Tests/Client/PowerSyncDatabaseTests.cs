@@ -4,6 +4,8 @@ using System.Diagnostics;
 
 using Microsoft.Data.Sqlite;
 
+using Newtonsoft.Json;
+
 using PowerSync.Common.Client;
 using PowerSync.Common.Tests.Models;
 
@@ -98,28 +100,6 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.Equal(id, row.id);
         Assert.Equal(description, row.description);
         Assert.Null(row.make);
-    }
-
-    [Fact]
-    public async Task QueryModelResult()
-    {
-        var id = Guid.NewGuid().ToString();
-        var description = "Test description";
-        var make = "Test make";
-        var createdAt = DateTimeOffset.Now;
-
-        await db.Execute(
-            "INSERT INTO assets(id, description, make, created_at) VALUES(?, ?, ?, ?)",
-            [id, description, make, createdAt]
-        );
-
-        var results = await db.GetAll<Asset>("SELECT * FROM assets");
-        Assert.Single(results);
-        var row = results.First();
-        Assert.Equal(id, row.AssetId);
-        Assert.Equal(description, row.Description);
-        Assert.Equal(make, row.Make);
-        Assert.Equal(createdAt, row.CreatedAt);
     }
 
     [Fact]
@@ -713,5 +693,48 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
 
         await semAlwaysRunning.WaitAsync();
         Assert.Equal(5, callCount);
+    }
+
+    [Fact]
+    public async Task Attributes_ColumnAliasing()
+    {
+        var db = new PowerSyncDatabase(new PowerSyncDatabaseOptions
+        {
+            Database = new SQLOpenOptions { DbFilename = "PowerSyncAttributesTest.db" },
+            Schema = TestSchemaAttributes.AppSchema,
+        });
+        await db.DisconnectAndClear();
+
+        var id = Guid.NewGuid().ToString();
+        var description = "Test description";
+        var completed = false;
+        var createdAt = DateTimeOffset.Now;
+
+        await db.Execute(
+            "INSERT INTO todos(id, description, completed, created_at, list_id) VALUES(?, ?, ?, ?, uuid())",
+            [id, description, completed, createdAt]
+        );
+
+        var results = await db.GetAll<Todo>("SELECT * FROM todos");
+        Assert.Single(results);
+        var row = results.First();
+        Assert.Equal(id, row.TodoId);
+        Assert.Equal(description, row.Description);
+        Assert.Equal(completed, row.Completed);
+        Assert.Equal(createdAt, row.CreatedAt);
+    }
+
+    [Fact]
+    public async Task IndexesCreatedOnTable()
+    {
+        dynamic[] result = await db.GetAll("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'ps_data__assets'");
+        Assert.Equal(2, result.Length);
+        Assert.Equal("sqlite_autoindex_ps_data__assets_1", result[0].name);
+        Assert.Equal("ps_data__assets__makemodel", result[1].name);
+
+        result = await db.GetAll("PRAGMA index_info('sqlite_autoindex_ps_data__assets_1')");
+        Assert.Single(result); // id
+        result = await db.GetAll("PRAGMA index_info('ps_data__assets__makemodel')");
+        Assert.Equal(2, result.Length); // make, model
     }
 }

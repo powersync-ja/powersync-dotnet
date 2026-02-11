@@ -19,6 +19,10 @@ class CompiledTable
 
     public CompiledTable(string name, Dictionary<string, ColumnType> columns, TableOptions options)
     {
+        Name = name;
+        Options = options;
+        Columns = columns;
+
         ColumnsJSON =
             columns
             .Select(kvp => new ColumnJSON(new ColumnJSONOptions(kvp.Key, kvp.Value)))
@@ -37,9 +41,6 @@ class CompiledTable
             )
             .ToArray();
 
-        Name = name;
-        Columns = columns;
-        Options = options;
         Indexes = Options?.Indexes ?? [];
     }
 
@@ -121,12 +122,13 @@ class CompiledTable
         }
     }
 
-    public string ToJSON(string Name = "")
+    public object ToJSONObject()
     {
         var trackPrevious = Options.TrackPreviousValues;
 
-        var jsonObject = new
+        return new
         {
+            name = Name,
             view_name = Options.ViewName ?? Name,
             local_only = Options.LocalOnly,
             insert_only = Options.InsertOnly,
@@ -143,7 +145,5 @@ class CompiledTable
             }),
             include_old_only_when_changed = trackPrevious?.OnlyWhenChanged ?? false
         };
-
-        return JsonConvert.SerializeObject(jsonObject);
     }
 }

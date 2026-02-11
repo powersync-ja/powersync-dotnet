@@ -1,11 +1,10 @@
 namespace PowerSync.Common.Tests.DB.Schema;
 
-using System.Diagnostics;
+using Newtonsoft.Json;
 
-using PowerSync.Common.Client;
 using PowerSync.Common.DB.Schema;
 using PowerSync.Common.DB.Schema.Attributes;
-using PowerSync.Common.Tests.Utils;
+using PowerSync.Common.Tests;
 
 /// <summary>
 /// dotnet test -v n --framework net8.0 --filter "SchemaTests"
@@ -313,5 +312,70 @@ public class SchemaTests
         new AttributeParser(typeof(Asset)).RegisterDapperTypeMap();
         var typeMap = Dapper.SqlMapper.GetTypeMap(typeof(Asset));
         Assert.True(typeMap is Dapper.DefaultTypeMap);
+    }
+
+    [Fact]
+    public void CompiledSchema_ToJSON()
+    {
+        object expectedJson = new
+        {
+            tables = new List<object>
+            {
+                new
+                {
+                    name = "todos",
+                    view_name = "todos",
+                    local_only = false,
+                    insert_only = false,
+                    columns = new List<object> {
+                        new { name = "list_id", type = "Text" },
+                        new { name = "created_at", type = "Text" },
+                        new { name = "completed_at", type = "Text" },
+                        new { name = "description", type = "Text" },
+                        new { name = "created_by", type = "Text" },
+                        new { name = "completed_by", type = "Text" },
+                        new { name = "completed", type = "Integer" },
+                    },
+                    indexes = new List<object> {
+                        new {
+                            name = "list",
+                            columns = new List<object> {
+                                new { name = "list_id", ascending = true, type = "Text" },
+                            }
+                        },
+                        new {
+                            name = "list_rev",
+                            columns = new List<object> {
+                                new { name = "list_id", ascending = false, type = "Text" },
+                            }
+                        }
+                    },
+                    include_metadata = false,
+                    ignore_empty_update = false,
+                    include_old = false,
+                    include_old_only_when_changed = false
+                },
+                new
+                {
+                    name = "lists",
+                    view_name = "lists",
+                    local_only = false,
+                    insert_only = false,
+                    columns = new List<object> {
+                        new { name = "created_at", type = "Text" },
+                        new { name = "name", type = "Text" },
+                        new { name = "owner_id", type = "Text" }
+                    },
+                    indexes = new List<object>(),
+                    include_metadata = false,
+                    ignore_empty_update = false,
+                    include_old = false,
+                    include_old_only_when_changed = false
+                },
+            }
+        };
+        var schema = TestSchemaTodoList.AppSchema.Compile();
+
+        Assert.Equal(JsonConvert.SerializeObject(expectedJson), schema.ToJSON());
     }
 }
