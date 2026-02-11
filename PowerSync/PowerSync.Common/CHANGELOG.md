@@ -1,5 +1,45 @@
 # PowerSync.Common Changelog
 
+## 0.0.10-alpha.1
+
+- Fixed a bug where custom indexes were not being sent to the PowerSync SQLite extension.
+- Added a new model-based syntax for defining the PowerSync schema (the old syntax is still functional). This syntax uses classes marked with attributes to define the PowerSync schema. The classes can then also be used for queries later on.
+
+```csharp
+using PowerSync.Common.DB.Schema;
+using PowerSync.Common.DB.Schema.Attributes;
+
+[
+    Table("todos"),
+    Index("list", ["list_id"])
+]
+public class Todo
+{
+    [Column("id")]
+    public string TodoId { get; set; }
+
+    [Column("created_at")]
+    public DateTime CreatedAt { get; set; }
+
+    [Column("name")]
+    public string Name { get; set; }
+
+    [Column("description")]
+    public string? Description { get; set; }
+
+    [Column("completed")]
+    public bool Completed { get; set; }
+}
+
+public class Schema
+{
+    public static Schema AppSchema = new Schema(typeof(Todo));
+}
+
+// Usage
+var todos = powerSync.GetAll<Todo>("SELECT * FROM todos");
+```
+
 ## 0.0.9-alpha.1
 
 - _Breaking:_ Further updated schema definition syntax.

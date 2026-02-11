@@ -1,6 +1,3 @@
-
-using Microsoft.VisualBasic;
-
 using Newtonsoft.Json;
 
 using Supabase.Postgrest.Attributes;

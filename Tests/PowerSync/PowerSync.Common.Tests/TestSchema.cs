@@ -1,6 +1,15 @@
 namespace PowerSync.Common.Tests;
 
 using PowerSync.Common.DB.Schema;
+using PowerSync.Common.Tests.Models;
+
+public class TestSchemaAttributes
+{
+    public static Table Todos = new Table(typeof(Todo));
+    public static Table Lists = new Table(typeof(List));
+
+    public static Schema AppSchema = new Schema(Todos, Lists);
+}
 
 public class TestSchemaTodoList
 {
@@ -19,7 +28,8 @@ public class TestSchemaTodoList
         },
         Indexes =
         {
-            ["list"] = ["list_id"]
+            ["list"] = ["list_id"],
+            ["list_rev"] = ["-list_id"]
         }
     };
 

@@ -1,7 +1,5 @@
 namespace PowerSync.Common.DB.Schema;
 
-using Newtonsoft.Json;
-
 class IndexedColumnJSONOptions(string Name, bool Ascending = true)
 {
     public string Name { get; set; } = Name;
@@ -14,17 +12,15 @@ class IndexedColumnJSON(IndexedColumnJSONOptions options)
 
     protected bool Ascending { get; set; } = options.Ascending;
 
-    public string ToJSON(CompiledTable table)
+    public object ToJSONObject(CompiledTable parentTable)
     {
-        var colType = table.Columns.TryGetValue(Name, out var value) ? value : default;
+        var colType = parentTable.Columns.TryGetValue(Name, out var value) ? value : default;
 
-        return JsonConvert.SerializeObject(
-         new
-         {
-             name = Name,
-             ascending = Ascending,
-             type = colType.ToString()
-         }
-        );
+        return new
+        {
+            name = Name,
+            ascending = Ascending,
+            type = colType.ToString()
+        };
     }
 }

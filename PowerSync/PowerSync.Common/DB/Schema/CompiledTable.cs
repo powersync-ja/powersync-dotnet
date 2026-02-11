@@ -19,6 +19,10 @@ class CompiledTable
 
     public CompiledTable(string name, Dictionary<string, ColumnType> columns, TableOptions options)
     {
+        Name = name;
+        Options = options;
+        Columns = columns;
+
         ColumnsJSON =
             columns
             .Select(kvp => new ColumnJSON(new ColumnJSONOptions(kvp.Key, kvp.Value)))
@@ -37,9 +41,6 @@ class CompiledTable
             )
             .ToArray();
 
-        Name = name;
-        Columns = columns;
-        Options = options;
         Indexes = Options?.Indexes ?? [];
     }
 
@@ -48,6 +49,11 @@ class CompiledTable
         if (string.IsNullOrWhiteSpace(Name))
         {
             throw new Exception($"Table name is required.");
+        }
+
+        if (InvalidSQLCharacters.IsMatch(Name))
+        {
+            throw new Exception($"Invalid characters in table name: {Name}");
         }
 
         if (!string.IsNullOrWhiteSpace(Options.ViewName) && InvalidSQLCharacters.IsMatch(Options.ViewName!))
@@ -73,11 +79,19 @@ class CompiledTable
 
         var columnNames = new HashSet<string> { "id" };
 
-        foreach (var columnName in Columns.Keys)
+        foreach (var kvp in Columns)
         {
+            string columnName = kvp.Key;
+            ColumnType columnType = kvp.Value;
+
             if (columnName == "id")
             {
                 throw new Exception("An id column is automatically added, custom id columns are not supported");
+            }
+
+            if (columnType == ColumnType.Inferred)
+            {
+                throw new Exception($"Invalid ColumnType for {kvp.Key}: ColumnType.Inferred. ColumnType.Inferred is only supported when using the schema attribute syntax for defining tables.");
             }
 
             if (InvalidSQLCharacters.IsMatch(columnName))
@@ -108,12 +122,13 @@ class CompiledTable
         }
     }
 
-    public string ToJSON(string Name = "")
+    public object ToJSONObject()
     {
         var trackPrevious = Options.TrackPreviousValues;
 
-        var jsonObject = new
+        return new
         {
+            name = Name,
             view_name = Options.ViewName ?? Name,
             local_only = Options.LocalOnly,
             insert_only = Options.InsertOnly,
@@ -130,7 +145,5 @@ class CompiledTable
             }),
             include_old_only_when_changed = trackPrevious?.OnlyWhenChanged ?? false
         };
-
-        return JsonConvert.SerializeObject(jsonObject);
     }
 }

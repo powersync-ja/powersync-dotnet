@@ -21,6 +21,10 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <DefaultItemExcludes>$(DefaultItemExcludes);runtimes/**/*.*;</DefaultItemExcludes>
   </PropertyGroup>
+  
+  <ItemGroup>
+    <InternalsVisibleTo Include="PowerSync.Common.Tests" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Dapper" Version="2.1.66" />

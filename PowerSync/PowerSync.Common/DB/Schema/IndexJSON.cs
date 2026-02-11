@@ -17,7 +17,7 @@ class IndexJSON(IndexJSONOptions options)
         return new
         {
             name = Name,
-            columns = Columns.Select(column => column.ToJSON(table)).ToList()
+            columns = Columns.Select(column => column.ToJSONObject(table)).ToList()
         };
     }
 }

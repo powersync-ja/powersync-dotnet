@@ -4,7 +4,12 @@ public enum ColumnType
 {
     Text,
     Integer,
-    Real
+    Real,
+    /// <summary>
+    /// <para>Infers the column type based on the associated property's PropertyType.</para>
+    /// <para>**NB:** `ColumnType.Inferred` can only be used when using the schema attributes syntax.</para>
+    /// </summary>
+    Inferred
 }
 
 class ColumnJSONOptions(string Name, ColumnType? Type)
@@ -21,6 +26,8 @@ class ColumnJSON(ColumnJSONOptions options)
 
     public object ToJSONObject()
     {
+        if (Type == ColumnType.Inferred) throw new InvalidOperationException("Attempted to serialise Inferred column. ColumnType.Inferred is only valid as an argument to ColumnAttribute.");
+
         return new
         {
             name = Name,
