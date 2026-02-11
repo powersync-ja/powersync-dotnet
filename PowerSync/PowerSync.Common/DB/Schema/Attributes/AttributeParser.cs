@@ -4,7 +4,7 @@ using System.Reflection;
 
 using Dapper;
 
-internal class AttributeParser
+class AttributeParser
 {
     private readonly Type _type;
     private readonly TableAttribute _tableAttr;
