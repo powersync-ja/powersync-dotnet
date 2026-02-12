@@ -920,11 +920,11 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
             stopRunningCts = watchSubscriptionCts;
         }
 
-        var stopRunningReg = stopRunningCts.Token.Register(stopRunningCts.Cancel);
+        var stopRunningReg = stopRunningCts.Token.Register(dbListenerCts.Cancel);
 
         return new ActionDisposable(() =>
         {
-            stopRunningCts.Dispose();
+            stopRunningReg.Dispose();
             dbListenerCts.Cancel();
             dbListenerCts.Dispose();
         });
