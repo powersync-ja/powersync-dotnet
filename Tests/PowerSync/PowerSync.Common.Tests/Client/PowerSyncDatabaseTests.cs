@@ -693,7 +693,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.Equal(5, callCount);
     }
 
-    [Fact]
+    [Fact(Timeout = 2000)]
     public async Task WatchSchemaResetTest()
     {
         var initialSchema = new Schema(
@@ -711,7 +711,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
             new Table
             {
                 Name = "assets_synced",
-                ViewName = "assets_inactive",
+                ViewName = "assets_synced_inactive",
                 Columns =
                 {
                     ["make"] = ColumnType.Text,
@@ -724,11 +724,10 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
             new Table
             {
                 Name = "assets_local",
-                ViewName = "assets_inactive",
+                ViewName = "assets_local_inactive",
                 Columns =
                 {
                     ["make"] = ColumnType.Text,
-                    ["model"] = ColumnType.Text,
                     ["description"] = ColumnType.Text,
                 }
             },
@@ -739,7 +738,6 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
                 Columns =
                 {
                     ["make"] = ColumnType.Text,
-                    ["model"] = ColumnType.Text,
                     ["description"] = ColumnType.Text,
                 }
             }
@@ -755,20 +753,44 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
             Schema = initialSchema
         });
 
-        // TODO: Setup query watching 'assets'
-        //       Setup semaphore to track successful watches
+        var sem = new SemaphoreSlim(0);
+        var callCount = 0;
 
-        // TODO: INSERT into 'assets'
-        //       Verify correct count (3)
+        var query = await db.Watch("SELECT * FROM assets", [], new WatchHandler<AssetResult>
+        {
+            OnResult = (result) =>
+            {
+                Interlocked.Increment(ref callCount);
+                sem.Release();
+            },
+            OnError = error => throw error
+        });
+        Assert.True(await sem.WaitAsync(100));
+        Assert.Equal(1, callCount);
 
-        // TODO: Update schema to change underlying table name without changing view name
+        for (int i = 0; i < 3; i++)
+        {
+            await db.Execute(
+                "insert into assets(id, description, make) values (?, ?, ?)",
+                [Guid.NewGuid().ToString(), "some desc", "some make"]
+            );
+            Assert.True(await sem.WaitAsync(100));
+        }
+        Assert.Equal(4, callCount);
 
-        // TODO: INSERT all data from "assets_local" into "assets_synced"
-        //       Verify correct count (6)
+        await db.UpdateSchema(updatedSchema);
+        Assert.True(await sem.WaitAsync(100));
+        Assert.Equal(5, callCount);
 
-        // ** Sanity check **
-        // TODO: Deregister query
-        //       Change schema back to initial and update data
-        //       Verify correct count (6) (unchanged) 
+        await db.Execute("insert into assets select * from assets_local_inactive");
+        Assert.True(await sem.WaitAsync(100));
+        Assert.Equal(6, callCount);
+
+        query.Dispose();
+        await Task.Delay(200);
+
+        await db.Execute("update assets set description = 'another desc'");
+        Assert.False(await sem.WaitAsync(100));
+        Assert.Equal(6, callCount);
     }
 }
