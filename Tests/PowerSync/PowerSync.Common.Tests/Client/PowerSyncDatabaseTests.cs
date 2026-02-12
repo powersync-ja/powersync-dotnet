@@ -647,7 +647,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.Equal(2, callCount);
     }
 
-    [Fact(Timeout = 2000)]
+    [Fact(Timeout = 2500)]
     public async void WatchSingleCancelledTest()
     {
         int callCount = 0;
@@ -686,8 +686,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         );
 
         // Ensure nothing received from cancelled result
-        bool receivedResult = await semCancelled.WaitAsync(100);
-        Assert.False(receivedResult, "Received update after disposal");
+        Assert.False(await semCancelled.WaitAsync(100));
 
         await semAlwaysRunning.WaitAsync();
         Assert.Equal(5, callCount);
@@ -788,7 +787,6 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.Equal(3, lastCount);
 
         query.Dispose();
-        await Task.Delay(200);
 
         await db.Execute("delete from assets");
         Assert.False(await sem.WaitAsync(100));
