@@ -748,7 +748,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
     /// Use <see cref="SQLWatchOptions.ThrottleMs"/> to specify the minimum interval between queries.
     /// Source tables are automatically detected using <c>EXPLAIN QUERY PLAN</c>.
     /// </summary>
-    public Task<WatchSubscription> Watch<T>(string query, object?[]? parameters, WatchHandler<T> handler, SQLWatchOptions? options = null)
+    public Task<IDisposable> Watch<T>(string query, object?[]? parameters, WatchHandler<T> handler, SQLWatchOptions? options = null)
         => Task.Run(() => WatchInternal(query, parameters, handler, options, GetAll<T>));
 
     /// <summary>
@@ -757,10 +757,10 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
     /// Use <see cref="SQLWatchOptions.ThrottleMs"/> to specify the minimum interval between queries.
     /// Source tables are automatically detected using <c>EXPLAIN QUERY PLAN</c>.
     /// </summary>
-    public Task<WatchSubscription> Watch(string query, object?[]? parameters, WatchHandler<dynamic> handler, SQLWatchOptions? options = null)
+    public Task<IDisposable> Watch(string query, object?[]? parameters, WatchHandler<dynamic> handler, SQLWatchOptions? options = null)
         => Task.Run(() => WatchInternal(query, parameters, handler, options, GetAll));
 
-    private async Task<WatchSubscription> WatchInternal<T>(
+    private async Task<IDisposable> WatchInternal<T>(
         string query,
         object?[]? parameters,
         WatchHandler<T> handler,
