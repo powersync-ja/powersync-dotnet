@@ -754,19 +754,19 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         });
 
         var sem = new SemaphoreSlim(0);
-        var callCount = 0;
+        long lastCount = -1;
 
-        var query = await db.Watch("SELECT * FROM assets", [], new WatchHandler<AssetResult>
+        var query = await db.Watch("SELECT COUNT(*) AS count FROM assets", [], new WatchHandler<CountResult>
         {
             OnResult = (result) =>
             {
-                Interlocked.Increment(ref callCount);
+                lastCount = result[0].count;
                 sem.Release();
             },
             OnError = error => throw error
         });
         Assert.True(await sem.WaitAsync(100));
-        Assert.Equal(1, callCount);
+        Assert.Equal(0, lastCount);
 
         for (int i = 0; i < 3; i++)
         {
@@ -775,22 +775,23 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
                 [Guid.NewGuid().ToString(), "some desc", "some make"]
             );
             Assert.True(await sem.WaitAsync(100));
+            Assert.Equal(i + 1, lastCount);
         }
-        Assert.Equal(4, callCount);
+        Assert.Equal(3, lastCount);
 
         await db.UpdateSchema(updatedSchema);
         Assert.True(await sem.WaitAsync(100));
-        Assert.Equal(5, callCount);
+        Assert.Equal(0, lastCount);
 
         await db.Execute("insert into assets select * from assets_local_inactive");
         Assert.True(await sem.WaitAsync(100));
-        Assert.Equal(6, callCount);
+        Assert.Equal(3, lastCount);
 
         query.Dispose();
         await Task.Delay(200);
 
-        await db.Execute("update assets set description = 'another desc'");
+        await db.Execute("delete from assets");
         Assert.False(await sem.WaitAsync(100));
-        Assert.Equal(6, callCount);
+        Assert.Equal(3, lastCount);
     }
 }
