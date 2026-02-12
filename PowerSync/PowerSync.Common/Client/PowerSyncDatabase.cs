@@ -748,7 +748,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
     /// Use <see cref="SQLWatchOptions.ThrottleMs"/> to specify the minimum interval between queries.
     /// Source tables are automatically detected using <c>EXPLAIN QUERY PLAN</c>.
     /// </summary>
-    public Task<IDisposable> Watch<T>(string query, object?[]? parameters, WatchHandler<T> handler, SQLWatchOptions? options = null)
+    public Task<WatchSubscription> Watch<T>(string query, object?[]? parameters, WatchHandler<T> handler, SQLWatchOptions? options = null)
         => Task.Run(() => WatchInternal(query, parameters, handler, options, GetAll<T>));
 
     /// <summary>
@@ -757,10 +757,10 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
     /// Use <see cref="SQLWatchOptions.ThrottleMs"/> to specify the minimum interval between queries.
     /// Source tables are automatically detected using <c>EXPLAIN QUERY PLAN</c>.
     /// </summary>
-    public Task<IDisposable> Watch(string query, object?[]? parameters, WatchHandler<dynamic> handler, SQLWatchOptions? options = null)
+    public Task<WatchSubscription> Watch(string query, object?[]? parameters, WatchHandler<dynamic> handler, SQLWatchOptions? options = null)
         => Task.Run(() => WatchInternal(query, parameters, handler, options, GetAll));
 
-    private async Task<IDisposable> WatchInternal<T>(
+    private async Task<WatchSubscription> WatchInternal<T>(
         string query,
         object?[]? parameters,
         WatchHandler<T> handler,
@@ -768,41 +768,61 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         Func<string, object?[]?, Task<T[]>> getter
     )
     {
-        try
-        {
-            var resolvedTables = await ResolveTables(query, parameters, options);
-            var result = await getter(query, parameters);
-            handler.OnResult(result);
+        var subscription = new WatchSubscription();
 
-            var subscription = OnChange(new WatchOnChangeHandler
+        async Task ResetQuery()
+        {
+            try
             {
-                OnChange = async (change) =>
+                var resolvedTables = await ResolveTables(query, parameters, options);
+                var result = await getter(query, parameters);
+                handler.OnResult(result);
+
+                var onChangeListener = OnChange(new WatchOnChangeHandler
                 {
-                    try
+                    OnChange = async (change) =>
                     {
-                        var result = await getter(query, parameters);
-                        handler.OnResult(result);
-                    }
-                    catch (Exception ex)
-                    {
-                        handler.OnError?.Invoke(ex);
-                    }
-                },
-                OnError = handler.OnError
-            }, new SQLWatchOptions
-            {
-                Tables = resolvedTables,
-                Signal = options?.Signal,
-                ThrottleMs = options?.ThrottleMs
-            });
+                        try
+                        {
+                            var result = await getter(query, parameters);
+                            handler.OnResult(result);
+                        }
+                        catch (Exception ex)
+                        {
+                            handler.OnError?.Invoke(ex);
+                        }
+                    },
+                    OnError = handler.OnError
+                }, new SQLWatchOptions
+                {
+                    Tables = resolvedTables,
+                    Signal = options?.Signal,
+                    ThrottleMs = options?.ThrottleMs
+                });
 
-            return subscription;
+                subscription.SetOnChangeListener(onChangeListener);
+            }
+            catch (Exception ex)
+            {
+                handler.OnError?.Invoke(ex);
+                throw;
+            }
         }
-        catch (Exception ex)
+
+        // Register initial subscription
+        await ResetQuery();
+
+        // Listen for schema changes and reset listener
+        var schemaListener = RunListener(async (e) =>
         {
-            handler.OnError?.Invoke(ex);
-            throw;
-        }
+            if (e.SchemaChanged != null)
+            {
+                await ResetQuery();
+            }
+        });
+        subscription.SetSchemaListener(schemaListener);
+
+        return subscription;
     }
 
     private class ExplainedResult
@@ -869,7 +889,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
             });
         }
 
-        var cts = Database.RunListener((update) =>
+        var dbListenerCts = Database.RunListener((update) =>
         {
             if (update.TablesUpdated != null)
             {
@@ -885,27 +905,29 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
             }
         });
 
-        CancellationTokenSource linkedCts;
-        if (options?.Signal.HasValue == true)
+        CancellationTokenSource stopRunningCts;
+
+        if (options?.Signal != null)
         {
-            // Cancel on global CTS cancellation or user token cancellation
-            linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+            var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
                 watchSubscriptionCts.Token,
                 options.Signal.Value
             );
+            stopRunningCts = linkedCts;
         }
         else
         {
-            // Cancel on global CTS cancellation
-            linkedCts = watchSubscriptionCts;
+            stopRunningCts = watchSubscriptionCts;
         }
 
-        var registration = linkedCts.Token.Register(() =>
-        {
-            cts.Cancel();
-        });
+        var stopRunningReg = stopRunningCts.Token.Register(stopRunningCts.Cancel);
 
-        return new WatchSubscription(cts, registration);
+        return new ActionDisposable(() =>
+        {
+            stopRunningCts.Dispose();
+            dbListenerCts.Cancel();
+            dbListenerCts.Dispose();
+        });
     }
 
     private static void HandleTableChanges(HashSet<string> changedTables, HashSet<string> watchedTables, Action<string[]> onDetectedChanges)
@@ -968,21 +990,63 @@ public class WatchOnChangeHandler
     public Action<Exception>? OnError { get; set; }
 }
 
-public class WatchSubscription(CancellationTokenSource cts, CancellationTokenRegistration registration) : IDisposable
+public class WatchSubscription : IDisposable
 {
-    private readonly CancellationTokenSource _cts = cts;
-    private readonly CancellationTokenRegistration _registration = registration;
+    private IDisposable? _onChangeListener;
+    private IDisposable? _schemaListener;
+    private readonly object _lock = new();
     private bool _disposed;
 
-    public bool Disposed { get { return _disposed; } }
+    internal void SetSchemaListener(IDisposable listener)
+    {
+        lock (_lock)
+        {
+            if (_disposed)
+            {
+                listener.Dispose();
+                return;
+            }
+            _schemaListener?.Dispose();
+            _schemaListener = listener;
+        }
+    }
+
+    internal void SetOnChangeListener(IDisposable listener)
+    {
+        lock (_lock)
+        {
+            if (_disposed)
+            {
+                listener.Dispose();
+                return;
+            }
+            _onChangeListener?.Dispose();
+            _onChangeListener = listener;
+        }
+    }
+
+    public void Dispose()
+    {
+        lock (_lock)
+        {
+            if (_disposed) return;
+            _disposed = true;
+
+            _onChangeListener?.Dispose();
+            _schemaListener?.Dispose();
+        }
+    }
+}
+
+public class ActionDisposable(Action onDispose) : IDisposable
+{
+    private readonly Action _onDispose = onDispose;
+    private bool _disposed = false;
 
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
-
-        _registration.Dispose();
-        _cts.Cancel();
-        _cts.Dispose();
+        _onDispose();
     }
 }
