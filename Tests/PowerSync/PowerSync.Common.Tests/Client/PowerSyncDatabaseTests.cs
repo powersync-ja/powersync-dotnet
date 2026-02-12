@@ -5,6 +5,7 @@ using System.Diagnostics;
 using Microsoft.Data.Sqlite;
 
 using PowerSync.Common.Client;
+using PowerSync.Common.DB.Schema;
 
 /// <summary>
 /// dotnet test -v n --framework net8.0 --filter "PowerSyncDatabaseTests"
@@ -690,5 +691,84 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
 
         await semAlwaysRunning.WaitAsync();
         Assert.Equal(5, callCount);
+    }
+
+    [Fact]
+    public async Task WatchSchemaResetTest()
+    {
+        var initialSchema = new Schema(
+            new Table
+            {
+                Name = "assets_local",
+                ViewName = "assets",
+                Columns =
+                {
+                    ["make"] = ColumnType.Text,
+                    ["model"] = ColumnType.Text,
+                    ["description"] = ColumnType.Text,
+                }
+            },
+            new Table
+            {
+                Name = "assets_synced",
+                ViewName = "assets_inactive",
+                Columns =
+                {
+                    ["make"] = ColumnType.Text,
+                    ["model"] = ColumnType.Text,
+                    ["description"] = ColumnType.Text,
+                }
+            }
+        );
+        var updatedSchema = new Schema(
+            new Table
+            {
+                Name = "assets_local",
+                ViewName = "assets_inactive",
+                Columns =
+                {
+                    ["make"] = ColumnType.Text,
+                    ["model"] = ColumnType.Text,
+                    ["description"] = ColumnType.Text,
+                }
+            },
+            new Table
+            {
+                Name = "assets_synced",
+                ViewName = "assets",
+                Columns =
+                {
+                    ["make"] = ColumnType.Text,
+                    ["model"] = ColumnType.Text,
+                    ["description"] = ColumnType.Text,
+                }
+            }
+        );
+
+        var dbId = Guid.NewGuid().ToString();
+        var db = new PowerSyncDatabase(new()
+        {
+            Database = new SQLOpenOptions
+            {
+                DbFilename = $"powerSyncWatch_{dbId}.db",
+            },
+            Schema = initialSchema
+        });
+
+        // TODO: Setup query watching 'assets'
+        //       Setup semaphore to track successful watches
+
+        // TODO: INSERT into 'assets'
+        //       Verify correct count (3)
+
+        // TODO: Update schema to change underlying table name without changing view name
+
+        // TODO: INSERT all data from "assets_local" into "assets_synced"
+        //       Verify correct count (6)
+
+        // ** Sanity check **
+        // TODO: Deregister query
+        //       Change schema back to initial and update data
+        //       Verify correct count (6) (unchanged) 
     }
 }
