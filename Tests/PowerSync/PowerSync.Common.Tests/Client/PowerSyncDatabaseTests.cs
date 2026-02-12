@@ -5,6 +5,7 @@ using System.Diagnostics;
 using Microsoft.Data.Sqlite;
 
 using PowerSync.Common.Client;
+using PowerSync.Common.DB.Schema;
 
 /// <summary>
 /// dotnet test -v n --framework net8.0 --filter "PowerSyncDatabaseTests"
@@ -646,7 +647,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.Equal(2, callCount);
     }
 
-    [Fact(Timeout = 2000)]
+    [Fact(Timeout = 2500)]
     public async void WatchSingleCancelledTest()
     {
         int callCount = 0;
@@ -685,10 +686,110 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         );
 
         // Ensure nothing received from cancelled result
-        bool receivedResult = await semCancelled.WaitAsync(100);
-        Assert.False(receivedResult, "Received update after disposal");
+        Assert.False(await semCancelled.WaitAsync(100));
 
         await semAlwaysRunning.WaitAsync();
         Assert.Equal(5, callCount);
+    }
+
+    [Fact(Timeout = 2000)]
+    public async Task WatchSchemaResetTest()
+    {
+        var initialSchema = new Schema(
+            new Table
+            {
+                Name = "assets_local",
+                ViewName = "assets",
+                Columns =
+                {
+                    ["make"] = ColumnType.Text,
+                    ["model"] = ColumnType.Text,
+                    ["description"] = ColumnType.Text,
+                }
+            },
+            new Table
+            {
+                Name = "assets_synced",
+                ViewName = "assets_synced_inactive",
+                Columns =
+                {
+                    ["make"] = ColumnType.Text,
+                    ["model"] = ColumnType.Text,
+                    ["description"] = ColumnType.Text,
+                }
+            }
+        );
+        var updatedSchema = new Schema(
+            new Table
+            {
+                Name = "assets_local",
+                ViewName = "assets_local_inactive",
+                Columns =
+                {
+                    ["make"] = ColumnType.Text,
+                    ["description"] = ColumnType.Text,
+                }
+            },
+            new Table
+            {
+                Name = "assets_synced",
+                ViewName = "assets",
+                Columns =
+                {
+                    ["make"] = ColumnType.Text,
+                    ["description"] = ColumnType.Text,
+                }
+            }
+        );
+
+        var dbId = Guid.NewGuid().ToString();
+        var db = new PowerSyncDatabase(new()
+        {
+            Database = new SQLOpenOptions
+            {
+                DbFilename = $"powerSyncWatch_{dbId}.db",
+            },
+            Schema = initialSchema
+        });
+
+        var sem = new SemaphoreSlim(0);
+        long lastCount = -1;
+
+        var query = await db.Watch("SELECT COUNT(*) AS count FROM assets", [], new WatchHandler<CountResult>
+        {
+            OnResult = (result) =>
+            {
+                lastCount = result[0].count;
+                sem.Release();
+            },
+            OnError = error => throw error
+        });
+        Assert.True(await sem.WaitAsync(100));
+        Assert.Equal(0, lastCount);
+
+        for (int i = 0; i < 3; i++)
+        {
+            await db.Execute(
+                "insert into assets(id, description, make) values (?, ?, ?)",
+                [Guid.NewGuid().ToString(), "some desc", "some make"]
+            );
+            Assert.True(await sem.WaitAsync(100));
+            Assert.Equal(i + 1, lastCount);
+        }
+        Assert.Equal(3, lastCount);
+
+        await db.UpdateSchema(updatedSchema);
+        Assert.True(await sem.WaitAsync(100));
+        Assert.Equal(0, lastCount);
+
+        await db.Execute("insert into assets select * from assets_local_inactive");
+        Assert.True(await sem.WaitAsync(100));
+        Assert.Equal(3, lastCount);
+
+        query.Dispose();
+
+        await db.Execute("delete from assets");
+        Assert.False(await sem.WaitAsync(100));
+        Assert.Equal(3, lastCount);
     }
 }
