@@ -42,8 +42,6 @@ public class Schema
 var todos = powerSync.GetAll<Todo>("SELECT * FROM todos");
 ```
 
-> > > > > > > main
-
 ## 0.0.9-alpha.1
 
 - _Breaking:_ Further updated schema definition syntax.
