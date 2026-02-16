@@ -1,30 +1,34 @@
-﻿using Newtonsoft.Json;
+﻿namespace MAUITodo.Models;
 
-namespace MAUITodo.Models;
+using PowerSync.Common.DB.Schema.Attributes;
 
+[
+    Table("todos"),
+    Index("list", ["list_id"])
+]
 public class TodoItem
 {
-    [JsonProperty("id")]
+    [Column("id")]
     public string ID { get; set; } = "";
 
-    [JsonProperty("list_id")]
+    [Column("list_id")]
     public string ListId { get; set; } = null!;
 
-    [JsonProperty("created_at")]
+    [Column("created_at")]
     public string CreatedAt { get; set; } = null!;
 
-    [JsonProperty("completed_at")]
+    [Column("completed_at")]
     public string? CompletedAt { get; set; }
 
-    [JsonProperty("description")]
+    [Column("description")]
     public string Description { get; set; } = null!;
 
-    [JsonProperty("created_by")]
+    [Column("created_by")]
     public string CreatedBy { get; set; } = null!;
 
-    [JsonProperty("completed_by")]
+    [Column("completed_by")]
     public string CompletedBy { get; set; } = null!;
 
-    [JsonProperty("completed")]
+    [Column("completed")]
     public bool Completed { get; set; }
 }

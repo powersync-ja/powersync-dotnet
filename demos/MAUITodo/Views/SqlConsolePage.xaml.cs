@@ -29,6 +29,12 @@ public partial class SqlConsolePage : ContentPage
                 return;
 
             var results = await database.Db.GetAll<object>(query);
+            if (results.Length == 0)
+            {
+                Headers.Text = "No results found.";
+                Results.Text = "";
+                return;
+            }
 
             var keys = JObject.Parse(JsonConvert.SerializeObject(results[0])).Properties().Select(p => p.Name).ToList();
             var allValues = results
