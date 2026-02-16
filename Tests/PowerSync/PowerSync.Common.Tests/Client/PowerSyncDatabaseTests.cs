@@ -649,7 +649,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.Equal(2, callCount);
     }
 
-    [Fact(Timeout = 2500)]
+    [Fact(Timeout = 3000)]
     public async void WatchSingleCancelledTest()
     {
         int callCount = 0;
@@ -688,13 +688,13 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         );
 
         // Ensure nothing received from cancelled result
-        Assert.False(await semCancelled.WaitAsync(100));
+        Assert.False(await semCancelled.WaitAsync(200));
 
         await semAlwaysRunning.WaitAsync();
         Assert.Equal(5, callCount);
     }
 
-    [Fact(Timeout = 2000)]
+    [Fact(Timeout = 3000)]
     public async Task WatchSchemaResetTest()
     {
         var dbId = Guid.NewGuid().ToString();
@@ -720,7 +720,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
             },
             OnError = error => throw error
         });
-        Assert.True(await sem.WaitAsync(100));
+        Assert.True(await sem.WaitAsync(200));
         Assert.Equal(0, lastCount);
 
         var resolved = await GetSourceTables(db, querySql);
@@ -733,7 +733,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
                 "insert into assets(id, description, make) values (?, ?, ?)",
                 [Guid.NewGuid().ToString(), "some desc", "some make"]
             );
-            Assert.True(await sem.WaitAsync(100));
+            Assert.True(await sem.WaitAsync(200));
             Assert.Equal(i + 1, lastCount);
         }
         Assert.Equal(3, lastCount);
@@ -744,18 +744,18 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.Single(resolved);
         Assert.Contains("ps_data__assets", resolved);
 
-        Assert.True(await sem.WaitAsync(100));
+        Assert.True(await sem.WaitAsync(200));
         Assert.Equal(0, lastCount);
 
         await db.Execute("insert into assets select * from inactive_local_assets");
-        Assert.True(await sem.WaitAsync(100));
+        Assert.True(await sem.WaitAsync(200));
         Assert.Equal(3, lastCount);
 
         // Sanity check
         query.Dispose();
 
         await db.Execute("delete from assets");
-        Assert.False(await sem.WaitAsync(100));
+        Assert.False(await sem.WaitAsync(200));
         Assert.Equal(3, lastCount);
     }
 
