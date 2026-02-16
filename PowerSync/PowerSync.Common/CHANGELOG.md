@@ -1,5 +1,9 @@
 # PowerSync.Common Changelog
 
+## 0.0.10-alpha.1
+
+- Fix watched queries sometimes resolving to the wrong underlying tables after a schema change.
+
 ## 0.0.9-alpha.1
 
 - _Breaking:_ Further updated schema definition syntax.
