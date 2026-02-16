@@ -3,7 +3,9 @@ namespace PowerSync.Common.Tests.Client;
 using System.Diagnostics;
 
 using Microsoft.Data.Sqlite;
+
 using Newtonsoft.Json;
+
 using PowerSync.Common.Client;
 using PowerSync.Common.DB.Schema;
 
@@ -695,57 +697,6 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     [Fact(Timeout = 2000)]
     public async Task WatchSchemaResetTest()
     {
-        var initialSchema = new Schema(
-            new Table
-            {
-                Name = "assets_local",
-                ViewName = "assets",
-                LocalOnly = true,
-                Columns =
-                {
-                    ["make"] = ColumnType.Text,
-                    ["model"] = ColumnType.Text,
-                    ["description"] = ColumnType.Text,
-                }
-            },
-            new Table
-            {
-                Name = "assets_synced",
-                ViewName = "assets_synced_inactive",
-                LocalOnly = false,
-                Columns =
-                {
-                    ["make"] = ColumnType.Text,
-                    ["model"] = ColumnType.Text,
-                    ["description"] = ColumnType.Text,
-                }
-            }
-        );
-        var updatedSchema = new Schema(
-            new Table
-            {
-                Name = "assets_local",
-                ViewName = "assets_local_inactive",
-                LocalOnly = true,
-                Columns =
-                {
-                    ["make"] = ColumnType.Text,
-                    ["description"] = ColumnType.Text,
-                }
-            },
-            new Table
-            {
-                Name = "assets_synced",
-                ViewName = "assets",
-                LocalOnly = false,
-                Columns =
-                {
-                    ["make"] = ColumnType.Text,
-                    ["description"] = ColumnType.Text,
-                }
-            }
-        );
-
         var dbId = Guid.NewGuid().ToString();
         var db = new PowerSyncDatabase(new()
         {
@@ -753,7 +704,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
             {
                 DbFilename = $"powerSyncWatch_{dbId}.db",
             },
-            Schema = initialSchema
+            Schema = TestSchema.MakeOptionalSyncSchema(false)
         });
 
         var sem = new SemaphoreSlim(0);
@@ -772,9 +723,9 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.True(await sem.WaitAsync(100));
         Assert.Equal(0, lastCount);
 
-        var initialResolved = await GetSourceTables(db, querySql);
-        Assert.Contains("ps_data_local__assets_local", initialResolved);
-        Assert.DoesNotContain("ps_data__assets_synced", initialResolved);
+        var resolved = await GetSourceTables(db, querySql);
+        Assert.Single(resolved);
+        Assert.Contains("ps_data_local__local_assets", resolved);
 
         for (int i = 0; i < 3; i++)
         {
@@ -787,19 +738,20 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         }
         Assert.Equal(3, lastCount);
 
-        await db.UpdateSchema(updatedSchema);
+        await db.UpdateSchema(TestSchema.MakeOptionalSyncSchema(true));
 
-        var updatedResolved = await GetSourceTables(db, querySql);
-        Assert.Contains("ps_data__assets_synced", updatedResolved);
-        Assert.DoesNotContain("ps_data_local__assets_local", updatedResolved);
+        resolved = await GetSourceTables(db, querySql);
+        Assert.Single(resolved);
+        Assert.Contains("ps_data__assets", resolved);
 
         Assert.True(await sem.WaitAsync(100));
         Assert.Equal(0, lastCount);
 
-        await db.Execute("insert into assets select * from assets_local_inactive");
+        await db.Execute("insert into assets select * from inactive_local_assets");
         Assert.True(await sem.WaitAsync(100));
         Assert.Equal(3, lastCount);
 
+        // Sanity check
         query.Dispose();
 
         await db.Execute("delete from assets");
