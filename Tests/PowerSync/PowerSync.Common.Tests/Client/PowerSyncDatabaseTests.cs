@@ -3,7 +3,7 @@ namespace PowerSync.Common.Tests.Client;
 using System.Diagnostics;
 
 using Microsoft.Data.Sqlite;
-
+using Newtonsoft.Json;
 using PowerSync.Common.Client;
 using PowerSync.Common.DB.Schema;
 
@@ -700,6 +700,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
             {
                 Name = "assets_local",
                 ViewName = "assets",
+                LocalOnly = true,
                 Columns =
                 {
                     ["make"] = ColumnType.Text,
@@ -711,6 +712,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
             {
                 Name = "assets_synced",
                 ViewName = "assets_synced_inactive",
+                LocalOnly = false,
                 Columns =
                 {
                     ["make"] = ColumnType.Text,
@@ -724,6 +726,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
             {
                 Name = "assets_local",
                 ViewName = "assets_local_inactive",
+                LocalOnly = true,
                 Columns =
                 {
                     ["make"] = ColumnType.Text,
@@ -734,6 +737,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
             {
                 Name = "assets_synced",
                 ViewName = "assets",
+                LocalOnly = false,
                 Columns =
                 {
                     ["make"] = ColumnType.Text,
@@ -755,7 +759,8 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         var sem = new SemaphoreSlim(0);
         long lastCount = -1;
 
-        var query = await db.Watch("SELECT COUNT(*) AS count FROM assets", [], new WatchHandler<CountResult>
+        string querySql = "SELECT COUNT(*) AS count FROM assets";
+        var query = await db.Watch(querySql, [], new WatchHandler<CountResult>
         {
             OnResult = (result) =>
             {
@@ -766,6 +771,10 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         });
         Assert.True(await sem.WaitAsync(100));
         Assert.Equal(0, lastCount);
+
+        var initialResolved = await GetSourceTables(db, querySql);
+        Assert.Contains("ps_data_local__assets_local", initialResolved);
+        Assert.DoesNotContain("ps_data__assets_synced", initialResolved);
 
         for (int i = 0; i < 3; i++)
         {
@@ -779,6 +788,11 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.Equal(3, lastCount);
 
         await db.UpdateSchema(updatedSchema);
+
+        var updatedResolved = await GetSourceTables(db, querySql);
+        Assert.Contains("ps_data__assets_synced", updatedResolved);
+        Assert.DoesNotContain("ps_data_local__assets_local", updatedResolved);
+
         Assert.True(await sem.WaitAsync(100));
         Assert.Equal(0, lastCount);
 
@@ -791,5 +805,35 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         await db.Execute("delete from assets");
         Assert.False(await sem.WaitAsync(100));
         Assert.Equal(3, lastCount);
+    }
+
+    private class ExplainedResult
+    {
+        public int addr = 0;
+        public string opcode = "";
+        public int p1 = 0;
+        public int p2 = 0;
+        public int p3 = 0;
+        public string p4 = "";
+        public int p5 = 0;
+    }
+    private record TableSelectResult(string tbl_name);
+    private async Task<List<string>> GetSourceTables(PowerSyncDatabase db, string sql, object?[]? parameters = null)
+    {
+        var explained = await db.GetAll<ExplainedResult>(
+            $"EXPLAIN {sql}", parameters
+        );
+
+        var rootPages = explained
+            .Where(row => row.opcode == "OpenRead" && row.p3 == 0)
+            .Select(row => row.p2)
+            .ToList();
+
+        var tables = await db.GetAll<TableSelectResult>(
+            "SELECT DISTINCT tbl_name FROM sqlite_master WHERE rootpage IN (SELECT json_each.value FROM json_each(?))",
+            [JsonConvert.SerializeObject(rootPages)]
+        );
+
+        return tables.Select(row => row.tbl_name).ToList();
     }
 }
