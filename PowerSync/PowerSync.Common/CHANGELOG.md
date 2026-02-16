@@ -3,6 +3,7 @@
 ## 0.0.10-alpha.1
 
 - Fix watched queries sometimes resolving to the wrong underlying tables after a schema change.
+- Fix some properties in Table not being public when they are meant to be.
 
 ## 0.0.9-alpha.1
 
