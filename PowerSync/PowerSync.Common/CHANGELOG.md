@@ -2,6 +2,8 @@
 
 ## 0.0.10-alpha.1
 
+- Fixed watched queries sometimes resolving to the wrong underlying tables after a schema change.
+- Fixed some properties in Table not being public when they are meant to be.
 - Fixed a bug where custom indexes were not being sent to the PowerSync SQLite extension.
 - Added a new model-based syntax for defining the PowerSync schema (the old syntax is still functional). This syntax uses classes marked with attributes to define the PowerSync schema. The classes can then also be used for queries later on.
 

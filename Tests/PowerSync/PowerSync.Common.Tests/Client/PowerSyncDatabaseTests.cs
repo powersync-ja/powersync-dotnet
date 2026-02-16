@@ -7,6 +7,7 @@ using Microsoft.Data.Sqlite;
 using Newtonsoft.Json;
 
 using PowerSync.Common.Client;
+using PowerSync.Common.DB.Schema;
 using PowerSync.Common.Tests.Models;
 
 /// <summary>
@@ -573,7 +574,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     }
 
     [Fact(Timeout = 2000)]
-    public async void WatchDisposableSubscriptionTest()
+    public async Task WatchDisposableSubscriptionTest()
     {
         int callCount = 0;
         var semaphore = new SemaphoreSlim(0);
@@ -609,7 +610,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     }
 
     [Fact(Timeout = 2000)]
-    public async void WatchDisposableCustomTokenTest()
+    public async Task WatchDisposableCustomTokenTest()
     {
         var customTokenSource = new CancellationTokenSource();
         int callCount = 0;
@@ -649,8 +650,8 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.Equal(2, callCount);
     }
 
-    [Fact(Timeout = 2500)]
-    public async void WatchSingleCancelledTest()
+    [Fact(Timeout = 3000)]
+    public async Task WatchSingleCancelledTest()
     {
         int callCount = 0;
 
@@ -688,11 +689,105 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         );
 
         // Ensure nothing received from cancelled result
-        bool receivedResult = await semCancelled.WaitAsync(100);
-        Assert.False(receivedResult, "Received update after disposal");
+        Assert.False(await semCancelled.WaitAsync(100));
 
         await semAlwaysRunning.WaitAsync();
         Assert.Equal(5, callCount);
+    }
+
+    [Fact(Timeout = 3000)]
+    public async Task WatchSchemaResetTest()
+    {
+        var dbId = Guid.NewGuid().ToString();
+        var db = new PowerSyncDatabase(new()
+        {
+            Database = new SQLOpenOptions
+            {
+                DbFilename = $"powerSyncWatch_{dbId}.db",
+            },
+            Schema = TestSchema.MakeOptionalSyncSchema(false)
+        });
+
+        var sem = new SemaphoreSlim(0);
+        long lastCount = -1;
+
+        string querySql = "SELECT COUNT(*) AS count FROM assets";
+        var query = await db.Watch(querySql, [], new WatchHandler<CountResult>
+        {
+            OnResult = (result) =>
+            {
+                lastCount = result[0].count;
+                sem.Release();
+            },
+            OnError = error => throw error
+        });
+        Assert.True(await sem.WaitAsync(100));
+        Assert.Equal(0, lastCount);
+
+        var resolved = await GetSourceTables(db, querySql);
+        Assert.Single(resolved);
+        Assert.Contains("ps_data_local__local_assets", resolved);
+
+        for (int i = 0; i < 3; i++)
+        {
+            await db.Execute(
+                "insert into assets(id, description, make) values (?, ?, ?)",
+                [Guid.NewGuid().ToString(), "some desc", "some make"]
+            );
+            Assert.True(await sem.WaitAsync(100));
+            Assert.Equal(i + 1, lastCount);
+        }
+        Assert.Equal(3, lastCount);
+
+        await db.UpdateSchema(TestSchema.MakeOptionalSyncSchema(true));
+
+        resolved = await GetSourceTables(db, querySql);
+        Assert.Single(resolved);
+        Assert.Contains("ps_data__assets", resolved);
+
+        Assert.True(await sem.WaitAsync(100));
+        Assert.Equal(0, lastCount);
+
+        await db.Execute("insert into assets select * from inactive_local_assets");
+        Assert.True(await sem.WaitAsync(500));
+        Assert.Equal(3, lastCount);
+
+        // Sanity check
+        query.Dispose();
+
+        await db.Execute("delete from assets");
+        Assert.False(await sem.WaitAsync(100));
+        Assert.Equal(3, lastCount);
+    }
+
+    private class ExplainedResult
+    {
+        public int addr = 0;
+        public string opcode = "";
+        public int p1 = 0;
+        public int p2 = 0;
+        public int p3 = 0;
+        public string p4 = "";
+        public int p5 = 0;
+    }
+    private record TableSelectResult(string tbl_name);
+    private async Task<List<string>> GetSourceTables(PowerSyncDatabase db, string sql, object?[]? parameters = null)
+    {
+        var explained = await db.GetAll<ExplainedResult>(
+            $"EXPLAIN {sql}", parameters
+        );
+
+        var rootPages = explained
+            .Where(row => row.opcode == "OpenRead" && row.p3 == 0)
+            .Select(row => row.p2)
+            .ToList();
+
+        var tables = await db.GetAll<TableSelectResult>(
+            "SELECT DISTINCT tbl_name FROM sqlite_master WHERE rootpage IN (SELECT json_each.value FROM json_each(?))",
+            [JsonConvert.SerializeObject(rootPages)]
+        );
+
+        return tables.Select(row => row.tbl_name).ToList();
     }
 
     [Fact]

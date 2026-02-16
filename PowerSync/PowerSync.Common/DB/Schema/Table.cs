@@ -84,22 +84,22 @@ public class Table
         get { return Options.InsertOnly; }
         set { Options.InsertOnly = value; }
     }
-    string? ViewName
+    public string? ViewName
     {
         get { return Options.ViewName; }
         set { Options.ViewName = value; }
     }
-    bool TrackMetadata
+    public bool TrackMetadata
     {
         get { return Options.TrackMetadata; }
         set { Options.TrackMetadata = value; }
     }
-    TrackPreviousOptions? TrackPreviousValues
+    public TrackPreviousOptions? TrackPreviousValues
     {
         get { return Options.TrackPreviousValues; }
         set { Options.TrackPreviousValues = value; }
     }
-    bool IgnoreEmptyUpdates
+    public bool IgnoreEmptyUpdates
     {
         get { return Options.IgnoreEmptyUpdates; }
         set { Options.IgnoreEmptyUpdates = value; }

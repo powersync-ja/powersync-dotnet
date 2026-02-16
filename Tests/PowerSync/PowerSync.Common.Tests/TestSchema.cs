@@ -89,4 +89,27 @@ public class TestSchema
 
         return new Schema(customAssets, Customers);
     }
+
+    public static Schema MakeOptionalSyncSchema(bool synced)
+    {
+        string SyncedName(string name) => synced ? name : $"inactice_synced_{name}";
+        string LocalName(string name) => synced ? $"inactive_local_{name}" : name;
+
+        return new Schema(
+            new Table
+            {
+                Name = "assets",
+                Columns = AssetsColumns,
+                ViewName = SyncedName("assets"),
+            },
+            new Table
+            {
+                Name = "local_assets",
+                Columns = AssetsColumns,
+                ViewName = LocalName("assets"),
+                LocalOnly = true,
+            }
+        );
+    }
 }
+
