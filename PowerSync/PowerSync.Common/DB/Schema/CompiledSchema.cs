@@ -1,7 +1,6 @@
 namespace PowerSync.Common.DB.Schema;
 
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 
 class CompiledSchema(Dictionary<string, CompiledTable> tables)
 {
@@ -27,13 +26,7 @@ class CompiledSchema(Dictionary<string, CompiledTable> tables)
     {
         var jsonObject = new
         {
-            tables = Tables.Select(kv =>
-            {
-                var json = JObject.Parse(kv.Value.ToJSON(kv.Key));
-                var orderedJson = new JObject { ["name"] = kv.Key };
-                orderedJson.Merge(json, new JsonMergeSettings { MergeArrayHandling = MergeArrayHandling.Concat });
-                return orderedJson;
-            }).ToList()
+            tables = Tables.Select(kvp => kvp.Value.ToJSONObject()).ToArray(),
         };
 
         return JsonConvert.SerializeObject(jsonObject);

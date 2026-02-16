@@ -8,6 +8,7 @@ using Newtonsoft.Json;
 
 using PowerSync.Common.Client;
 using PowerSync.Common.DB.Schema;
+using PowerSync.Common.Tests.Models;
 
 /// <summary>
 /// dotnet test -v n --framework net8.0 --filter "PowerSyncDatabaseTests"
@@ -86,11 +87,11 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     public async Task QueryWithNullParams()
     {
         var id = Guid.NewGuid().ToString();
-        var name = "Test user";
+        var description = "Test description";
 
         await db.Execute(
             "INSERT INTO assets(id, description, make) VALUES(?, ?, ?)",
-            [id, name, null]
+            [id, description, null]
         );
 
         var result = await db.GetAll<AssetResult>("SELECT id, description, make FROM assets");
@@ -98,7 +99,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.Single(result);
         var row = result.First();
         Assert.Equal(id, row.id);
-        Assert.Equal(name, row.description);
+        Assert.Equal(description, row.description);
         Assert.Null(row.make);
     }
 
@@ -573,7 +574,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     }
 
     [Fact(Timeout = 2000)]
-    public async void WatchDisposableSubscriptionTest()
+    public async Task WatchDisposableSubscriptionTest()
     {
         int callCount = 0;
         var semaphore = new SemaphoreSlim(0);
@@ -609,7 +610,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     }
 
     [Fact(Timeout = 2000)]
-    public async void WatchDisposableCustomTokenTest()
+    public async Task WatchDisposableCustomTokenTest()
     {
         var customTokenSource = new CancellationTokenSource();
         int callCount = 0;
@@ -650,7 +651,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     }
 
     [Fact(Timeout = 3000)]
-    public async void WatchSingleCancelledTest()
+    public async Task WatchSingleCancelledTest()
     {
         int callCount = 0;
 
@@ -688,7 +689,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         );
 
         // Ensure nothing received from cancelled result
-        Assert.False(await semCancelled.WaitAsync(200));
+        Assert.False(await semCancelled.WaitAsync(100));
 
         await semAlwaysRunning.WaitAsync();
         Assert.Equal(5, callCount);
@@ -720,7 +721,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
             },
             OnError = error => throw error
         });
-        Assert.True(await sem.WaitAsync(200));
+        Assert.True(await sem.WaitAsync(100));
         Assert.Equal(0, lastCount);
 
         var resolved = await GetSourceTables(db, querySql);
@@ -733,7 +734,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
                 "insert into assets(id, description, make) values (?, ?, ?)",
                 [Guid.NewGuid().ToString(), "some desc", "some make"]
             );
-            Assert.True(await sem.WaitAsync(200));
+            Assert.True(await sem.WaitAsync(100));
             Assert.Equal(i + 1, lastCount);
         }
         Assert.Equal(3, lastCount);
@@ -744,18 +745,18 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.Single(resolved);
         Assert.Contains("ps_data__assets", resolved);
 
-        Assert.True(await sem.WaitAsync(200));
+        Assert.True(await sem.WaitAsync(100));
         Assert.Equal(0, lastCount);
 
         await db.Execute("insert into assets select * from inactive_local_assets");
-        Assert.True(await sem.WaitAsync(200));
+        Assert.True(await sem.WaitAsync(500));
         Assert.Equal(3, lastCount);
 
         // Sanity check
         query.Dispose();
 
         await db.Execute("delete from assets");
-        Assert.False(await sem.WaitAsync(200));
+        Assert.False(await sem.WaitAsync(100));
         Assert.Equal(3, lastCount);
     }
 
@@ -787,5 +788,48 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         );
 
         return tables.Select(row => row.tbl_name).ToList();
+    }
+
+    [Fact]
+    public async Task Attributes_ColumnAliasing()
+    {
+        var db = new PowerSyncDatabase(new PowerSyncDatabaseOptions
+        {
+            Database = new SQLOpenOptions { DbFilename = "PowerSyncAttributesTest.db" },
+            Schema = TestSchemaAttributes.AppSchema,
+        });
+        await db.DisconnectAndClear();
+
+        var id = Guid.NewGuid().ToString();
+        var description = "Test description";
+        var completed = false;
+        var createdAt = DateTimeOffset.Now;
+
+        await db.Execute(
+            "INSERT INTO todos(id, description, completed, created_at, list_id) VALUES(?, ?, ?, ?, uuid())",
+            [id, description, completed, createdAt]
+        );
+
+        var results = await db.GetAll<Todo>("SELECT * FROM todos");
+        Assert.Single(results);
+        var row = results.First();
+        Assert.Equal(id, row.TodoId);
+        Assert.Equal(description, row.Description);
+        Assert.Equal(completed, row.Completed);
+        Assert.Equal(createdAt, row.CreatedAt);
+    }
+
+    [Fact]
+    public async Task IndexesCreatedOnTable()
+    {
+        dynamic[] result = await db.GetAll("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'ps_data__assets'");
+        Assert.Equal(2, result.Length);
+        Assert.Equal("sqlite_autoindex_ps_data__assets_1", result[0].name);
+        Assert.Equal("ps_data__assets__makemodel", result[1].name);
+
+        result = await db.GetAll("PRAGMA index_info('sqlite_autoindex_ps_data__assets_1')");
+        Assert.Single(result); // id
+        result = await db.GetAll("PRAGMA index_info('ps_data__assets__makemodel')");
+        Assert.Equal(2, result.Length); // make, model
     }
 }
