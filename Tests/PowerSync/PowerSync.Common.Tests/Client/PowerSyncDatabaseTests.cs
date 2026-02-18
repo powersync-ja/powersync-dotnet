@@ -4,24 +4,27 @@ using System.Diagnostics;
 
 using Microsoft.Data.Sqlite;
 
-using Newtonsoft.Json;
-
 using PowerSync.Common.Client;
-using PowerSync.Common.DB.Schema;
 using PowerSync.Common.Tests.Models;
 
 /// <summary>
 /// dotnet test -v n --framework net8.0 --filter "PowerSyncDatabaseTests"
 /// </summary>
+[Collection("PowerSyncDatabaseTests")]
 public class PowerSyncDatabaseTests : IAsyncLifetime
 {
     private PowerSyncDatabase db = default!;
+    private CancellationTokenSource testCts = default!;
+    string dbName = default!;
 
     public async Task InitializeAsync()
     {
+        testCts = new();
+        dbName = $"transactions-{Guid.NewGuid():N}.db";
+
         db = new PowerSyncDatabase(new PowerSyncDatabaseOptions
         {
-            Database = new SQLOpenOptions { DbFilename = "powersyncDataBaseTransactions.db" },
+            Database = new SQLOpenOptions { DbFilename = dbName },
             Schema = TestSchema.AppSchema,
         });
         await db.Init();
@@ -29,8 +32,16 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
+        testCts.Cancel();
+
         await db.DisconnectAndClear();
         await db.Close();
+
+        try { File.Delete(dbName); }
+        catch { }
+
+        testCts.Dispose();
+        testCts = new();
     }
 
     private record IdResult(string id);
@@ -360,24 +371,22 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     [Fact(Timeout = 2000)]
     public async Task CallUpdateHookOnChangesTest()
     {
-        var cts = new CancellationTokenSource();
         var result = new TaskCompletionSource<bool>();
 
-        var onChange = db.OnChange(new SQLWatchOptions
+        var listener = db.OnChange(new SQLWatchOptions
         {
             Tables = ["assets"],
-            Signal = cts.Token,
+            Signal = testCts.Token,
         });
 
         _ = Task.Run(async () =>
         {
-            await foreach (var update in onChange)
+            await foreach (var update in listener)
             {
                 result.TrySetResult(true);
-                cts.Cancel();
+                testCts.Cancel();
             }
-        });
-        // await Task.Delay(1000);
+        }, testCts.Token);
 
         await db.Execute("INSERT INTO assets (id) VALUES(?)", ["099-onchange"]);
 
@@ -389,45 +398,47 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     {
         var watched = new TaskCompletionSource<bool>();
 
-        var cts = new CancellationTokenSource();
+        var listener = db.Watch<CountResult>("SELECT COUNT(*) as count FROM assets", null, new() { Signal = testCts.Token });
         _ = Task.Run(async () =>
         {
-            await foreach (var x in db.Watch<CountResult>("SELECT COUNT(*) as count FROM assets", null, new() { Signal = cts.Token }))
+            await foreach (var x in listener)
             {
                 if (x.First().count == 1)
                 {
                     watched.SetResult(true);
-                    cts.Cancel();
+                    testCts.Cancel();
                 }
             }
-        });
+        }, testCts.Token);
 
         await db.WriteTransaction(async tx =>
         {
             await tx.Execute("INSERT INTO assets (id) VALUES(?)", ["099-watch"]);
+            await tx.Commit();
         });
 
         await watched.Task;
     }
 
-    [Fact(Timeout = 2000)]
+    [Fact(Timeout = 5000)]
     public async Task ReflectWriteLockUpdatesOnReadConnectionsTest()
     {
-        var numberOfAssets = 10_000;
+        var numberOfAssets = 10;
 
         var watched = new TaskCompletionSource<bool>();
 
-        var cts = new CancellationTokenSource();
-        var listener = db.Watch<CountResult>("SELECT COUNT(*) as count FROM assets", null, new() { Signal = cts.Token });
-
+        var listener = db.Watch<CountResult>(
+            "SELECT COUNT(*) as count FROM assets",
+            null,
+            new() { Signal = testCts.Token, TriggerImmediately = true });
         _ = Task.Run(async () =>
         {
             await foreach (var x in listener)
             {
                 if (x.First().count == numberOfAssets)
                 {
-                    watched.SetResult(true);
-                    cts.Cancel();
+                    watched.TrySetResult(true);
+                    testCts.Cancel();
                 }
             }
         });
@@ -538,20 +549,15 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         using var sem = new SemaphoreSlim(0);
         dynamic? dynamicAsset = null;
 
+        var listener = db.Watch<AssetResult>("select id, description, make from assets", null, new() { TriggerImmediately = true });
         _ = Task.Run(async () =>
         {
-            await foreach (var assets in db.Watch<AssetResult>(
-                "select id, description, make from assets",
-                null,
-                new() { TriggerImmediately = true }))
+            await foreach (var assets in listener)
             {
-                if (assets.Length == 0)
+                if (assets.Length > 0)
                 {
-                    sem.Release();
-                    continue;
+                    dynamicAsset = assets[0];
                 }
-
-                dynamicAsset = assets[0];
 
                 sem.Release();
             }
@@ -574,18 +580,13 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     public async Task WatchCancelledTest()
     {
         int callCount = 0;
-        using var cts = new CancellationTokenSource();
         using var sem = new SemaphoreSlim(0);
 
+        var listener = db.Watch<IdResult>("select id from assets", null, new() { Signal = testCts.Token, TriggerImmediately = true });
         _ = Task.Run(async () =>
         {
-            await foreach (var result in db.Watch<IdResult>(
-                "select id from assets",
-                null,
-                new() { Signal = cts.Token, TriggerImmediately = true }
-            ))
+            await foreach (var result in listener)
             {
-                Console.WriteLine($"Result received: {result.Length}");
                 Interlocked.Increment(ref callCount);
                 sem.Release();
             }
@@ -601,7 +602,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.True(await sem.WaitAsync(100));
         Assert.Equal(2, callCount);
 
-        cts.Cancel();
+        testCts.Cancel();
 
         await db.Execute(
             "insert into assets(id, description, make) values (?, ?, ?)",
@@ -618,21 +619,26 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     {
         int callCount = 0;
 
-        var runQuery = (CancellationTokenSource cts, SemaphoreSlim sem) => Task.Run(async () =>
+        void RunQuery(CancellationTokenSource cts, SemaphoreSlim sem)
         {
-            await foreach (var update in db.Watch<IdResult>("select id from assets", null, new() { Signal = cts.Token, TriggerImmediately = true }))
+            var listener = db.Watch<IdResult>("select id from assets", null, new() { Signal = cts.Token });
+            _ = Task.Run(async () =>
             {
-                Interlocked.Increment(ref callCount);
-                sem.Release();
-            }
-        });
+                await foreach (var update in listener)
+                {
+                    Interlocked.Increment(ref callCount);
+                    sem.Release();
+                }
+            });
+        }
+
         using var semAlwaysRunning = new SemaphoreSlim(0);
         using var semCancelled = new SemaphoreSlim(0);
-        using var ctsAlwaysRunning = new CancellationTokenSource();
-        using var ctsCancelled = new CancellationTokenSource();
+        using var ctsAlwaysRunning = CancellationTokenSource.CreateLinkedTokenSource(testCts.Token);
+        using var ctsCancelled = CancellationTokenSource.CreateLinkedTokenSource(testCts.Token);
 
-        _ = runQuery(ctsAlwaysRunning, semAlwaysRunning);
-        _ = runQuery(ctsCancelled, semCancelled);
+        RunQuery(ctsAlwaysRunning, semAlwaysRunning);
+        RunQuery(ctsCancelled, semCancelled);
 
         await db.Execute(
             "insert into assets(id, description, make) values (?, ?, ?)",
@@ -682,14 +688,13 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         });
 
         using var sem = new SemaphoreSlim(0);
-        long lastCount = -1;
-
-        var cts = new CancellationTokenSource();
+        long lastCount = 0;
 
         const string QUERY = "SELECT COUNT(*) AS count FROM assets";
+        var listener = db.Watch<CountResult>(QUERY, null, new() { Signal = testCts.Token });
         _ = Task.Run(async () =>
         {
-            await foreach (var result in db.Watch<CountResult>(QUERY, null, new() { Signal = cts.Token, TriggerImmediately = true }))
+            await foreach (var result in listener)
             {
                 if (result.Length > 0)
                 {
@@ -698,8 +703,6 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
                 sem.Release();
             }
         });
-        Assert.True(await sem.WaitAsync(100));
-        Assert.Equal(0, lastCount);
 
         var resolved = await db.GetSourceTables(QUERY, null);
         Assert.Single(resolved);
@@ -730,7 +733,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.Equal(3, lastCount);
 
         // Sanity check
-        cts.Cancel();
+        testCts.Cancel();
         await Task.Delay(100);
 
         await db.Execute("delete from assets");

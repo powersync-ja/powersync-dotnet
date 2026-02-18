@@ -806,7 +806,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         return internalName;
     }
 
-    public async IAsyncEnumerable<T[]> Watch<T>(
+    public IAsyncEnumerable<T[]> Watch<T>(
         string sql,
         object?[]? parameters = null,
         SQLWatchOptions? options = null
@@ -819,6 +819,24 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
             ? CancellationTokenSource.CreateLinkedTokenSource(masterCts.Token, options.Signal.Value)
             : CancellationTokenSource.CreateLinkedTokenSource(masterCts.Token);
 
+        // Establish the initial DB listener synchronously before returning the IAsyncEnumerable,
+        // so that table changes between Watch() being called and iteration starting are not missed.
+        // This mirrors the pattern used in OnChange().
+        var initialRestartCts = CancellationTokenSource.CreateLinkedTokenSource(signal.Token);
+        var initialListener = Database.ListenAsync(initialRestartCts.Token);
+
+        return WatchCore<T>(sql, parameters, options, signal, initialRestartCts, initialListener);
+    }
+
+    private async IAsyncEnumerable<T[]> WatchCore<T>(
+        string sql,
+        object?[]? parameters,
+        SQLWatchOptions options,
+        CancellationTokenSource signal,
+        CancellationTokenSource initialRestartCts,
+        IAsyncEnumerable<DBAdapterEvent> initialListener
+    )
+    {
         var schemaChanged = new TaskCompletionSource<bool>();
 
         // Listen for schema changes in the background
@@ -837,10 +855,13 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
 
         // Re-register query on schema updates
         bool isRestart = false;
+        var currentRestartCts = initialRestartCts;
+        var currentListener = initialListener;
+
         while (!signal.Token.IsCancellationRequested)
         {
             // Resolve tables
-            HashSet<string> powersyncTables = new();
+            HashSet<string> powersyncTables;
             if (options?.Tables != null)
             {
                 powersyncTables = [.. options
@@ -853,14 +874,12 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
                 powersyncTables = await GetSourceTables(sql, parameters);
             }
 
-            // Register new token for the current schema reset
-            using var restartCts = CancellationTokenSource.CreateLinkedTokenSource(signal.Token);
-
             var enumerator = OnRawTableChange(
                 powersyncTables,
-                restartCts.Token,
+                currentListener,
+                currentRestartCts.Token,
                 isRestart || options?.TriggerImmediately == true
-            ).GetAsyncEnumerator(restartCts.Token);
+            ).GetAsyncEnumerator(currentRestartCts.Token);
 
             // Continually wait for either OnChange or SchemaChanged to fire
             while (true)
@@ -871,11 +890,16 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
 
                 if (completedTask == currentSchemaTask)
                 {
-                    restartCts.Cancel();
+                    currentRestartCts.Cancel();
                     isRestart = true;
                     // Let the current task complete/cancel gracefully
                     try { await onChangeTask; }
                     catch (OperationCanceledException) { }
+
+                    // Establish a new listener BEFORE resolving source tables in the next iteration,
+                    // so that changes during the async GetSourceTables call are not missed.
+                    currentRestartCts = CancellationTokenSource.CreateLinkedTokenSource(signal.Token);
+                    currentListener = Database.ListenAsync(currentRestartCts.Token);
 
                     break;
                 }
@@ -922,6 +946,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
 
     private async IAsyncEnumerable<WatchOnChangeEvent> OnRawTableChange(
         HashSet<string> watchedTables,
+        IAsyncEnumerable<DBAdapterEvent> listener,
         [EnumeratorCancellation] CancellationToken token,
         bool triggerImmediately = false
     )
@@ -932,7 +957,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         }
 
         HashSet<string> changedTables = new();
-        await foreach (var e in Database.ListenAsync(token))
+        await foreach (var e in listener)
         {
             if (e.TablesUpdated != null)
             {
