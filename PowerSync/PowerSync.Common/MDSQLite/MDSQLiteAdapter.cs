@@ -31,6 +31,7 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
 
     protected RequiredMDSQLiteOptions resolvedMDSQLiteOptions;
     private CancellationTokenSource? tablesUpdatedCts;
+    private Task? tablesUpdatedTask;
 
     private readonly AsyncLock writeMutex = new();
     private readonly AsyncLock readMutex = new();
@@ -86,11 +87,7 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
 
         foreach (var statement in writeConnectionStatements)
         {
-            for (int tries = 0; tries < 30; tries++)
-            {
-                await writeConnection!.Execute(statement);
-                tries = 30;
-            }
+            await writeConnection!.Execute(statement);
         }
 
         foreach (var statement in readConnectionStatements)
@@ -99,9 +96,9 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
         }
 
         tablesUpdatedCts = new CancellationTokenSource();
-        var _ = Task.Run(() =>
+        tablesUpdatedTask = Task.Run(async () =>
         {
-            foreach (var notification in writeConnection!.Listen(tablesUpdatedCts.Token))
+            await foreach (var notification in writeConnection!.ListenAsync(tablesUpdatedCts.Token))
             {
                 if (notification.TablesUpdated != null)
                 {
@@ -139,6 +136,7 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
     public new void Close()
     {
         tablesUpdatedCts?.Cancel();
+        try { tablesUpdatedTask?.Wait(TimeSpan.FromSeconds(2)); } catch { }
         base.Close();
         writeConnection?.Close();
         readConnection?.Close();

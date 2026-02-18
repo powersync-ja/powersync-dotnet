@@ -212,7 +212,6 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvent>, ILockContext
         DynamicParameters? dynamicParams = PrepareQuery(ref query, parameters);
         int rowsAffected = await Db.ExecuteAsync(query, dynamicParams, commandType: CommandType.Text);
 
-        FlushUpdates();
         return new NonQueryResult
         {
             InsertId = raw.sqlite3_last_insert_rowid(Db.Handle),

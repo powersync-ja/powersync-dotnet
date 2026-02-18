@@ -33,14 +33,15 @@ public class MockSyncService : EventStream<string>
         Emit(line);
     }
 
-    public PowerSyncDatabase CreateDatabase()
+    public PowerSyncDatabase CreateDatabase(string? dbFilename = null)
     {
+        dbFilename ??= $"sync-stream-{Guid.NewGuid():N}.db";
         var connector = new TestConnector();
         var mockRemote = new MockRemote(connector, this, _requests);
 
         return new PowerSyncDatabase(new PowerSyncDatabaseOptions
         {
-            Database = new SQLOpenOptions { DbFilename = "sync-stream.db" },
+            Database = new SQLOpenOptions { DbFilename = dbFilename },
             Schema = TestSchemaTodoList.AppSchema,
             RemoteFactory = _ => mockRemote,
             Logger = createLogger()
@@ -163,13 +164,22 @@ public class MockRemote : Remote
         var pipe = new Pipe();
         var writer = pipe.Writer;
 
-        var cts = new CancellationTokenSource();
+        var cts = CancellationTokenSource.CreateLinkedTokenSource(options.CancellationToken);
         _ = Task.Run(async () =>
         {
-            await foreach (var line in syncService.ListenAsync(cts.Token))
+            try
             {
-                var bytes = Encoding.UTF8.GetBytes(line + "\n");
-                await writer.WriteAsync(bytes);
+                await foreach (var line in syncService.ListenAsync(cts.Token))
+                {
+                    var bytes = Encoding.UTF8.GetBytes(line + "\n");
+                    await writer.WriteAsync(bytes);
+                }
+            }
+            finally
+            {
+                await writer.CompleteAsync();
+                cts.Cancel();
+                cts.Dispose();
             }
         });
 

@@ -286,18 +286,22 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         }
 
         var tcs = new TaskCompletionSource<bool>();
-        var cts = new CancellationTokenSource();
+        var cts = CancellationTokenSource.CreateLinkedTokenSource(masterCts.Token);
 
-        _ = Task.Run(() =>
+        _ = Task.Run(async () =>
         {
-            foreach (var update in Listen(cts.Token))
+            try
             {
-                if (update.StatusChanged != null && predicate(update.StatusChanged))
+                await foreach (var update in ListenAsync(cts.Token))
                 {
-                    cts.Cancel();
-                    tcs.TrySetResult(true);
+                    if (update.StatusChanged != null && predicate(update.StatusChanged))
+                    {
+                        cts.Cancel();
+                        tcs.TrySetResult(true);
+                    }
                 }
             }
+            catch (OperationCanceledException) { }
         });
 
         cancellationToken?.Register(() =>
