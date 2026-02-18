@@ -20,15 +20,17 @@ public partial class ListsPage
     {
         base.OnAppearing();
 
-        database.Db.RunListener((update) =>
+        _ = Task.Run(async () =>
         {
-            if (update.StatusChanged != null)
+            await foreach (var update in database.Db.ListenAsync(new CancellationToken()))
             {
-                MainThread.BeginInvokeOnMainThread(() =>
+                if (update.StatusChanged != null)
                 {
-                    WifiStatusItem.IconImageSource = update.StatusChanged.Connected ? "wifi.png" : "wifi_off.png";
-                });
-
+                    MainThread.BeginInvokeOnMainThread(() =>
+                    {
+                        WifiStatusItem.IconImageSource = update.StatusChanged.Connected ? "wifi.png" : "wifi_off.png";
+                    });
+                }
             }
         });
 

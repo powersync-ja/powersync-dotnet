@@ -122,11 +122,14 @@ class Demo
         };
         var connected = false;
 
-        db.RunListener((update) =>
+        _ = Task.Run(async () =>
         {
-            if (update.StatusChanged != null)
+            await foreach (var update in db.ListenAsync(new CancellationToken()))
             {
-                connected = update.StatusChanged.Connected;
+                if (update.StatusChanged != null)
+                {
+                    connected = update.StatusChanged.Connected;
+                }
             }
         });
 

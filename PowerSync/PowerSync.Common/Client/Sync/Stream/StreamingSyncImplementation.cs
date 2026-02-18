@@ -457,16 +457,19 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
             controlInvocations = new EventStream<EnqueuedCommand>();
             try
             {
-                controlInvocations?.RunListenerAsync(async (line) =>
+                _ = Task.Run(async () =>
                 {
-                    await Control(line.Command, line.Payload);
-
-                    // Triggers a local CRUD upload when the first sync line has been received.
-                    // This allows uploading local changes that have been made while offline or disconnected.
-                    if (!hadSyncLine)
+                    await foreach (var line in controlInvocations.ListenAsync(new CancellationToken()))
                     {
-                        TriggerCrudUpload();
-                        hadSyncLine = true;
+                        await Control(line.Command, line.Payload);
+
+                        // Triggers a local CRUD upload when the first sync line has been received.
+                        // This allows uploading local changes that have been made while offline or disconnected.
+                        if (!hadSyncLine)
+                        {
+                            TriggerCrudUpload();
+                            hadSyncLine = true;
+                        }
                     }
                 });
 

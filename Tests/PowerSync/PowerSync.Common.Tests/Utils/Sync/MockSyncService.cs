@@ -60,14 +60,17 @@ public class MockSyncService : EventStream<string>
     public static async Task<SyncStatus> NextStatus(PowerSyncDatabase db)
     {
         var tcs = new TaskCompletionSource<SyncStatus>();
-        CancellationTokenSource? cts = null;
+        var cts = new CancellationTokenSource();
 
-        cts = db.RunListenerAsync(async (update) =>
+        _ = Task.Run(async () =>
         {
-            if (update.StatusChanged != null)
+            await foreach (var update in db.ListenAsync(cts.Token))
             {
-                tcs.TrySetResult(update.StatusChanged);
-                cts?.Cancel();
+                if (update.StatusChanged != null)
+                {
+                    tcs.TrySetResult(update.StatusChanged);
+                    cts?.Cancel();
+                }
             }
         });
 
@@ -160,10 +163,14 @@ public class MockRemote : Remote
         var pipe = new Pipe();
         var writer = pipe.Writer;
 
-        var x = syncService.RunListenerAsync(async (line) =>
+        var cts = new CancellationTokenSource();
+        _ = Task.Run(async () =>
         {
-            var bytes = Encoding.UTF8.GetBytes(line + "\n");
-            await writer.WriteAsync(bytes);
+            await foreach (var line in syncService.ListenAsync(cts.Token))
+            {
+                var bytes = Encoding.UTF8.GetBytes(line + "\n");
+                await writer.WriteAsync(bytes);
+            }
         });
 
         return pipe.Reader.AsStream();
