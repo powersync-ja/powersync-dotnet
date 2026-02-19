@@ -34,15 +34,12 @@ public partial class ListsPage
             }
         });
 
-        await database.Db.Watch("select * from lists", null, new WatchHandler<TodoList>
+        var listener = database.Db.Watch<TodoList>("select * from lists", null, new() { TriggerImmediately = true });
+        _ = Task.Run(async () =>
         {
-            OnResult = (results) =>
+            await foreach (var results in listener)
             {
                 MainThread.BeginInvokeOnMainThread(() => { ListsCollection.ItemsSource = results.ToList(); });
-            },
-            OnError = (error) =>
-            {
-                Console.WriteLine("Error: " + error.Message);
             }
         });
     }

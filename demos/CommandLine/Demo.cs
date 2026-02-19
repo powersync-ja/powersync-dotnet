@@ -67,23 +67,20 @@ class Demo
 
         bool running = true;
 
-        await db.Watch("select * from lists", null, new WatchHandler<ListResult>
+        var listener = db.Watch<ListResult>("select * from lists");
+        _ = Task.Run(async () =>
         {
-            OnResult = (results) =>
+            await foreach (var results in listener)
             {
                 table.Rows.Clear();
                 foreach (var line in results)
                 {
                     table.AddRow(line.id, line.name, line.owner_id, line.created_at);
                 }
-            },
-            OnError = (error) =>
-            {
-                Console.WriteLine("Error: " + error.Message);
             }
         });
 
-        var _ = Task.Run(async () =>
+        _ = Task.Run(async () =>
          {
              while (running)
              {

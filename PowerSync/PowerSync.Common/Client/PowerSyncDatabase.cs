@@ -1009,12 +1009,6 @@ public class SQLWatchOptions
     public bool TriggerImmediately { get; set; } = false;
 }
 
-public class WatchHandler<T>
-{
-    public Action<T[]> OnResult { get; set; } = null!;
-    public Action<Exception>? OnError { get; set; }
-}
-
 public class WatchOnChangeEvent
 {
     public string[] ChangedTables { get; set; } = [];
