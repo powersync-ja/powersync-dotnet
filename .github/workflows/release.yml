@@ -76,16 +76,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "PowerSync.Common@${{ env.COMMON_VERSION }}" \
+            --prerelease \
+            --draft \
             --title "PowerSync.Common@${{ env.COMMON_VERSION }}" \
             --target main
             --generate-notes \
-            --prerelease \
-            --draft \
             ${{ github.workspace }}/output/PowerSync.Common*.nupkg
           gh release create "PowerSync.Maui@${{ env.MAUI_VERSION }}" \
+            --prerelease \
+            --draft \
             --title "PowerSync.Maui@${{ env.MAUI_VERSION }}" \
             --target main
             --generate-notes \
-            --prerelease \
-            --draft \
             ${{ github.workspace }}/output/PowerSync.Maui*.nupkg
