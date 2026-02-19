@@ -78,12 +78,14 @@ jobs:
           gh release create "PowerSync.Common@${{ env.COMMON_VERSION }}" \
             --title "PowerSync.Common@${{ env.COMMON_VERSION }}" \
             --notes-file /tmp/release_notes_common.md \
+            --target ${{ github.sha }} \
             --prerelease \
             --draft \
             ${{ github.workspace }}/output/PowerSync.Common*.nupkg
           gh release create "PowerSync.Maui@${{ env.MAUI_VERSION }}" \
             --title "PowerSync.Maui@${{ env.MAUI_VERSION }}" \
             --notes-file /tmp/release_notes_maui.md \
+            --target ${{ github.sha }} \
             --prerelease \
             --draft \
             ${{ github.workspace }}/output/PowerSync.Maui*.nupkg
