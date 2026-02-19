@@ -12,14 +12,21 @@ get_package_version() {
     grep "\\S" "$1" | sed -n '2p' | awk '{print $2}'
 }
 
+nuget_link() {
+    printf "https://www.nuget.org/packages/%s/%s\n" "$1" "$2"
+}
+
 release_notes() {
-    # Print package name and version
     package_name=$(get_package_name "$1")
     package_version=$(get_package_version "$1")
-    printf "# %s v%s\n\n" "$package_name" "$package_version"
 
     # Print changelog items
+    printf "# Changelog\n\n"
     get_changelog_items "$1"
+
+    # Print package link
+    printf "\n# Links\n\n"
+    nuget_link "$package_name" "$package_version"
 }
 
 release_notes "$1"
