@@ -7,7 +7,7 @@ jobs:
   release:
     name: Release
     runs-on: macos-latest
-    if: github.ref == 'refs/heads/main'
+    # if: github.ref == 'refs/heads/main'
 
     steps:
       - name: Checkout Repository
@@ -18,24 +18,25 @@ jobs:
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: "8.0.x"
 
       - name: Install MAUI Workloads
         run: dotnet workload restore
 
       - name: Download PowerSync extension
-        run: dotnet run --project Tools/Setup    
+        run: dotnet run --project Tools/Setup
 
       - name: Restore dependencies
         run: dotnet restore
-      
+
       - name: Extract Common Package Version from CHANGELOG.md
         id: extract_version
         shell: bash
         run: |
           VERSION=$(awk '/^## [0-9]+\.[0-9]+\.[0-9]+/ {print $2; exit}' PowerSync/PowerSync.Common/CHANGELOG.md)
           echo "Detected Version: $VERSION"
-          echo "VERSION=$VERSION" >> $GITHUB_ENV 
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "COMMON_VERSION=$VERSION" >> $GITHUB_ENV
 
       - name: Run Pack for Common
         run: dotnet pack PowerSync/PowerSync.Common -c Release -o ${{ github.workspace }}/output
@@ -51,7 +52,8 @@ jobs:
           MAUI_VERSION=$(awk '/^## [0-9]+\.[0-9]+\.[0-9]+/ {print $2; exit}' PowerSync/PowerSync.Maui/CHANGELOG.md)
           echo "Detected Version: $MAUI_VERSION"
           echo "VERSION=$MAUI_VERSION" >> $GITHUB_ENV
-          
+          echo "MAUI_VERSION=$MAUI_VERSION" >> $GITHUB_ENV
+
       - name: Build MAUI Project
         run: dotnet build PowerSync/PowerSync.Maui -c Release
 
@@ -61,3 +63,27 @@ jobs:
       - name: Run Push For MAUI
         continue-on-error: true
         run: dotnet nuget push ${{ github.workspace }}/output/PowerSync.Maui*.nupkg --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }}
+
+      - name: Generate Release Notes
+        shell: bash
+        run: |
+          chmod +x ./Scripts/gen_release_notes.sh
+          ./Scripts/gen_release_notes.sh PowerSync/PowerSync.Common/CHANGELOG.md > /tmp/release_notes_common.md
+          ./Scripts/gen_release_notes.sh PowerSync/PowerSync.Maui/CHANGELOG.md > /tmp/release_notes_maui.md
+
+      - name: Create GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "PowerSync.Common@${{ env.COMMON_VERSION }}" \
+            --title "PowerSync.Common@${{ env.COMMON_VERSION }}" \
+            --notes-file /tmp/release_notes_common.md \
+            --prerelease \
+            --draft \
+            ${{ github.workspace }}/output/PowerSync.Common*.nupkg
+          gh release create "PowerSync.Maui@${{ env.MAUI_VERSION }}" \
+            --title "PowerSync.Maui@${{ env.MAUI_VERSION }}" \
+            --notes-file /tmp/release_notes_maui.md \
+            --prerelease \
+            --draft \
+            ${{ github.workspace }}/output/PowerSync.Maui*.nupkg
