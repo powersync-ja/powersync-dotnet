@@ -1,7 +1,7 @@
 # The version is pulled from the CHANGELOG.md file of the package.
 name: Release
 
-on: workflow_dispatch
+on: pull_request
 
 jobs:
   release:
