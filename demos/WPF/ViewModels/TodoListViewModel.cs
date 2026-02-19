@@ -147,32 +147,25 @@ namespace PowersyncDotnetTodoList.ViewModels
                     last_completed_at DESC NULLS LAST;
                 ";
 
-            await _db.Watch(
-                query,
-                null,
-                new WatchHandler<TodoListWithStats>
+            var listener = _db.Watch<TodoListWithStats>(query);
+            _ = Task.Run(async () =>
+            {
+                await foreach (var results in listener)
                 {
-                    OnResult = (results) =>
+                    var dispatcher = System.Windows.Application.Current?.Dispatcher;
+                    if (dispatcher != null)
                     {
-                        var dispatcher = System.Windows.Application.Current?.Dispatcher;
-                        if (dispatcher != null)
+                        dispatcher.Invoke(() =>
                         {
-                            dispatcher.Invoke(() =>
+                            TodoLists.Clear();
+                            foreach (var result in results)
                             {
-                                TodoLists.Clear();
-                                foreach (var result in results)
-                                {
-                                    TodoLists.Add(result);
-                                }
-                            });
-                        }
-                    },
-                    OnError = (error) =>
-                    {
-                        Console.WriteLine("Error: " + error.Message);
-                    },
+                                TodoLists.Add(result);
+                            }
+                        });
+                    }
                 }
-            );
+            });
         }
 
         private async Task AddList(string newListName)

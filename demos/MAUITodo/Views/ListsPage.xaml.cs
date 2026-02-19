@@ -20,27 +20,26 @@ public partial class ListsPage
     {
         base.OnAppearing();
 
-        database.Db.RunListener((update) =>
+        _ = Task.Run(async () =>
         {
-            if (update.StatusChanged != null)
+            await foreach (var update in database.Db.ListenAsync(new CancellationToken()))
             {
-                MainThread.BeginInvokeOnMainThread(() =>
+                if (update.StatusChanged != null)
                 {
-                    WifiStatusItem.IconImageSource = update.StatusChanged.Connected ? "wifi.png" : "wifi_off.png";
-                });
-
+                    MainThread.BeginInvokeOnMainThread(() =>
+                    {
+                        WifiStatusItem.IconImageSource = update.StatusChanged.Connected ? "wifi.png" : "wifi_off.png";
+                    });
+                }
             }
         });
 
-        await database.Db.Watch("select * from lists", null, new WatchHandler<TodoList>
+        var listener = database.Db.Watch<TodoList>("select * from lists", null, new() { TriggerImmediately = true });
+        _ = Task.Run(async () =>
         {
-            OnResult = (results) =>
+            await foreach (var results in listener)
             {
                 MainThread.BeginInvokeOnMainThread(() => { ListsCollection.ItemsSource = results.ToList(); });
-            },
-            OnError = (error) =>
-            {
-                Console.WriteLine("Error: " + error.Message);
             }
         });
     }

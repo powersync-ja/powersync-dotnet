@@ -1,6 +1,7 @@
 namespace PowerSync.Common.Tests.Client.Sync;
 
 using PowerSync.Common.Client;
+using PowerSync.Common.Tests.Utils;
 using PowerSync.Common.Tests.Utils.Sync;
 
 
@@ -21,9 +22,10 @@ public class SyncTests : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        syncService.Close();
         await db.DisconnectAndClear();
+        syncService.Close();
         await db.Close();
+        DatabaseUtils.CleanDb(db.Database.Name);
     }
 
     private readonly string[] syncInitialWithListCreation = [

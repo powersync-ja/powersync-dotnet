@@ -67,23 +67,20 @@ class Demo
 
         bool running = true;
 
-        await db.Watch("select * from lists", null, new WatchHandler<ListResult>
+        var listener = db.Watch<ListResult>("select * from lists");
+        _ = Task.Run(async () =>
         {
-            OnResult = (results) =>
+            await foreach (var results in listener)
             {
                 table.Rows.Clear();
                 foreach (var line in results)
                 {
                     table.AddRow(line.id, line.name, line.owner_id, line.created_at);
                 }
-            },
-            OnError = (error) =>
-            {
-                Console.WriteLine("Error: " + error.Message);
             }
         });
 
-        var _ = Task.Run(async () =>
+        _ = Task.Run(async () =>
          {
              while (running)
              {
@@ -122,11 +119,14 @@ class Demo
         };
         var connected = false;
 
-        db.RunListener((update) =>
+        _ = Task.Run(async () =>
         {
-            if (update.StatusChanged != null)
+            await foreach (var update in db.ListenAsync(new CancellationToken()))
             {
-                connected = update.StatusChanged.Connected;
+                if (update.StatusChanged != null)
+                {
+                    connected = update.StatusChanged.Connected;
+                }
             }
         });
 

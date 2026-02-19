@@ -24,15 +24,12 @@ public partial class TodoListPage
     {
         base.OnAppearing();
 
-        await database.Db.Watch("select * from todos where list_id = ?", [selectedList.ID], new WatchHandler<TodoItem>
+        var listener = database.Db.Watch<TodoItem>("select * from todos where list_id = ?", [selectedList.ID], new() { TriggerImmediately = true });
+        _ = Task.Run(async () =>
         {
-            OnResult = (results) =>
+            await foreach (var results in listener)
             {
                 MainThread.BeginInvokeOnMainThread(() => { TodoItemsCollection.ItemsSource = results.ToList(); });
-            },
-            OnError = (error) =>
-            {
-                Console.WriteLine("Error: " + error.Message);
             }
         });
     }

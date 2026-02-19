@@ -105,32 +105,25 @@ namespace PowersyncDotnetTodoList.ViewModels
 
         private async void WatchForChanges()
         {
-            await _db.Watch(
-                "SELECT * FROM todos where list_id = ? ORDER BY created_at;",
-                [_list!.Id],
-                new WatchHandler<Todo>
+            var listener = _db.Watch<Todo>("SELECT * FROM todos where list_id = ? ORDER BY created_at;", [_list!.Id]);
+            _ = Task.Run(async () =>
+            {
+                await foreach (var results in listener)
                 {
-                    OnResult = (results) =>
+                    var dispatcher = System.Windows.Application.Current?.Dispatcher;
+                    if (dispatcher != null)
                     {
-                        var dispatcher = System.Windows.Application.Current?.Dispatcher;
-                        if (dispatcher != null)
+                        dispatcher.Invoke(() =>
                         {
-                            dispatcher.Invoke(() =>
+                            Todos.Clear();
+                            foreach (var result in results)
                             {
-                                Todos.Clear();
-                                foreach (var result in results)
-                                {
-                                    Todos.Add(result);
-                                }
-                            });
-                        }
-                    },
-                    OnError = (error) =>
-                    {
-                        Console.WriteLine("Error: " + error.Message);
-                    },
+                                Todos.Add(result);
+                            }
+                        });
+                    }
                 }
-            );
+            });
         }
 
         private async void LoadTodos()

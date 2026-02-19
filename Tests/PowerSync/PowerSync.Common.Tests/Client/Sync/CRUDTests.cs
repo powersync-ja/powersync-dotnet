@@ -17,7 +17,7 @@ public class CRUDTests : IAsyncLifetime
 {
     private PowerSyncDatabase db = default!;
     private readonly string testId = Guid.NewGuid().ToString();
-    private readonly string dbName = "crud-test.db";
+    private readonly string dbName = $"crud-{Guid.NewGuid():N}.db";
 
     private record CrudEntryData(string data);
 
@@ -47,50 +47,69 @@ public class CRUDTests : IAsyncLifetime
     [Fact]
     public async Task IncludeMetadataTest()
     {
+        var localDbName = $"IncludeMetadataTest-{Guid.NewGuid():N}.db";
         var db = new PowerSyncDatabase(new PowerSyncDatabaseOptions
         {
-            Database = new SQLOpenOptions { DbFilename = "IncludeMetadataTest.db" },
+            Database = new SQLOpenOptions { DbFilename = localDbName },
             Schema = TestSchema.GetSchemaWithCustomAssetOptions(new TableOptions
             {
                 TrackMetadata = true
             }),
         });
-        await ResetDB(db);
+        try
+        {
+            await ResetDB(db);
 
-        await db.Execute("INSERT INTO assets (id, description, _metadata) VALUES(uuid(), 'xxxx', 'so meta');");
+            await db.Execute("INSERT INTO assets (id, description, _metadata) VALUES(uuid(), 'xxxx', 'so meta');");
 
-        var batch = await db.GetNextCrudTransaction();
-        Assert.Equal("so meta", batch?.Crud[0].Metadata);
+            var batch = await db.GetNextCrudTransaction();
+            Assert.Equal("so meta", batch?.Crud[0].Metadata);
+        }
+        finally
+        {
+            await db.Close();
+            DatabaseUtils.CleanDb(localDbName);
+        }
     }
 
     [Fact]
     public async Task IncludeOldValuesTest()
     {
+        var localDbName = $"IncludeOldValuesTest-{Guid.NewGuid():N}.db";
         var db = new PowerSyncDatabase(new PowerSyncDatabaseOptions
         {
-            Database = new SQLOpenOptions { DbFilename = "IncludeOldValuesTest.db" },
+            Database = new SQLOpenOptions { DbFilename = localDbName },
             Schema = TestSchema.GetSchemaWithCustomAssetOptions(new TableOptions
             {
                 TrackPreviousValues = new TrackPreviousOptions()
             }),
         });
-        await ResetDB(db);
+        try
+        {
+            await ResetDB(db);
 
-        await db.Execute("INSERT INTO assets (id, description) VALUES(?, ?);", ["a185b7e1-dffa-4a9a-888c-15c0f0cac4b3", "entry"]);
-        await db.Execute("DELETE FROM ps_crud;");
-        await db.Execute("UPDATE assets SET description = ?", ["new name"]);
+            await db.Execute("INSERT INTO assets (id, description) VALUES(?, ?);", ["a185b7e1-dffa-4a9a-888c-15c0f0cac4b3", "entry"]);
+            await db.Execute("DELETE FROM ps_crud;");
+            await db.Execute("UPDATE assets SET description = ?", ["new name"]);
 
-        var batch = await db.GetNextCrudTransaction();
-        Assert.True(batch?.Crud[0].PreviousValues?.ContainsKey("description"));
-        Assert.Equal("entry", batch?.Crud[0].PreviousValues?["description"]);
+            var batch = await db.GetNextCrudTransaction();
+            Assert.True(batch?.Crud[0].PreviousValues?.ContainsKey("description"));
+            Assert.Equal("entry", batch?.Crud[0].PreviousValues?["description"]);
+        }
+        finally
+        {
+            await db.Close();
+            DatabaseUtils.CleanDb(localDbName);
+        }
     }
 
     [Fact]
     public async Task IncludeOldValuesWithColumnFilterTest()
     {
+        var localDbName = $"IncludeOldValuesWithColumnFilterTest-{Guid.NewGuid():N}.db";
         var db = new PowerSyncDatabase(new PowerSyncDatabaseOptions
         {
-            Database = new SQLOpenOptions { DbFilename = "IncludeOldValuesWithColumnFilterTest.db" },
+            Database = new SQLOpenOptions { DbFilename = localDbName },
             Schema = TestSchema.GetSchemaWithCustomAssetOptions(new TableOptions
             {
                 TrackPreviousValues = new TrackPreviousOptions
@@ -99,25 +118,34 @@ public class CRUDTests : IAsyncLifetime
                 }
             }),
         });
-        await ResetDB(db);
+        try
+        {
+            await ResetDB(db);
 
-        await db.Execute("INSERT INTO assets (id, description, make) VALUES(?, ?, ?);", ["a185b7e1-dffa-4a9a-888c-15c0f0cac4b3", "entry", "make1"]);
-        await db.Execute("DELETE FROM ps_crud;");
-        await db.Execute("UPDATE assets SET description = ?, make = ?", ["new name", "make2"]);
+            await db.Execute("INSERT INTO assets (id, description, make) VALUES(?, ?, ?);", ["a185b7e1-dffa-4a9a-888c-15c0f0cac4b3", "entry", "make1"]);
+            await db.Execute("DELETE FROM ps_crud;");
+            await db.Execute("UPDATE assets SET description = ?, make = ?", ["new name", "make2"]);
 
-        var batch = await db.GetNextCrudTransaction();
-        Assert.NotNull(batch?.Crud[0].PreviousValues);
-        Assert.Equal("entry", batch?.Crud[0].PreviousValues?["description"]);
-        Assert.False(batch?.Crud[0].PreviousValues!.ContainsKey("make"));
+            var batch = await db.GetNextCrudTransaction();
+            Assert.NotNull(batch?.Crud[0].PreviousValues);
+            Assert.Equal("entry", batch?.Crud[0].PreviousValues?["description"]);
+            Assert.False(batch?.Crud[0].PreviousValues!.ContainsKey("make"));
+        }
+        finally
+        {
+            await db.Close();
+            DatabaseUtils.CleanDb(localDbName);
+        }
     }
 
 
     [Fact]
     public async Task IncludeOldValuesWhenChangedTest()
     {
+        var localDbName = $"oldValuesDb-{Guid.NewGuid():N}.db";
         var db = new PowerSyncDatabase(new PowerSyncDatabaseOptions
         {
-            Database = new SQLOpenOptions { DbFilename = "oldValuesDb" },
+            Database = new SQLOpenOptions { DbFilename = localDbName },
             Schema = TestSchema.GetSchemaWithCustomAssetOptions(new TableOptions
             {
                 TrackPreviousValues = new TrackPreviousOptions
@@ -126,37 +154,54 @@ public class CRUDTests : IAsyncLifetime
                 }
             }),
         });
-        await ResetDB(db);
+        try
+        {
+            await ResetDB(db);
 
-        await db.Execute("INSERT INTO assets (id, description, make) VALUES(uuid(), ?, ?);", ["name", "make1"]);
-        await db.Execute("DELETE FROM ps_crud;");
-        await db.Execute("UPDATE assets SET description = ?", ["new name"]);
+            await db.Execute("INSERT INTO assets (id, description, make) VALUES(uuid(), ?, ?);", ["name", "make1"]);
+            await db.Execute("DELETE FROM ps_crud;");
+            await db.Execute("UPDATE assets SET description = ?", ["new name"]);
 
-        var batch = await db.GetNextCrudTransaction();
-        Assert.Single(batch!.Crud);
-        Assert.NotNull(batch.Crud[0].PreviousValues);
-        Assert.Equal("name", batch.Crud[0].PreviousValues!["description"]);
-        Assert.False(batch.Crud[0].PreviousValues!.ContainsKey("make"));
+            var batch = await db.GetNextCrudTransaction();
+            Assert.Single(batch!.Crud);
+            Assert.NotNull(batch.Crud[0].PreviousValues);
+            Assert.Equal("name", batch.Crud[0].PreviousValues!["description"]);
+            Assert.False(batch.Crud[0].PreviousValues!.ContainsKey("make"));
+        }
+        finally
+        {
+            await db.Close();
+            DatabaseUtils.CleanDb(localDbName);
+        }
     }
 
     [Fact]
     public async Task IgnoreEmptyUpdateTest()
     {
+        var localDbName = $"IgnoreEmptyUpdateTest-{Guid.NewGuid():N}.db";
         var db = new PowerSyncDatabase(new PowerSyncDatabaseOptions
         {
-            Database = new SQLOpenOptions { DbFilename = "IgnoreEmptyUpdateTest.db" },
+            Database = new SQLOpenOptions { DbFilename = localDbName },
             Schema = TestSchema.GetSchemaWithCustomAssetOptions(new TableOptions
             {
                 IgnoreEmptyUpdates = true
             }),
         });
-        await ResetDB(db);
-        await db.Execute("INSERT INTO assets (id, description) VALUES(?, ?);", [testId, "name"]);
-        await db.Execute("DELETE FROM ps_crud;");
-        await db.Execute("UPDATE assets SET description = ?", ["name"]);
+        try
+        {
+            await ResetDB(db);
+            await db.Execute("INSERT INTO assets (id, description) VALUES(?, ?);", [testId, "name"]);
+            await db.Execute("DELETE FROM ps_crud;");
+            await db.Execute("UPDATE assets SET description = ?", ["name"]);
 
-        var batch = await db.GetNextCrudTransaction();
-        Assert.Null(batch);
+            var batch = await db.GetNextCrudTransaction();
+            Assert.Null(batch);
+        }
+        finally
+        {
+            await db.Close();
+            DatabaseUtils.CleanDb(localDbName);
+        }
     }
 
     [Fact]
@@ -309,37 +354,45 @@ public class CRUDTests : IAsyncLifetime
 
         await insertOnlyDb.Init();
 
-        var initialCrudRows = await insertOnlyDb.GetAll("SELECT * FROM ps_crud");
-        Assert.Empty(initialCrudRows);
-
-        await insertOnlyDb.Execute("INSERT INTO logs(id, level, content) VALUES(?, ?, ?)", [testId, "INFO", "test log"]);
-
-        var crudEntry = await insertOnlyDb.Get<CrudEntryData>("SELECT data FROM ps_crud ORDER BY id");
-
-        Assert.Equal(
-            JsonConvert.SerializeObject(new
-            {
-                op = "PUT",
-                type = "logs",
-                id = testId,
-                data = new { content = "test log", level = "INFO" }
-            }),
-            crudEntry.data
-        );
-
-        var logRows = await insertOnlyDb.GetAll("SELECT * FROM logs");
-        Assert.Empty(logRows);
-
-        var tx = await insertOnlyDb.GetNextCrudTransaction();
-        Assert.Equal(1, tx!.TransactionId);
-
-        var expectedCrudEntry = new CrudEntry(1, UpdateType.PUT, "logs", testId, 1, new Dictionary<string, object>
+        try
         {
-            { "content", "test log" },
-            { "level", "INFO" }
-        });
+            var initialCrudRows = await insertOnlyDb.GetAll("SELECT * FROM ps_crud");
+            Assert.Empty(initialCrudRows);
 
-        Assert.True(tx.Crud.First().Equals(expectedCrudEntry));
+            await insertOnlyDb.Execute("INSERT INTO logs(id, level, content) VALUES(?, ?, ?)", [testId, "INFO", "test log"]);
+
+            var crudEntry = await insertOnlyDb.Get<CrudEntryData>("SELECT data FROM ps_crud ORDER BY id");
+
+            Assert.Equal(
+                JsonConvert.SerializeObject(new
+                {
+                    op = "PUT",
+                    type = "logs",
+                    id = testId,
+                    data = new { content = "test log", level = "INFO" }
+                }),
+                crudEntry.data
+            );
+
+            var logRows = await insertOnlyDb.GetAll("SELECT * FROM logs");
+            Assert.Empty(logRows);
+
+            var tx = await insertOnlyDb.GetNextCrudTransaction();
+            Assert.Equal(1, tx!.TransactionId);
+
+            var expectedCrudEntry = new CrudEntry(1, UpdateType.PUT, "logs", testId, 1, new Dictionary<string, object>
+            {
+                { "content", "test log" },
+                { "level", "INFO" }
+            });
+
+            Assert.True(tx.Crud.First().Equals(expectedCrudEntry));
+        }
+        finally
+        {
+            await insertOnlyDb.Close();
+            DatabaseUtils.CleanDb(uniqueDbName);
+        }
     }
 
     private record QuantityResult(long quantity);

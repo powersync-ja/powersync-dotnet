@@ -10,21 +10,15 @@ public interface IEventStream<T>
 
     Task EmitAsync(T item);
 
-    CancellationTokenSource RunListenerAsync(
-    Func<T, Task> callback);
+    IEnumerable<T> Listen(CancellationToken cancellationToken);
 
     IAsyncEnumerable<T> ListenAsync(CancellationToken cancellationToken);
-
-    CancellationTokenSource RunListener(Action<T> callback);
-
-    IEnumerable<T> Listen(CancellationToken cancellationToken);
 
     void Close();
 }
 
 public class EventStream<T> : IEventStream<T>
 {
-
     public bool Closed = false;
 
     // Closest implementation to a ConcurrentSet<T> in .Net
@@ -51,25 +45,11 @@ public class EventStream<T> : IEventStream<T>
         }
     }
 
-    public CancellationTokenSource RunListenerAsync(
-    Func<T, Task> callback)
+    public IEnumerable<T> Listen(CancellationToken cancellationToken)
     {
-        var cts = new CancellationTokenSource();
-        var started = new TaskCompletionSource<bool>();
-
-        _ = Task.Run(async () =>
-        {
-            started.SetResult(true);
-            await foreach (var value in ListenAsync(cts.Token))
-            {
-                await callback(value);
-            }
-
-        }, cts.Token);
-
-        started.Task.GetAwaiter().GetResult();
-
-        return cts;
+        var channel = Channel.CreateUnbounded<T>();
+        subscribers.TryAdd(channel, 0);
+        return ReadFromChannel(channel, cancellationToken);
     }
 
     public IAsyncEnumerable<T> ListenAsync(CancellationToken cancellationToken)
@@ -79,30 +59,28 @@ public class EventStream<T> : IEventStream<T>
         return ReadFromChannelAsync(channel, cancellationToken);
     }
 
-    public CancellationTokenSource RunListener(Action<T> callback)
+    private IEnumerable<T> ReadFromChannel(Channel<T> channel, CancellationToken cancellationToken)
     {
-        var cts = new CancellationTokenSource();
-        var started = new TaskCompletionSource<bool>();
-
-        _ = Task.Run(() =>
+        try
         {
-            started.SetResult(true);
-            foreach (var value in Listen(cts.Token))
+            while (!cancellationToken.IsCancellationRequested)
             {
-                callback(value);
+                if (!channel.Reader.WaitToReadAsync(cancellationToken).AsTask().Result)
+                {
+                    // Channel was completed, exit the loop
+                    break;
+                }
+
+                while (channel.Reader.TryRead(out var item))
+                {
+                    yield return item;
+                }
             }
-        }, cts.Token);
-
-        started.Task.GetAwaiter().GetResult();
-
-        return cts;
-    }
-
-    public IEnumerable<T> Listen(CancellationToken cancellationToken)
-    {
-        var channel = Channel.CreateUnbounded<T>();
-        subscribers.TryAdd(channel, 0);
-        return ReadFromChannel(channel, cancellationToken);
+        }
+        finally
+        {
+            RemoveSubscriber(channel);
+        }
     }
 
     private async IAsyncEnumerable<T> ReadFromChannelAsync(
@@ -123,30 +101,6 @@ public class EventStream<T> : IEventStream<T>
                     {
                         yield break;
                     }
-                }
-            }
-        }
-        finally
-        {
-            RemoveSubscriber(channel);
-        }
-    }
-
-    private IEnumerable<T> ReadFromChannel(Channel<T> channel, CancellationToken cancellationToken)
-    {
-        try
-        {
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                if (!channel.Reader.WaitToReadAsync(cancellationToken).AsTask().Result)
-                {
-                    // Channel was completed, exit the loop
-                    break;
-                }
-
-                while (channel.Reader.TryRead(out var item))
-                {
-                    yield return item;
                 }
             }
         }

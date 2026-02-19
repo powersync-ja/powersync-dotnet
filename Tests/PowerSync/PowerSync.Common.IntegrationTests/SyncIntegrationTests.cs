@@ -77,20 +77,16 @@ public class SyncIntegrationTests : IAsyncLifetime
         var cts = new CancellationTokenSource();
         var id = Uuid();
 
-        await db.Watch("select * from lists where id = ?", [id], new WatchHandler<ListResult>
+        _ = Task.Run(async () =>
         {
-            OnResult = (x) =>
+            await foreach (var x in db.Watch<ListResult>("select * from lists where id = ?", [id], new() { Signal = cts.Token }))
             {
-                // Verify that the item was added locally
                 if (x.Length == 1)
                 {
                     watched.SetResult(true);
                     cts.Cancel();
                 }
             }
-        }, new SQLWatchOptions
-        {
-            Signal = cts.Token
         });
 
         await nodeClient.CreateList(id, name: "Test List magic");
@@ -106,9 +102,9 @@ public class SyncIntegrationTests : IAsyncLifetime
 
         await nodeClient.CreateList(id, name: "Test List to delete");
 
-        await db.Watch("select * from lists where id = ?", [id], new WatchHandler<ListResult>
+        _ = Task.Run(async () =>
         {
-            OnResult = (x) =>
+            await foreach (var x in db.Watch<ListResult>("select * from lists where id = ?", [id], new() { Signal = cts.Token }))
             {
                 // Verify that the item was added locally
                 if (x.Length == 1)
@@ -117,9 +113,6 @@ public class SyncIntegrationTests : IAsyncLifetime
                     cts.Cancel();
                 }
             }
-        }, new SQLWatchOptions
-        {
-            Signal = cts.Token
         });
 
         await watched.Task;
@@ -128,9 +121,9 @@ public class SyncIntegrationTests : IAsyncLifetime
         watched = new TaskCompletionSource<bool>();
         cts = new CancellationTokenSource();
 
-        await db.Watch("select * from lists where id = ?", [id], new WatchHandler<ListResult>
+        _ = Task.Run(async () =>
         {
-            OnResult = (x) =>
+            await foreach (var x in db.Watch<ListResult>("select * from lists where id = ?", [id], new() { Signal = cts.Token }))
             {
                 // Verify that the item was deleted locally
                 if (x.Length == 0)
@@ -139,9 +132,6 @@ public class SyncIntegrationTests : IAsyncLifetime
                     cts.Cancel();
                 }
             }
-        }, new SQLWatchOptions
-        {
-            Signal = cts.Token
         });
 
         await watched.Task;
@@ -155,9 +145,9 @@ public class SyncIntegrationTests : IAsyncLifetime
         var id = Uuid();
         var listName = Uuid();
 
-        await db.Watch("select * from lists where name = ?", [listName], new WatchHandler<ListResult>
+        _ = Task.Run(async () =>
         {
-            OnResult = (x) =>
+            await foreach (var x in db.Watch<ListResult>("select * from lists where id = ?", [id], new() { Signal = cts.Token }))
             {
                 // Verify that the item was added locally
                 if (x.Length == 100)
@@ -166,9 +156,6 @@ public class SyncIntegrationTests : IAsyncLifetime
                     cts.Cancel();
                 }
             }
-        }, new SQLWatchOptions
-        {
-            Signal = cts.Token
         });
 
         for (int i = 0; i < 100; i++)
@@ -187,9 +174,9 @@ public class SyncIntegrationTests : IAsyncLifetime
         var id = Uuid();
         var listName = Uuid();
 
-        await db.Watch("select * from lists where name = ?", [listName], new WatchHandler<ListResult>
+        _ = Task.Run(async () =>
         {
-            OnResult = (x) =>
+            await foreach (var x in db.Watch<ListResult>("select * from lists where id = ?", [id], new() { Signal = cts.Token }))
             {
                 // Verify that the items were added locally
                 if (x.Length == 100)
@@ -203,9 +190,6 @@ public class SyncIntegrationTests : IAsyncLifetime
                     cts.Cancel();
                 }
             }
-        }, new SQLWatchOptions
-        {
-            Signal = cts.Token
         });
 
         for (int i = 0; i < 100; i++)
