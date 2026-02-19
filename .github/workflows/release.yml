@@ -1,13 +1,13 @@
 # The version is pulled from the CHANGELOG.md file of the package.
 name: Release
 
-on: pull_request
+on: workflow_dispatch
 
 jobs:
   release:
     name: Release
     runs-on: macos-latest
-    # if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main'
 
     steps:
       - name: Checkout Repository
@@ -41,9 +41,9 @@ jobs:
       - name: Run Pack for Common
         run: dotnet pack PowerSync/PowerSync.Common -c Release -o ${{ github.workspace }}/output
 
-      # - name: Run Push for Common
-      #   continue-on-error: true
-      #   run: dotnet nuget push ${{ github.workspace }}/output/PowerSync.Common*.nupkg --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }}
+      - name: Run Push for Common
+        continue-on-error: true
+        run: dotnet nuget push ${{ github.workspace }}/output/PowerSync.Common*.nupkg --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }}
 
       - name: Extract MAUI Package Version from CHANGELOG.md
         id: extract_maui_version
@@ -60,16 +60,9 @@ jobs:
       - name: Run Pack For MAUI
         run: dotnet pack PowerSync/PowerSync.Maui -c Release -o ${{ github.workspace }}/output
 
-      # - name: Run Push For MAUI
-      #   continue-on-error: true
-      #   run: dotnet nuget push ${{ github.workspace }}/output/PowerSync.Maui*.nupkg --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }}
-
-      - name: Generate Release Notes
-        shell: bash
-        run: |
-          chmod +x ./Scripts/gen_release_notes.sh
-          ./Scripts/gen_release_notes.sh PowerSync/PowerSync.Common/CHANGELOG.md > /tmp/release_notes_common.md
-          ./Scripts/gen_release_notes.sh PowerSync/PowerSync.Maui/CHANGELOG.md > /tmp/release_notes_maui.md
+      - name: Run Push For MAUI
+        continue-on-error: true
+        run: dotnet nuget push ${{ github.workspace }}/output/PowerSync.Maui*.nupkg --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }}
 
       - name: Create GitHub Releases
         env:
