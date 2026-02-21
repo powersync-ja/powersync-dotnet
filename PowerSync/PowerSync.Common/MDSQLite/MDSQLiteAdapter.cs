@@ -1,6 +1,7 @@
 namespace PowerSync.Common.MDSQLite;
 
 using System;
+using System.Collections.Concurrent;
 using System.Threading.Tasks;
 
 using Microsoft.Data.Sqlite;
@@ -22,8 +23,14 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
 {
     public string Name => options.Name;
 
-    public MDSQLiteConnection? writeConnection;
-    public MDSQLiteConnection? readConnection;
+    // One writer
+    private MDSQLiteConnection writeConnection = null!;
+
+    // Many readers
+    private ConcurrentQueue<MDSQLiteConnection> readPool = null!;
+    private SemaphoreSlim readLock = null!;
+    // TODO make maxPoolSize option in SQLOpenOptions
+    int maxPoolSize = 2;
 
     private readonly Task initialized;
 
@@ -31,6 +38,7 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
 
     protected RequiredMDSQLiteOptions resolvedMDSQLiteOptions;
     private CancellationTokenSource? tablesUpdatedCts;
+    private Task? tablesUpdatedTask;
 
     private readonly AsyncLock writeMutex = new();
     private readonly AsyncLock readMutex = new();
@@ -61,7 +69,6 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
     private async Task Init()
     {
         writeConnection = await OpenConnection(options.Name);
-        readConnection = await OpenConnection(options.Name);
 
         string[] baseStatements =
         [
@@ -88,20 +95,27 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
         {
             for (int tries = 0; tries < 30; tries++)
             {
-                await writeConnection!.Execute(statement);
+                await writeConnection.Execute(statement);
                 tries = 30;
             }
         }
 
-        foreach (var statement in readConnectionStatements)
+        readPool = new ConcurrentQueue<MDSQLiteConnection>();
+        readLock = new SemaphoreSlim(maxPoolSize, maxPoolSize);
+        for (int i = 0; i < maxPoolSize; i++)
         {
-            await readConnection!.Execute(statement);
+            var readConnection = await OpenConnection(options.Name);
+            foreach (var statement in readConnectionStatements)
+            {
+                await readConnection.Execute(statement);
+            }
+            readPool.Enqueue(readConnection);
         }
 
         tablesUpdatedCts = new CancellationTokenSource();
-        var _ = Task.Run(() =>
+        tablesUpdatedTask = Task.Run(async () =>
         {
-            foreach (var notification in writeConnection!.Listen(tablesUpdatedCts.Token))
+            await foreach (var notification in writeConnection.ListenAsync(tablesUpdatedCts.Token))
             {
                 if (notification.TablesUpdated != null)
                 {
@@ -136,12 +150,15 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
         db.LoadExtension(extensionPath, "sqlite3_powersync_init");
     }
 
-    public new void Close()
+    public new async Task Close()
     {
         tablesUpdatedCts?.Cancel();
+        try { tablesUpdatedTask?.Wait(2000); } catch { /* expected */ }
         base.Close();
         writeConnection?.Close();
-        readConnection?.Close();
+        await LockReaders();
+        foreach (var conn in readPool) conn.Close();
+        UnlockReaders();
     }
 
     public async Task<NonQueryResult> Execute(string query, object?[]? parameters = null)
@@ -186,7 +203,7 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
 
     public async Task<T> ReadTransaction<T>(Func<ITransaction, Task<T>> fn, DBLockOptions? options = null)
     {
-        return await ReadLock((ctx) => InternalTransaction(new MDSQLiteTransaction(readConnection!)!, fn));
+        return await ReadLock((ctx) => InternalTransaction(new MDSQLiteTransaction((MDSQLiteConnection)ctx), fn));
     }
 
     public async Task<T> ReadLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null)
@@ -194,9 +211,17 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
         await initialized;
 
         T result;
-        using (await readMutex.LockAsync())
+        using (await readLock.LockAsync())
         {
-            result = await fn(readConnection!);
+            readPool.TryDequeue(out var conn);
+            try
+            {
+                result = await fn(conn);
+            }
+            finally
+            {
+                readPool.Enqueue(conn);
+            }
         }
 
         return result;
@@ -208,10 +233,10 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
 
         using (await writeMutex.LockAsync())
         {
-            await fn(writeConnection!);
+            await fn(writeConnection);
         }
 
-        writeConnection!.FlushUpdates();
+        writeConnection.FlushUpdates();
 
     }
 
@@ -222,22 +247,22 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
         T result;
         using (await writeMutex.LockAsync())
         {
-            result = await fn(writeConnection!);
+            result = await fn(writeConnection);
         }
 
-        writeConnection!.FlushUpdates();
+        writeConnection.FlushUpdates();
 
         return result;
     }
 
     public async Task WriteTransaction(Func<ITransaction, Task> fn, DBLockOptions? options = null)
     {
-        await WriteLock(ctx => InternalTransaction(new MDSQLiteTransaction(writeConnection!)!, fn));
+        await WriteLock(ctx => InternalTransaction(new MDSQLiteTransaction(writeConnection), fn));
     }
 
     public async Task<T> WriteTransaction<T>(Func<ITransaction, Task<T>> fn, DBLockOptions? options = null)
     {
-        return await WriteLock((ctx) => InternalTransaction(new MDSQLiteTransaction(writeConnection!)!, fn));
+        return await WriteLock((ctx) => InternalTransaction(new MDSQLiteTransaction(writeConnection), fn));
     }
 
     protected static async Task InternalTransaction(
@@ -285,8 +310,26 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
     public async Task RefreshSchema()
     {
         await initialized;
-        await writeConnection!.RefreshSchema();
-        await readConnection!.RefreshSchema();
+        await writeConnection.RefreshSchema();
+        await LockReaders();
+        foreach (var conn in readPool) await conn.RefreshSchema();
+        UnlockReaders();
+    }
+
+    private async Task LockReaders()
+    {
+        for (int i = 0; i < maxPoolSize; i++)
+        {
+            await readLock.WaitAsync();
+        }
+    }
+
+    private void UnlockReaders()
+    {
+        for (int i = 0; i < maxPoolSize; i++)
+        {
+            readLock.Release();
+        }
     }
 }
 
