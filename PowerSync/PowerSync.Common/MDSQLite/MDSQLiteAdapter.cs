@@ -16,7 +16,6 @@ public class MDSQLiteAdapterOptions()
     public string Name { get; set; } = null!;
 
     public MDSQLiteOptions? SqliteOptions;
-
 }
 
 public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
@@ -25,32 +24,28 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
 
     // One writer
     private MDSQLiteConnection writeConnection = null!;
+    private readonly AsyncLock writeMutex = new();
 
     // Many readers
     private ConcurrentQueue<MDSQLiteConnection> readPool = null!;
     private SemaphoreSlim readLock = null!;
-    // TODO make maxPoolSize option in SQLOpenOptions
-    int maxPoolSize = 2;
 
     private readonly Task initialized;
 
     protected MDSQLiteAdapterOptions options;
 
-    protected RequiredMDSQLiteOptions resolvedMDSQLiteOptions;
+    protected RequiredMDSQLiteOptions resolvedOptions;
     private CancellationTokenSource? tablesUpdatedCts;
     private Task? tablesUpdatedTask;
-
-    private readonly AsyncLock writeMutex = new();
-    private readonly AsyncLock readMutex = new();
 
     public MDSQLiteAdapter(MDSQLiteAdapterOptions options)
     {
         this.options = options;
-        resolvedMDSQLiteOptions = resolveMDSQLiteOptions(options.SqliteOptions);
+        resolvedOptions = ResolveMDSQLiteOptions(options.SqliteOptions);
         initialized = Init();
     }
 
-    private RequiredMDSQLiteOptions resolveMDSQLiteOptions(MDSQLiteOptions? options)
+    private RequiredMDSQLiteOptions ResolveMDSQLiteOptions(MDSQLiteOptions? options)
     {
         var defaults = RequiredMDSQLiteOptions.DEFAULT_SQLITE_OPTIONS;
         return new RequiredMDSQLiteOptions
@@ -62,7 +57,8 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
             TemporaryStorage = options?.TemporaryStorage ?? defaults.TemporaryStorage,
             LockTimeoutMs = options?.LockTimeoutMs ?? defaults.LockTimeoutMs,
             EncryptionKey = options?.EncryptionKey ?? defaults.EncryptionKey,
-            Extensions = options?.Extensions ?? defaults.Extensions
+            Extensions = options?.Extensions ?? defaults.Extensions,
+            ReadPoolSize = options?.ReadPoolSize ?? defaults.ReadPoolSize,
         };
     }
 
@@ -72,17 +68,17 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
 
         string[] baseStatements =
         [
-            $"PRAGMA busy_timeout = {resolvedMDSQLiteOptions.LockTimeoutMs}",
-            $"PRAGMA cache_size = -{resolvedMDSQLiteOptions.CacheSizeKb}",
-            $"PRAGMA temp_store = {resolvedMDSQLiteOptions.TemporaryStorage}"
+            $"PRAGMA busy_timeout = {resolvedOptions.LockTimeoutMs}",
+            $"PRAGMA cache_size = -{resolvedOptions.CacheSizeKb}",
+            $"PRAGMA temp_store = {resolvedOptions.TemporaryStorage}"
         ];
 
         string[] writeConnectionStatements =
         [
             .. baseStatements,
-            $"PRAGMA journal_mode = {resolvedMDSQLiteOptions.JournalMode}",
-            $"PRAGMA journal_size_limit = {resolvedMDSQLiteOptions.JournalSizeLimit}",
-            $"PRAGMA synchronous = {resolvedMDSQLiteOptions.Synchronous}",
+            $"PRAGMA journal_mode = {resolvedOptions.JournalMode}",
+            $"PRAGMA journal_size_limit = {resolvedOptions.JournalSizeLimit}",
+            $"PRAGMA synchronous = {resolvedOptions.Synchronous}",
         ];
 
         string[] readConnectionStatements =
@@ -101,8 +97,8 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
         }
 
         readPool = new ConcurrentQueue<MDSQLiteConnection>();
-        readLock = new SemaphoreSlim(maxPoolSize, maxPoolSize);
-        for (int i = 0; i < maxPoolSize; i++)
+        readLock = new SemaphoreSlim(resolvedOptions.ReadPoolSize, resolvedOptions.ReadPoolSize);
+        for (int i = 0; i < resolvedOptions.ReadPoolSize; i++)
         {
             var readConnection = await OpenConnection(options.Name);
             foreach (var statement in readConnectionStatements)
@@ -318,7 +314,7 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
 
     private async Task LockReaders()
     {
-        for (int i = 0; i < maxPoolSize; i++)
+        for (int i = 0; i < resolvedOptions.ReadPoolSize; i++)
         {
             await readLock.WaitAsync();
         }
@@ -326,7 +322,7 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
 
     private void UnlockReaders()
     {
-        for (int i = 0; i < maxPoolSize; i++)
+        for (int i = 0; i < resolvedOptions.ReadPoolSize; i++)
         {
             readLock.Release();
         }
