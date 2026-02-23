@@ -33,9 +33,10 @@ jobs:
         id: extract_version
         shell: bash
         run: |
-          VERSION=$(awk '/^## [0-9]+\.[0-9]+\.[0-9]+/ {print $2; exit}' PowerSync/PowerSync.Common/CHANGELOG.md)
-          echo "Detected Version: $VERSION"
-          echo "COMMON_VERSION=$VERSION" >> $GITHUB_ENV
+          COMMON_VERSION=$(awk '/^## [0-9]+\.[0-9]+\.[0-9]+/ {print $2; exit}' PowerSync/PowerSync.Common/CHANGELOG.md)
+          echo "Detected Version: $COMMON_VERSION"
+          echo "VERSION=$COMMON_VERSION" >> $GITHUB_ENV
+          echo "COMMON_VERSION=$COMMON_VERSION" >> $GITHUB_ENV
 
       - name: Run Pack for Common
         run: dotnet pack PowerSync/PowerSync.Common -c Release -o ${{ github.workspace }}/output
@@ -50,6 +51,7 @@ jobs:
         run: |
           MAUI_VERSION=$(awk '/^## [0-9]+\.[0-9]+\.[0-9]+/ {print $2; exit}' PowerSync/PowerSync.Maui/CHANGELOG.md)
           echo "Detected Version: $MAUI_VERSION"
+          echo "VERSION=$MAUI_VERSION" >> $GITHUB_ENV
           echo "MAUI_VERSION=$MAUI_VERSION" >> $GITHUB_ENV
 
       - name: Build MAUI Project
