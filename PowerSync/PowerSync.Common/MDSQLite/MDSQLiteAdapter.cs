@@ -134,7 +134,8 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
 
     private static SqliteConnection OpenDatabase(string dbFilename)
     {
-        var connection = new SqliteConnection($"Data Source={dbFilename}");
+        string connectionString = $"Data Source={dbFilename};Pooling=False;";
+        var connection = new SqliteConnection(connectionString);
         connection.Open();
         return connection;
     }
