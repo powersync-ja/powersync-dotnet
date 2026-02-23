@@ -98,8 +98,8 @@ public class CRUDTests : IAsyncLifetime
         }
         finally
         {
-            await db.Close();
-            DatabaseUtils.CleanDb(localDbName);
+            // await db.Close();
+            // DatabaseUtils.CleanDb(localDbName);
         }
     }
 
@@ -142,7 +142,7 @@ public class CRUDTests : IAsyncLifetime
     [Fact]
     public async Task IncludeOldValuesWhenChangedTest()
     {
-        var localDbName = $"oldValuesDb-{Guid.NewGuid():N}.db";
+        var localDbName = $"IncludeOldValuesWhenChangedTest-{Guid.NewGuid():N}.db";
         var db = new PowerSyncDatabase(new PowerSyncDatabaseOptions
         {
             Database = new SQLOpenOptions { DbFilename = localDbName },

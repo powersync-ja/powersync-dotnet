@@ -21,7 +21,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         testCts = new();
-        dbName = $"transactions-{Guid.NewGuid():N}.db";
+        dbName = $"PowerSyncDatabase-{Guid.NewGuid():N}.db";
 
         db = new PowerSyncDatabase(new PowerSyncDatabaseOptions
         {
@@ -424,7 +424,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     [Fact(Timeout = 5000)]
     public async Task ReflectWriteLockUpdatesOnReadConnectionsTest()
     {
-        var numberOfAssets = 10;
+        var numberOfAssets = 10_000;
 
         var watched = new TaskCompletionSource<bool>();
 
@@ -679,7 +679,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     public async Task WatchSchemaResetTest()
     {
         var dbId = Guid.NewGuid().ToString();
-        var localDbName = $"powerSyncWatch_{dbId}.db";
+        var localDbName = $"PowerSyncWatchReset_{dbId}.db";
         var db = new PowerSyncDatabase(new()
         {
             Database = new SQLOpenOptions
