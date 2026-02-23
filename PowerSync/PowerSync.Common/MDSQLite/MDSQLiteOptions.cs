@@ -121,7 +121,7 @@ public class RequiredMDSQLiteOptions : MDSQLiteOptions
         LockTimeoutMs = 30000,
         EncryptionKey = null,
         Extensions = [],
-        ReadPoolSize = 2,
+        ReadPoolSize = 5,
     };
 
     public new SqliteJournalMode JournalMode { get; set; } = null!;
