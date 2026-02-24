@@ -1,5 +1,33 @@
 # PowerSync.Common Changelog
 
+## 0.0.11-alpha.1
+
+- Changed the `PowerSyncDatabase.Watch` syntax to return an IAsyncEnumerable instead of accepting a callback. This allows users to handle database changes when they are ready instead of us eagerly running the callback as soon as a change is detected.
+
+```csharp
+// Optional cancellation token
+var cts = new CancellationTokenSource();
+
+// Register listener synchronously on the calling thread...
+var listener = db.Watch<Todo>(
+    "SELECT * FROM todos",
+    [],
+    new SQLWatchOptions { Signal = cts.Token }
+);
+
+// ...then listen to changes on another thread
+_ = Task.Run(async () =>
+{
+    await foreach (var result in listener)
+    {
+        Console.WriteLine($"Number of todos: {result.Length}");
+    }
+}, cts.Token);
+
+// Stop watching by cancelling token
+cts.Cancel();
+```
+
 ## 0.0.10-alpha.1
 
 - Fixed watched queries sometimes resolving to the wrong underlying tables after a schema change.
