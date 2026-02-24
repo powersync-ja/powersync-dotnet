@@ -1,7 +1,8 @@
 namespace PowerSync.Common.MDSQLite;
 
 using System;
-using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 
 using Microsoft.Data.Sqlite;
@@ -27,8 +28,7 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
     private readonly AsyncLock writeMutex = new();
 
     // Many readers
-    private ConcurrentQueue<MDSQLiteConnection> readPool = null!;
-    private SemaphoreSlim readLock = null!;
+    private Channel<MDSQLiteConnection> readPool = null!;
 
     private readonly Task initialized;
 
@@ -96,8 +96,7 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
             }
         }
 
-        readPool = new ConcurrentQueue<MDSQLiteConnection>();
-        readLock = new SemaphoreSlim(resolvedOptions.ReadPoolSize, resolvedOptions.ReadPoolSize);
+        readPool = Channel.CreateBounded<MDSQLiteConnection>(resolvedOptions.ReadPoolSize);
         for (int i = 0; i < resolvedOptions.ReadPoolSize; i++)
         {
             var readConnection = await OpenConnection(options.Name);
@@ -105,7 +104,7 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
             {
                 await readConnection.Execute(statement);
             }
-            readPool.Enqueue(readConnection);
+            await readPool.Writer.WriteAsync(readConnection);
         }
 
         tablesUpdatedCts = new CancellationTokenSource();
@@ -153,9 +152,9 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
         try { tablesUpdatedTask?.Wait(2000); } catch { /* expected */ }
         base.Close();
         writeConnection?.Close();
-        await LockReaders();
-        foreach (var conn in readPool) conn.Close();
-        UnlockReaders();
+        var readConnections = await LockReaders();
+        readPool.Writer.Complete();
+        foreach (var conn in readConnections) conn.Close();
     }
 
     public async Task<NonQueryResult> Execute(string query, object?[]? parameters = null)
@@ -207,21 +206,15 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
     {
         await initialized;
 
-        T result;
-        using (await readLock.LockAsync())
+        var conn = await readPool.Reader.ReadAsync();
+        try
         {
-            readPool.TryDequeue(out var conn);
-            try
-            {
-                result = await fn(conn);
-            }
-            finally
-            {
-                readPool.Enqueue(conn);
-            }
+            return await fn(conn);
         }
-
-        return result;
+        finally
+        {
+            readPool.Writer.TryWrite(conn);
+        }
     }
 
     public async Task WriteLock(Func<ILockContext, Task> fn, DBLockOptions? options = null)
@@ -308,24 +301,26 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
     {
         await initialized;
         await writeConnection.RefreshSchema();
-        await LockReaders();
-        foreach (var conn in readPool) await conn.RefreshSchema();
-        UnlockReaders();
+        var connections = await LockReaders();
+        foreach (var conn in connections) await conn.RefreshSchema();
+        UnlockReaders(connections);
     }
 
-    private async Task LockReaders()
+    private async Task<List<MDSQLiteConnection>> LockReaders()
     {
+        var connections = new List<MDSQLiteConnection>(resolvedOptions.ReadPoolSize);
         for (int i = 0; i < resolvedOptions.ReadPoolSize; i++)
         {
-            await readLock.WaitAsync();
+            connections.Add(await readPool.Reader.ReadAsync());
         }
+        return connections;
     }
 
-    private void UnlockReaders()
+    private void UnlockReaders(List<MDSQLiteConnection> connections)
     {
-        for (int i = 0; i < resolvedOptions.ReadPoolSize; i++)
+        foreach (var conn in connections)
         {
-            readLock.Release();
+            readPool.Writer.TryWrite(conn);
         }
     }
 }
