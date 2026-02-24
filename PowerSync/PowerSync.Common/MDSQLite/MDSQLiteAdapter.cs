@@ -152,9 +152,11 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
         try { tablesUpdatedTask?.Wait(2000); } catch { /* expected */ }
         base.Close();
         writeConnection?.Close();
-        var readConnections = await LockReaders();
+        await WithAllReaders((connections) =>
+        {
+            foreach (var conn in connections) conn.Close();
+        });
         readPool.Writer.Complete();
-        foreach (var conn in readConnections) conn.Close();
     }
 
     public async Task<NonQueryResult> Execute(string query, object?[]? parameters = null)
@@ -301,26 +303,51 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
     {
         await initialized;
         await writeConnection.RefreshSchema();
-        var connections = await LockReaders();
-        foreach (var conn in connections) await conn.RefreshSchema();
-        UnlockReaders(connections);
+        await WithAllReaders(async (connections) =>
+        {
+            foreach (var conn in connections) await conn.RefreshSchema();
+        });
     }
 
-    private async Task<List<MDSQLiteConnection>> LockReaders()
+    private async Task WithAllReaders(Func<List<MDSQLiteConnection>, Task> callback)
     {
         var connections = new List<MDSQLiteConnection>(resolvedOptions.ReadPoolSize);
         for (int i = 0; i < resolvedOptions.ReadPoolSize; i++)
         {
             connections.Add(await readPool.Reader.ReadAsync());
         }
-        return connections;
+
+        try
+        {
+            await callback(connections);
+        }
+        finally
+        {
+            foreach (var conn in connections)
+            {
+                readPool.Writer.TryWrite(conn);
+            }
+        }
     }
 
-    private void UnlockReaders(List<MDSQLiteConnection> connections)
+    private async Task WithAllReaders(Action<List<MDSQLiteConnection>> callback)
     {
-        foreach (var conn in connections)
+        var connections = new List<MDSQLiteConnection>(resolvedOptions.ReadPoolSize);
+        for (int i = 0; i < resolvedOptions.ReadPoolSize; i++)
         {
-            readPool.Writer.TryWrite(conn);
+            connections.Add(await readPool.Reader.ReadAsync());
+        }
+
+        try
+        {
+            callback(connections);
+        }
+        finally
+        {
+            foreach (var conn in connections)
+            {
+                readPool.Writer.TryWrite(conn);
+            }
         }
     }
 }
