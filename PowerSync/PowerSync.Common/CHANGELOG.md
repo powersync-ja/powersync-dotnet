@@ -2,6 +2,7 @@
 
 ## 0.0.11-alpha.1
 
+- Removed the `RunListener` and `RunListenerAsync` APIs from `IEventStream`. Users are encouraged to use the `Listen` or `ListenAsync` APIs instead (`RunListener` itself was implemented using the `Listen` API).
 - Changed the `PowerSyncDatabase.Watch` syntax to return an IAsyncEnumerable instead of accepting a callback. This allows users to handle database changes when they are ready instead of us eagerly running the callback as soon as a change is detected.
 
 ```csharp
