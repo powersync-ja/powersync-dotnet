@@ -102,10 +102,10 @@ class CompiledTable
             columnNames.Add(columnName);
         }
 
-        foreach (var kvp in Indexes)
+        foreach (var index in IndexesJSON)
         {
-            var indexName = kvp.Key;
-            var indexColumns = kvp.Value;
+            var indexName = index.Name;
+            var indexColumns = index.Columns;
 
             if (InvalidSQLCharacters.IsMatch(indexName))
             {
@@ -114,9 +114,9 @@ class CompiledTable
 
             foreach (var indexColumn in indexColumns)
             {
-                if (!columnNames.Contains(indexColumn))
+                if (!columnNames.Contains(indexColumn.Name))
                 {
-                    throw new Exception($"Column {indexColumn} not found for index {indexName}");
+                    throw new Exception($"Column {indexColumn.Name} not found for index {indexName}");
                 }
             }
         }

@@ -226,24 +226,27 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
         var tcs = new TaskCompletionSource<bool>();
         var cts = new CancellationTokenSource();
 
-        var _ = Task.Run(() =>
-        {
-            foreach (var status in Listen(cts.Token))
-            {
-                if (status.StatusChanged != null)
-                {
-                    if (status.StatusChanged.Connected == false)
-                    {
-                        logger.LogWarning("Initial connect attempt did not successfully connect to server");
-                    }
-
-                    tcs.SetResult(true);
-                    cts.Cancel();
-                }
-            }
-        });
+        // Subscribe to events before starting StreamingSync to not miss the Connected == true event
+        var listener = ListenAsync(cts.Token);
 
         streamingSyncTask = StreamingSync(CancellationTokenSource.Token, options);
+
+        var _ = Task.Run(async () =>
+        {
+            await foreach (var status in listener)
+            {
+                if (status.StatusChanged?.Connected == true)
+                {
+                    tcs.TrySetResult(true);
+                    cts.Cancel();
+                    return;
+                }
+            }
+
+            // Connection closed prematurely
+            logger.LogWarning("Initial connect attempt did not successfully connect to server");
+            tcs.TrySetResult(true);
+        });
 
         await tcs.Task;
     }

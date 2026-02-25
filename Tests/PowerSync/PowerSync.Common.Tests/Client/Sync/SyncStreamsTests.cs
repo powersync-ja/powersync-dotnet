@@ -25,6 +25,7 @@ public class SyncStreamsTests : IAsyncLifetime
     {
         syncService = new MockSyncService();
         db = syncService.CreateDatabase();
+        await db.Init();
     }
 
     public async Task DisposeAsync()

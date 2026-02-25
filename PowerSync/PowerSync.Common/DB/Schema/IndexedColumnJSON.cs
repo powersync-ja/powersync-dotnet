@@ -8,9 +8,9 @@ class IndexedColumnJSONOptions(string Name, bool Ascending = true)
 
 class IndexedColumnJSON(IndexedColumnJSONOptions options)
 {
-    protected string Name { get; set; } = options.Name;
+    public string Name { get; set; } = options.Name;
 
-    protected bool Ascending { get; set; } = options.Ascending;
+    public bool Ascending { get; set; } = options.Ascending;
 
     public object ToJSONObject(CompiledTable parentTable)
     {
