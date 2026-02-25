@@ -89,11 +89,7 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
 
         foreach (var statement in writeConnectionStatements)
         {
-            for (int tries = 0; tries < 30; tries++)
-            {
-                await writeConnection.Execute(statement);
-                tries = 30;
-            }
+            await writeConnection!.Execute(statement);
         }
 
         readPool = Channel.CreateBounded<MDSQLiteConnection>(resolvedOptions.ReadPoolSize);

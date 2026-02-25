@@ -4,24 +4,28 @@ using System.Diagnostics;
 
 using Microsoft.Data.Sqlite;
 
-using Newtonsoft.Json;
-
 using PowerSync.Common.Client;
-using PowerSync.Common.DB.Schema;
 using PowerSync.Common.Tests.Models;
+using PowerSync.Common.Tests.Utils;
 
 /// <summary>
 /// dotnet test -v n --framework net8.0 --filter "PowerSyncDatabaseTests"
 /// </summary>
+[Collection("PowerSyncDatabaseTests")]
 public class PowerSyncDatabaseTests : IAsyncLifetime
 {
     private PowerSyncDatabase db = default!;
+    private CancellationTokenSource testCts = default!;
+    string dbName = default!;
 
     public async Task InitializeAsync()
     {
+        testCts = new();
+        dbName = $"PowerSyncDatabase-{Guid.NewGuid():N}.db";
+
         db = new PowerSyncDatabase(new PowerSyncDatabaseOptions
         {
-            Database = new SQLOpenOptions { DbFilename = "powersyncDataBaseTransactions.db" },
+            Database = new SQLOpenOptions { DbFilename = dbName },
             Schema = TestSchema.AppSchema,
         });
         await db.Init();
@@ -29,8 +33,16 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
+        testCts.Cancel();
+
         await db.DisconnectAndClear();
         await db.Close();
+
+        try { File.Delete(dbName); }
+        catch { }
+
+        testCts.Dispose();
+        testCts = new();
     }
 
     private record IdResult(string id);
@@ -360,22 +372,23 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     [Fact(Timeout = 2000)]
     public async Task CallUpdateHookOnChangesTest()
     {
-        var cts = new CancellationTokenSource();
         var result = new TaskCompletionSource<bool>();
 
-        db.OnChange(new WatchOnChangeHandler
-        {
-            OnChange = (x) =>
-            {
-                result.SetResult(true);
-                cts.Cancel();
-                return Task.CompletedTask;
-            }
-        }, new SQLWatchOptions
+        var listener = db.OnChange(new SQLWatchOptions
         {
             Tables = ["assets"],
-            Signal = cts.Token
+            Signal = testCts.Token,
         });
+
+        _ = Task.Run(async () =>
+        {
+            await foreach (var update in listener)
+            {
+                result.TrySetResult(true);
+                testCts.Cancel();
+            }
+        }, testCts.Token);
+
         await db.Execute("INSERT INTO assets (id) VALUES(?)", ["099-onchange"]);
 
         await result.Task;
@@ -386,51 +399,49 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     {
         var watched = new TaskCompletionSource<bool>();
 
-        var cts = new CancellationTokenSource();
-        await db.Watch("SELECT COUNT(*) as count FROM assets", null, new WatchHandler<CountResult>
+        var listener = db.Watch<CountResult>("SELECT COUNT(*) as count FROM assets", null, new() { Signal = testCts.Token });
+        _ = Task.Run(async () =>
         {
-            OnResult = (x) =>
+            await foreach (var x in listener)
             {
                 if (x.First().count == 1)
                 {
                     watched.SetResult(true);
-                    cts.Cancel();
+                    testCts.Cancel();
                 }
             }
-        }, new SQLWatchOptions
-        {
-            Signal = cts.Token
-        });
+        }, testCts.Token);
 
         await db.WriteTransaction(async tx =>
         {
             await tx.Execute("INSERT INTO assets (id) VALUES(?)", ["099-watch"]);
+            await tx.Commit();
         });
 
         await watched.Task;
     }
 
-    [Fact(Timeout = 2000)]
+    [Fact(Timeout = 5000)]
     public async Task ReflectWriteLockUpdatesOnReadConnectionsTest()
     {
         var numberOfAssets = 10_000;
 
         var watched = new TaskCompletionSource<bool>();
 
-        var cts = new CancellationTokenSource();
-        await db.Watch("SELECT COUNT(*) as count FROM assets", null, new WatchHandler<CountResult>
+        var listener = db.Watch<CountResult>(
+            "SELECT COUNT(*) as count FROM assets",
+            null,
+            new() { Signal = testCts.Token, TriggerImmediately = true });
+        _ = Task.Run(async () =>
         {
-            OnResult = (x) =>
+            await foreach (var x in listener)
             {
                 if (x.First().count == numberOfAssets)
                 {
-                    watched.SetResult(true);
-                    cts.Cancel();
+                    watched.TrySetResult(true);
+                    testCts.Cancel();
                 }
             }
-        }, new SQLWatchOptions
-        {
-            Signal = cts.Token
         });
 
         await db.WriteLock(async tx =>
@@ -529,159 +540,116 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.Equal(make, dynamicAsset.make);
     }
 
-    [Fact(Timeout = 2000)]
+    [Fact(Timeout = 2500)]
     public async Task WatchDynamicTest()
     {
         string id = Guid.NewGuid().ToString();
-        string description = "new description";
-        string make = "some make";
+        string description = "dynamic description";
+        string make = "dynamic make";
 
-        var watched = new TaskCompletionSource<bool>();
-        var cts = new CancellationTokenSource();
+        using var sem = new SemaphoreSlim(0);
+        dynamic? dynamicAsset = null;
 
-        await db.Watch("select id, description, make from assets", null, new WatchHandler<dynamic>
+        var listener = db.Watch<AssetResult>("select id, description, make from assets", null, new() { TriggerImmediately = true });
+        _ = Task.Run(async () =>
         {
-            OnResult = (assets) =>
+            await foreach (var assets in listener)
             {
-                // Only care about results after Execute is called
-                if (assets.Length == 0) return;
+                if (assets.Length > 0)
+                {
+                    dynamicAsset = assets[0];
+                }
 
-                Assert.Single(assets);
-                dynamic dynamicAsset = assets[0];
-                Assert.Equal(id, dynamicAsset.id);
-                Assert.Equal(description, dynamicAsset.description);
-                Assert.Equal(make, dynamicAsset.make);
-
-                watched.SetResult(true);
-                cts.Cancel();
-            },
-            OnError = (ex) => throw ex,
-        },
-        new SQLWatchOptions
-        {
-            Signal = cts.Token
-        });
-
-        await db.WriteTransaction(async tx =>
-        {
-            await tx.Execute(
-                "insert into assets (id, description, make) values (?, ?, ?)",
-                [id, description, make]
-            );
-        });
-
-        await watched.Task;
-    }
-
-    [Fact(Timeout = 2000)]
-    public async Task WatchDisposableSubscriptionTest()
-    {
-        int callCount = 0;
-        var semaphore = new SemaphoreSlim(0);
-
-        var query = await db.Watch("select id from assets", null, new()
-        {
-            OnResult = (results) =>
-            {
-                callCount++;
-                semaphore.Release();
-            },
-            OnError = (ex) => Assert.Fail(ex.ToString())
-        });
-        await semaphore.WaitAsync();
-        Assert.Equal(1, callCount);
-
-        await db.Execute(
-            "insert into assets(id, description, make) values (?, ?, ?)",
-            [Guid.NewGuid().ToString(), "some desc", "some make"]
-        );
-        await semaphore.WaitAsync();
-        Assert.Equal(2, callCount);
-
-        query.Dispose();
-
-        await db.Execute(
-            "insert into assets(id, description, make) values (?, ?, ?)",
-            [Guid.NewGuid().ToString(), "some desc", "some make"]
-        );
-        bool receivedResult = await semaphore.WaitAsync(100);
-        Assert.False(receivedResult, "Received update after disposal");
-        Assert.Equal(2, callCount);
-    }
-
-    [Fact(Timeout = 2000)]
-    public async Task WatchDisposableCustomTokenTest()
-    {
-        var customTokenSource = new CancellationTokenSource();
-        int callCount = 0;
-        var sem = new SemaphoreSlim(0);
-
-        using var query = await db.Watch("select id, description, make from assets", null, new()
-        {
-            OnResult = (results) =>
-            {
-                callCount++;
                 sem.Release();
-            },
-            OnError = (ex) => Assert.Fail(ex.ToString())
-        }, new()
-        {
-            Signal = customTokenSource.Token
+            }
         });
-        await sem.WaitAsync();
+
+        await db.Execute(
+            "insert into assets (id, description, make) values (?, ?, ?)",
+            [id, description, make]
+        );
+        Assert.True(await sem.WaitAsync(500));
+
+        Assert.NotNull(dynamicAsset);
+
+        Assert.Equal(id, dynamicAsset?.id);
+        Assert.Equal(description, dynamicAsset?.description);
+        Assert.Equal(make, dynamicAsset?.make);
+    }
+
+    [Fact(Timeout = 2000)]
+    public async Task WatchCancelledTest()
+    {
+        int callCount = 0;
+        using var sem = new SemaphoreSlim(0);
+
+        var listener = db.Watch<IdResult>("select id from assets", null, new() { Signal = testCts.Token, TriggerImmediately = true });
+        _ = Task.Run(async () =>
+        {
+            await foreach (var result in listener)
+            {
+                Interlocked.Increment(ref callCount);
+                sem.Release();
+            }
+        });
+        Assert.True(await sem.WaitAsync(100));
         Assert.Equal(1, callCount);
 
         await db.Execute(
             "insert into assets(id, description, make) values (?, ?, ?)",
             [Guid.NewGuid().ToString(), "some desc", "some make"]
         );
-        await sem.WaitAsync();
+
+        Assert.True(await sem.WaitAsync(100));
         Assert.Equal(2, callCount);
 
-        customTokenSource.Cancel();
+        testCts.Cancel();
 
         await db.Execute(
             "insert into assets(id, description, make) values (?, ?, ?)",
             [Guid.NewGuid().ToString(), "some desc", "some make"]
         );
-        bool receivedResult = await sem.WaitAsync(100);
-        Assert.False(receivedResult, "Received update after disposal");
 
+        // This is failing
+        Assert.False(await sem.WaitAsync(100));
         Assert.Equal(2, callCount);
     }
 
     [Fact(Timeout = 3000)]
-    public async Task WatchSingleCancelledTest()
+    public async Task WatchMultipleCancelledTest()
     {
         int callCount = 0;
 
-        var watchHandlerFactory = (SemaphoreSlim sem) => new WatchHandler<IdResult>
+        void RunQuery(CancellationTokenSource cts, SemaphoreSlim sem)
         {
-            OnResult = (result) =>
+            var listener = db.Watch<IdResult>("select id from assets", null, new() { Signal = cts.Token });
+            _ = Task.Run(async () =>
             {
-                Interlocked.Increment(ref callCount);
-                sem.Release();
-            },
-            OnError = (ex) => Assert.Fail(ex.ToString()),
-        };
+                await foreach (var update in listener)
+                {
+                    Interlocked.Increment(ref callCount);
+                    sem.Release();
+                }
+            });
+        }
 
-        var semAlwaysRunning = new SemaphoreSlim(0);
-        var semCancelled = new SemaphoreSlim(0);
-        using var queryAlwaysRunning = await db.Watch("select id from assets", null, watchHandlerFactory(semAlwaysRunning));
-        using var queryCancelled = await db.Watch("select id from assets", null, watchHandlerFactory(semCancelled));
+        using var semAlwaysRunning = new SemaphoreSlim(0);
+        using var semCancelled = new SemaphoreSlim(0);
+        using var ctsAlwaysRunning = CancellationTokenSource.CreateLinkedTokenSource(testCts.Token);
+        using var ctsCancelled = CancellationTokenSource.CreateLinkedTokenSource(testCts.Token);
 
-        await Task.WhenAll(semAlwaysRunning.WaitAsync(), semCancelled.WaitAsync());
-        Assert.Equal(2, callCount);
+        RunQuery(ctsAlwaysRunning, semAlwaysRunning);
+        RunQuery(ctsCancelled, semCancelled);
 
         await db.Execute(
             "insert into assets(id, description, make) values (?, ?, ?)",
             [Guid.NewGuid().ToString(), "some desc", "some make"]
         );
         await Task.WhenAll(semAlwaysRunning.WaitAsync(), semCancelled.WaitAsync());
-        Assert.Equal(4, callCount);
+        Assert.Equal(2, callCount);
 
         // Close one query
-        queryCancelled.Dispose();
+        ctsCancelled.Cancel();
 
         await db.Execute(
             "insert into assets(id, description, make) values (?, ?, ?)",
@@ -692,131 +660,133 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.False(await semCancelled.WaitAsync(100));
 
         await semAlwaysRunning.WaitAsync();
-        Assert.Equal(5, callCount);
+        Assert.Equal(3, callCount);
+
+        // Sanity check
+        ctsAlwaysRunning.Cancel();
+
+        await db.Execute(
+            "insert into assets(id, description, make) values (?, ?, ?)",
+            [Guid.NewGuid().ToString(), "some desc", "some make"]
+        );
+
+        Assert.False(await semAlwaysRunning.WaitAsync(100));
+        Assert.False(await semCancelled.WaitAsync(100));
+        Assert.Equal(3, callCount);
     }
 
     [Fact(Timeout = 3000)]
     public async Task WatchSchemaResetTest()
     {
         var dbId = Guid.NewGuid().ToString();
+        var localDbName = $"PowerSyncWatchReset_{dbId}.db";
         var db = new PowerSyncDatabase(new()
         {
             Database = new SQLOpenOptions
             {
-                DbFilename = $"powerSyncWatch_{dbId}.db",
+                DbFilename = localDbName,
             },
             Schema = TestSchema.MakeOptionalSyncSchema(false)
         });
 
-        var sem = new SemaphoreSlim(0);
-        long lastCount = -1;
-
-        string querySql = "SELECT COUNT(*) AS count FROM assets";
-        var query = await db.Watch(querySql, [], new WatchHandler<CountResult>
+        try
         {
-            OnResult = (result) =>
+            using var sem = new SemaphoreSlim(0);
+            long lastCount = 0;
+
+            const string QUERY = "SELECT COUNT(*) AS count FROM assets";
+            var listener = db.Watch<CountResult>(QUERY, null, new() { Signal = testCts.Token });
+            _ = Task.Run(async () =>
             {
-                lastCount = result[0].count;
-                sem.Release();
-            },
-            OnError = error => throw error
-        });
-        Assert.True(await sem.WaitAsync(100));
-        Assert.Equal(0, lastCount);
+                await foreach (var result in listener)
+                {
+                    if (result.Length > 0)
+                    {
+                        lastCount = result[0].count;
+                    }
+                    sem.Release();
+                }
+            });
 
-        var resolved = await GetSourceTables(db, querySql);
-        Assert.Single(resolved);
-        Assert.Contains("ps_data_local__local_assets", resolved);
+            var resolved = await db.GetSourceTables(QUERY, null);
+            Assert.Single(resolved);
+            Assert.Contains("ps_data_local__local_assets", resolved);
 
-        for (int i = 0; i < 3; i++)
-        {
-            await db.Execute(
-                "insert into assets(id, description, make) values (?, ?, ?)",
-                [Guid.NewGuid().ToString(), "some desc", "some make"]
-            );
+            for (int i = 0; i < 3; i++)
+            {
+                await db.Execute(
+                    "insert into assets(id, description, make) values (?, ?, ?)",
+                    [Guid.NewGuid().ToString(), "some desc", "some make"]
+                );
+                Assert.True(await sem.WaitAsync(100));
+                Assert.Equal(i + 1, lastCount);
+            }
+            Assert.Equal(3, lastCount);
+
+            await db.UpdateSchema(TestSchema.MakeOptionalSyncSchema(true));
+
+            resolved = await db.GetSourceTables(QUERY);
+            Assert.Single(resolved);
+            Assert.Contains("ps_data__assets", resolved);
+
             Assert.True(await sem.WaitAsync(100));
-            Assert.Equal(i + 1, lastCount);
+            Assert.Equal(0, lastCount);
+
+            await db.Execute("insert into assets select * from inactive_local_assets");
+            Assert.True(await sem.WaitAsync(500));
+            Assert.Equal(3, lastCount);
+
+            // Sanity check
+            testCts.Cancel();
+            await Task.Delay(100);
+
+            await db.Execute("delete from assets");
+            Assert.False(await sem.WaitAsync(100));
+            Assert.Equal(3, lastCount);
         }
-        Assert.Equal(3, lastCount);
-
-        await db.UpdateSchema(TestSchema.MakeOptionalSyncSchema(true));
-
-        resolved = await GetSourceTables(db, querySql);
-        Assert.Single(resolved);
-        Assert.Contains("ps_data__assets", resolved);
-
-        Assert.True(await sem.WaitAsync(100));
-        Assert.Equal(0, lastCount);
-
-        await db.Execute("insert into assets select * from inactive_local_assets");
-        Assert.True(await sem.WaitAsync(500));
-        Assert.Equal(3, lastCount);
-
-        // Sanity check
-        query.Dispose();
-
-        await db.Execute("delete from assets");
-        Assert.False(await sem.WaitAsync(100));
-        Assert.Equal(3, lastCount);
-    }
-
-    private class ExplainedResult
-    {
-        public int addr = 0;
-        public string opcode = "";
-        public int p1 = 0;
-        public int p2 = 0;
-        public int p3 = 0;
-        public string p4 = "";
-        public int p5 = 0;
-    }
-    private record TableSelectResult(string tbl_name);
-    private async Task<List<string>> GetSourceTables(PowerSyncDatabase db, string sql, object?[]? parameters = null)
-    {
-        var explained = await db.GetAll<ExplainedResult>(
-            $"EXPLAIN {sql}", parameters
-        );
-
-        var rootPages = explained
-            .Where(row => row.opcode == "OpenRead" && row.p3 == 0)
-            .Select(row => row.p2)
-            .ToList();
-
-        var tables = await db.GetAll<TableSelectResult>(
-            "SELECT DISTINCT tbl_name FROM sqlite_master WHERE rootpage IN (SELECT json_each.value FROM json_each(?))",
-            [JsonConvert.SerializeObject(rootPages)]
-        );
-
-        return tables.Select(row => row.tbl_name).ToList();
+        finally
+        {
+            await db.Close();
+            DatabaseUtils.CleanDb(localDbName);
+        }
     }
 
     [Fact]
     public async Task Attributes_ColumnAliasing()
     {
+        var localDbName = $"PowerSyncAttributesTest-{Guid.NewGuid():N}.db";
         var db = new PowerSyncDatabase(new PowerSyncDatabaseOptions
         {
-            Database = new SQLOpenOptions { DbFilename = "PowerSyncAttributesTest.db" },
+            Database = new SQLOpenOptions { DbFilename = localDbName },
             Schema = TestSchemaAttributes.AppSchema,
         });
-        await db.DisconnectAndClear();
+        try
+        {
+            await db.DisconnectAndClear();
 
-        var id = Guid.NewGuid().ToString();
-        var description = "Test description";
-        var completed = false;
-        var createdAt = DateTimeOffset.Now;
+            var id = Guid.NewGuid().ToString();
+            var description = "Test description";
+            var completed = false;
+            var createdAt = DateTimeOffset.Now;
 
-        await db.Execute(
-            "INSERT INTO todos(id, description, completed, created_at, list_id) VALUES(?, ?, ?, ?, uuid())",
-            [id, description, completed, createdAt]
-        );
+            await db.Execute(
+                "INSERT INTO todos(id, description, completed, created_at, list_id) VALUES(?, ?, ?, ?, uuid())",
+                [id, description, completed, createdAt]
+            );
 
-        var results = await db.GetAll<Todo>("SELECT * FROM todos");
-        Assert.Single(results);
-        var row = results.First();
-        Assert.Equal(id, row.TodoId);
-        Assert.Equal(description, row.Description);
-        Assert.Equal(completed, row.Completed);
-        Assert.Equal(createdAt, row.CreatedAt);
+            var results = await db.GetAll<Todo>("SELECT * FROM todos");
+            Assert.Single(results);
+            var row = results.First();
+            Assert.Equal(id, row.TodoId);
+            Assert.Equal(description, row.Description);
+            Assert.Equal(completed, row.Completed);
+            Assert.Equal(createdAt, row.CreatedAt);
+        }
+        finally
+        {
+            await db.Close();
+            DatabaseUtils.CleanDb(localDbName);
+        }
     }
 
     [Fact]

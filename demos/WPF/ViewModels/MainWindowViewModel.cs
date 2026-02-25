@@ -32,15 +32,16 @@ namespace PowersyncDotnetTodoList.ViewModels
         {
             _db = db;
             // Set up the listener to track the status changes
-            _db.RunListener(
-                (update) =>
+            _ = Task.Run(async () =>
+            {
+                await foreach (var update in _db.ListenAsync(new CancellationToken()))
                 {
                     if (update.StatusChanged != null)
                     {
                         Connected = update.StatusChanged.Connected;
                     }
                 }
-            );
+            });
         }
         #endregion
     }
