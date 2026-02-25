@@ -1,5 +1,6 @@
 namespace PowerSync.Common.Client;
 
+using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
@@ -121,8 +122,9 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
 
     public SyncStatus CurrentStatus { get; protected set; }
 
+    protected CancellationTokenSource masterCts = new();
+
     protected CancellationTokenSource? syncStreamStatusCts;
-    protected CancellationTokenSource watchSubscriptionCts = new();
 
     public ILogger Logger { get; protected set; }
 
@@ -284,18 +286,22 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         }
 
         var tcs = new TaskCompletionSource<bool>();
-        var cts = new CancellationTokenSource();
+        var cts = CancellationTokenSource.CreateLinkedTokenSource(masterCts.Token);
 
-        _ = Task.Run(() =>
+        _ = Task.Run(async () =>
         {
-            foreach (var update in Listen(cts.Token))
+            try
             {
-                if (update.StatusChanged != null && predicate(update.StatusChanged))
+                await foreach (var update in ListenAsync(cts.Token))
                 {
-                    cts.Cancel();
-                    tcs.TrySetResult(true);
+                    if (update.StatusChanged != null && predicate(update.StatusChanged))
+                    {
+                        cts.Cancel();
+                        tcs.TrySetResult(true);
+                    }
                 }
             }
+            catch (OperationCanceledException) { }
         });
 
         cancellationToken?.Register(() =>
@@ -425,16 +431,6 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         await ConnectionManager.Connect(connector, resolvedOptions);
     }
 
-    /// <summary>
-    /// Unsubscribe from all currently watched queries.
-    /// </summary>
-    protected void UnsubscribeAllQueries()
-    {
-        watchSubscriptionCts.Cancel();
-        watchSubscriptionCts.Dispose();
-        watchSubscriptionCts = new();
-    }
-
     public async Task Disconnect()
     {
         await ConnectionManager.Disconnect();
@@ -490,10 +486,13 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
 
         Emit(new PowerSyncDBEvent { Closing = true });
 
-        UnsubscribeAllQueries();
         await Disconnect();
 
         base.Close();
+
+        masterCts.Cancel();
+        masterCts.Dispose();
+
         ConnectionManager.Close();
         BucketStorageAdapter?.Close();
 
@@ -742,87 +741,181 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         return await Database.WriteTransaction(fn, options);
     }
 
-    /// <summary>
-    /// Executes a read query every time the source tables are modified.
-    /// <para />
-    /// Use <see cref="SQLWatchOptions.ThrottleMs"/> to specify the minimum interval between queries.
-    /// Source tables are automatically detected using <c>EXPLAIN QUERY PLAN</c>.
-    /// </summary>
-    public Task<IDisposable> Watch<T>(string query, object?[]? parameters, WatchHandler<T> handler, SQLWatchOptions? options = null)
-        => Task.Run(() => WatchInternal(query, parameters, handler, options, GetAll<T>));
+    public IAsyncEnumerable<WatchOnChangeEvent> OnChange(SQLWatchOptions? options = null)
+    {
+        options ??= new SQLWatchOptions();
 
-    /// <summary>
-    /// Executes a read query every time the source tables are modified.
-    /// <para />
-    /// Use <see cref="SQLWatchOptions.ThrottleMs"/> to specify the minimum interval between queries.
-    /// Source tables are automatically detected using <c>EXPLAIN QUERY PLAN</c>.
-    /// </summary>
-    public Task<IDisposable> Watch(string query, object?[]? parameters, WatchHandler<dynamic> handler, SQLWatchOptions? options = null)
-        => Task.Run(() => WatchInternal(query, parameters, handler, options, GetAll));
+        var tables = options?.Tables ?? [];
+        var powersyncTables = new HashSet<string>(
+            tables.SelectMany(table => new[] { $"ps_data__{table}", $"ps_data_local__{table}" })
+        );
 
-    private async Task<IDisposable> WatchInternal<T>(
-        string query,
-        object?[]? parameters,
-        WatchHandler<T> handler,
-        SQLWatchOptions? options,
-        Func<string, object?[]?, Task<T[]>> getter
+        var signal = options?.Signal != null
+            ? CancellationTokenSource.CreateLinkedTokenSource(masterCts.Token, options.Signal.Value)
+            : CancellationTokenSource.CreateLinkedTokenSource(masterCts.Token);
+
+        var listener = Database.ListenAsync(signal.Token);
+
+        // Return the actual IAsyncEnumerable here, using OnChange as a synchronous wrapper that blocks until the
+        // connection is established
+        return OnChangeCore(powersyncTables, listener, signal.Token, options?.TriggerImmediately == true);
+    }
+
+    private async IAsyncEnumerable<WatchOnChangeEvent> OnChangeCore(
+        HashSet<string> watchedTables,
+        IAsyncEnumerable<DBAdapterEvent> listener,
+        [EnumeratorCancellation] CancellationToken signal,
+        bool triggerImmediately
     )
     {
-        var subscription = new WatchSubscription();
-
-        async Task ResetQuery()
+        if (triggerImmediately == true)
         {
-            try
-            {
-                var resolvedTables = await ResolveTables(query, parameters, options);
-                var result = await getter(query, parameters);
-                handler.OnResult(result);
-
-                var onChangeListener = OnChange(new WatchOnChangeHandler
-                {
-                    OnChange = async (change) =>
-                    {
-                        try
-                        {
-                            var result = await getter(query, parameters);
-                            handler.OnResult(result);
-                        }
-                        catch (Exception ex)
-                        {
-                            handler.OnError?.Invoke(ex);
-                        }
-                    },
-                    OnError = handler.OnError
-                }, new SQLWatchOptions
-                {
-                    Tables = resolvedTables,
-                    Signal = options?.Signal,
-                    ThrottleMs = options?.ThrottleMs
-                });
-
-                subscription.SetOnChangeListener(onChangeListener);
-            }
-            catch (Exception ex)
-            {
-                handler.OnError?.Invoke(ex);
-                throw;
-            }
+            yield return new WatchOnChangeEvent { ChangedTables = [] };
         }
 
-        // Register initial subscription
-        await ResetQuery();
-
-        // Listen for schema changes and reset listener
-        var schemaListener = RunListener(async (e) =>
+        HashSet<string> changedTables = new();
+        await foreach (var e in listener)
         {
-            if (e.SchemaChanged != null)
-            {
-                await ResetQuery();
-            }
-        });
-        subscription.SetSchemaListener(schemaListener);
+            if (signal.IsCancellationRequested) yield break;
+            if (e.TablesUpdated == null) continue;
 
-        return subscription;
+            changedTables.Clear();
+            GetTablesFromNotification(e.TablesUpdated, changedTables);
+            changedTables.IntersectWith(watchedTables);
+
+            if (changedTables.Count == 0) continue;
+
+            var update = new WatchOnChangeEvent { ChangedTables = [.. changedTables] };
+
+            // Convert from 'ps_data__<name>' to '<name>'
+            for (int i = 0; i < update.ChangedTables.Length; i++)
+            {
+                update.ChangedTables[i] = InternalToFriendlyTableName(update.ChangedTables[i]);
+            }
+            yield return update;
+        }
+    }
+
+    private static string InternalToFriendlyTableName(string internalName)
+    {
+        const string PS_DATA_PREFIX = "ps_data__";
+        const string PS_DATA_LOCAL_PREFIX = "ps_data_local__";
+
+        if (internalName.StartsWith(PS_DATA_PREFIX))
+            return internalName.Substring(PS_DATA_PREFIX.Length);
+
+        if (internalName.StartsWith(PS_DATA_LOCAL_PREFIX))
+            return internalName.Substring(PS_DATA_LOCAL_PREFIX.Length);
+
+        return internalName;
+    }
+
+    public IAsyncEnumerable<T[]> Watch<T>(
+        string sql,
+        object?[]? parameters = null,
+        SQLWatchOptions? options = null
+    )
+    {
+        options ??= new SQLWatchOptions();
+
+        // Stop watching on master CTS cancellation, or on user CTS cancellation
+        var signal = options.Signal != null
+            ? CancellationTokenSource.CreateLinkedTokenSource(masterCts.Token, options.Signal.Value)
+            : CancellationTokenSource.CreateLinkedTokenSource(masterCts.Token);
+
+        // Establish the initial DB listener synchronously before returning the IAsyncEnumerable,
+        // so that table changes between Watch() being called and iteration starting are not missed.
+        // This mirrors the pattern used in OnChange().
+        var initialRestartCts = CancellationTokenSource.CreateLinkedTokenSource(signal.Token);
+        var initialListener = Database.ListenAsync(initialRestartCts.Token);
+
+        return WatchCore<T>(sql, parameters, options, signal, initialRestartCts, initialListener);
+    }
+
+    private async IAsyncEnumerable<T[]> WatchCore<T>(
+        string sql,
+        object?[]? parameters,
+        SQLWatchOptions options,
+        CancellationTokenSource signal,
+        CancellationTokenSource initialRestartCts,
+        IAsyncEnumerable<DBAdapterEvent> initialListener
+    )
+    {
+        var schemaChanged = new TaskCompletionSource<bool>();
+
+        // Listen for schema changes in the background
+        _ = Task.Run(async () =>
+        {
+            await foreach (var update in ListenAsync(signal.Token))
+            {
+                if (update.SchemaChanged != null)
+                {
+                    // Swap schemaChanged with an unresolved TCS
+                    var oldTcs = Interlocked.Exchange(ref schemaChanged, new());
+                    oldTcs.TrySetResult(true);
+                }
+            }
+        }, signal.Token);
+
+        // Re-register query on schema updates
+        bool isRestart = false;
+        var currentRestartCts = initialRestartCts;
+        var currentListener = initialListener;
+
+        while (!signal.Token.IsCancellationRequested)
+        {
+            // Resolve tables
+            HashSet<string> powersyncTables;
+            if (options?.Tables != null)
+            {
+                powersyncTables = [.. options
+                    .Tables
+                    .SelectMany<string, string>(table => [$"ps_data__{table}", $"ps_data_local__{table}"]
+                )];
+            }
+            else
+            {
+                powersyncTables = await GetSourceTables(sql, parameters);
+            }
+
+            var enumerator = OnRawTableChange(
+                powersyncTables,
+                currentListener,
+                currentRestartCts.Token,
+                isRestart || options?.TriggerImmediately == true
+            ).GetAsyncEnumerator(currentRestartCts.Token);
+
+            // Continually wait for either OnChange or SchemaChanged to fire
+            while (true)
+            {
+                var currentSchemaTask = schemaChanged.Task;
+                var onChangeTask = enumerator.MoveNextAsync().AsTask();
+                var completedTask = await Task.WhenAny(onChangeTask, currentSchemaTask);
+
+                if (completedTask == currentSchemaTask)
+                {
+                    currentRestartCts.Cancel();
+                    isRestart = true;
+                    // Let the current task complete/cancel gracefully
+                    try { await onChangeTask; }
+                    catch (OperationCanceledException) { }
+
+                    // Establish a new listener BEFORE resolving source tables in the next iteration,
+                    // so that changes during the async GetSourceTables call are not missed.
+                    currentRestartCts = CancellationTokenSource.CreateLinkedTokenSource(signal.Token);
+                    currentListener = Database.ListenAsync(currentRestartCts.Token);
+
+                    break;
+                }
+
+                var update = enumerator.Current;
+                if (update.ChangedTables != null)
+                {
+                    if (signal.IsCancellationRequested) yield break;
+                    yield return await GetAll<T>(sql, parameters);
+                }
+            }
+        }
     }
 
     private class ExplainedResult
@@ -836,114 +929,55 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         public int p5 = 0;
     }
     private record TableSelectResult(string tbl_name);
-    public async Task<string[]> ResolveTables(string sql, object?[]? parameters = null, SQLWatchOptions? options = null)
+    internal async Task<HashSet<string>> GetSourceTables(string sql, object?[]? parameters = null)
     {
-        List<string> resolvedTables = options?.Tables != null ? [.. options.Tables] : [];
+        var explained = await GetAll<ExplainedResult>(
+            $"EXPLAIN {sql}", parameters
+        );
 
-        if (options?.Tables == null)
-        {
-            var explained = await GetAll<ExplainedResult>(
-                $"EXPLAIN {sql}", parameters
-            );
+        var rootPages = explained
+            .Where(row => row.opcode == "OpenRead" && row.p3 == 0)
+            .Select(row => row.p2)
+            .ToList();
 
-            var rootPages = explained
-                .Where(row => row.opcode == "OpenRead" && row.p3 == 0)
-                .Select(row => row.p2)
-                .ToList();
+        var tables = await GetAll<TableSelectResult>(
+            "SELECT DISTINCT tbl_name FROM sqlite_master WHERE rootpage IN (SELECT json_each.value FROM json_each(?))",
+            [JsonConvert.SerializeObject(rootPages)]
+        );
 
-            var tables = await GetAll<TableSelectResult>(
-                "SELECT DISTINCT tbl_name FROM sqlite_master WHERE rootpage IN (SELECT json_each.value FROM json_each(?))",
-                [JsonConvert.SerializeObject(rootPages)]
-            );
-
-            foreach (var table in tables)
-            {
-                resolvedTables.Add(POWERSYNC_TABLE_MATCH.Replace(table.tbl_name, ""));
-            }
-        }
-        return [.. resolvedTables];
+        return [.. tables.Select(row => row.tbl_name)];
     }
 
-    /// <summary>
-    /// Invokes the provided callback whenever any of the specified tables are modified.
-    /// <para />
-    /// This is preferred over <see cref="Watch"/> when multiple queries need to be performed
-    /// together in response to data changes.
-    /// </summary>
-    public IDisposable OnChange(WatchOnChangeHandler handler, SQLWatchOptions? options = null)
+    private async IAsyncEnumerable<WatchOnChangeEvent> OnRawTableChange(
+        HashSet<string> watchedTables,
+        IAsyncEnumerable<DBAdapterEvent> listener,
+        [EnumeratorCancellation] CancellationToken token,
+        bool triggerImmediately = false
+    )
     {
-        var resolvedOptions = options ?? new SQLWatchOptions();
-
-        string[] tables = resolvedOptions.Tables ?? [];
-        HashSet<string> watchedTables = [.. tables.SelectMany(table => new[] { table, $"ps_data__{table}", $"ps_data_local__{table}" })];
-
-        var changedTables = new HashSet<string>();
-        var resolvedThrottleMs = resolvedOptions.ThrottleMs ?? DEFAULT_WATCH_THROTTLE_MS;
-
-        void flushTableUpdates()
+        if (triggerImmediately)
         {
-            HandleTableChanges(changedTables, watchedTables, (intersection) =>
-            {
-                if (resolvedOptions?.Signal?.IsCancellationRequested == true) return;
-                handler.OnChange(new WatchOnChangeEvent { ChangedTables = intersection });
-            });
+            yield return new WatchOnChangeEvent { ChangedTables = [] };
         }
 
-        var dbListenerCts = Database.RunListener((update) =>
+        HashSet<string> changedTables = new();
+        await foreach (var e in listener)
         {
-            if (update.TablesUpdated != null)
+            if (e.TablesUpdated != null)
             {
-                try
-                {
-                    ProcessTableUpdates(update.TablesUpdated, changedTables);
-                    flushTableUpdates();
-                }
-                catch (Exception ex)
-                {
-                    handler?.OnError?.Invoke(ex);
-                }
-            }
-        });
+                if (token.IsCancellationRequested) break;
 
-        CancellationTokenSource stopRunningCts;
+                // Extract the changed tables and intersect with the watched tables
+                changedTables.Clear();
+                GetTablesFromNotification(e.TablesUpdated, changedTables);
+                changedTables.IntersectWith(watchedTables);
 
-        if (options?.Signal != null)
-        {
-            var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
-                watchSubscriptionCts.Token,
-                options.Signal.Value
-            );
-            stopRunningCts = linkedCts;
-        }
-        else
-        {
-            stopRunningCts = watchSubscriptionCts;
-        }
-
-        var stopRunningReg = stopRunningCts.Token.Register(dbListenerCts.Cancel);
-
-        return new ActionDisposable(() =>
-        {
-            stopRunningReg.Dispose();
-            dbListenerCts.Cancel();
-            dbListenerCts.Dispose();
-        });
-    }
-
-    private static void HandleTableChanges(HashSet<string> changedTables, HashSet<string> watchedTables, Action<string[]> onDetectedChanges)
-    {
-        if (changedTables.Count > 0)
-        {
-            var intersection = changedTables.Where(watchedTables.Contains).ToArray();
-            if (intersection.Length > 0)
-            {
-                onDetectedChanges(intersection);
+                yield return new WatchOnChangeEvent { ChangedTables = [.. changedTables] };
             }
         }
-        changedTables.Clear();
     }
 
-    private static void ProcessTableUpdates(INotification updateNotification, HashSet<string> changedTables)
+    private static void GetTablesFromNotification(INotification updateNotification, HashSet<string> changedTables)
     {
         string[] tables = [];
         if (updateNotification is BatchedUpdateNotification batchedUpdate)
@@ -971,12 +1005,8 @@ public class SQLWatchOptions
     /// The minimum interval between queries in milliseconds.
     /// </summary>
     public int? ThrottleMs { get; set; }
-}
 
-public class WatchHandler<T>
-{
-    public Action<T[]> OnResult { get; set; } = null!;
-    public Action<Exception>? OnError { get; set; }
+    public bool TriggerImmediately { get; set; } = false;
 }
 
 public class WatchOnChangeEvent
@@ -990,63 +1020,3 @@ public class WatchOnChangeHandler
     public Action<Exception>? OnError { get; set; }
 }
 
-public class WatchSubscription : IDisposable
-{
-    private IDisposable? _onChangeListener;
-    private IDisposable? _schemaListener;
-    private readonly object _lock = new();
-    private bool _disposed;
-
-    internal void SetSchemaListener(IDisposable listener)
-    {
-        lock (_lock)
-        {
-            if (_disposed)
-            {
-                listener.Dispose();
-                return;
-            }
-            _schemaListener?.Dispose();
-            _schemaListener = listener;
-        }
-    }
-
-    internal void SetOnChangeListener(IDisposable listener)
-    {
-        lock (_lock)
-        {
-            if (_disposed)
-            {
-                listener.Dispose();
-                return;
-            }
-            _onChangeListener?.Dispose();
-            _onChangeListener = listener;
-        }
-    }
-
-    public void Dispose()
-    {
-        lock (_lock)
-        {
-            if (_disposed) return;
-            _disposed = true;
-
-            _onChangeListener?.Dispose();
-            _schemaListener?.Dispose();
-        }
-    }
-}
-
-public class ActionDisposable(Action onDispose) : IDisposable
-{
-    private readonly Action _onDispose = onDispose;
-    private bool _disposed = false;
-
-    public void Dispose()
-    {
-        if (_disposed) return;
-        _disposed = true;
-        _onDispose();
-    }
-}
