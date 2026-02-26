@@ -102,6 +102,11 @@ public class MDSQLiteOptions
     /// Load extensions using the path and entryPoint.
     /// </summary>
     public SqliteExtension[]? Extensions { get; set; }
+
+    /// <summary>
+    /// The number of MDSQLiteConnection objects to create for the read pool.
+    /// </summary>
+    public int? ReadPoolSize { get; set; }
 }
 
 public class RequiredMDSQLiteOptions : MDSQLiteOptions
@@ -115,7 +120,8 @@ public class RequiredMDSQLiteOptions : MDSQLiteOptions
         TemporaryStorage = TemporaryStorageOption.MEMORY,
         LockTimeoutMs = 30000,
         EncryptionKey = null,
-        Extensions = []
+        Extensions = [],
+        ReadPoolSize = 5,
     };
 
     public new SqliteJournalMode JournalMode { get; set; } = null!;
@@ -131,5 +137,8 @@ public class RequiredMDSQLiteOptions : MDSQLiteOptions
     public new TemporaryStorageOption TemporaryStorage { get; set; } = null!;
 
     public new int CacheSizeKb { get; set; }
+
     public new SqliteExtension[] Extensions { get; set; } = null!;
+
+    public new int ReadPoolSize { get; set; }
 }
