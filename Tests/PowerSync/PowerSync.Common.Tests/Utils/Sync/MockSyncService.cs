@@ -165,11 +165,12 @@ public class MockRemote : Remote
         var writer = pipe.Writer;
 
         var cts = CancellationTokenSource.CreateLinkedTokenSource(options.CancellationToken);
+        var listener = syncService.ListenAsync(cts.Token);
         _ = Task.Run(async () =>
         {
             try
             {
-                await foreach (var line in syncService.ListenAsync(cts.Token))
+                await foreach (var line in listener)
                 {
                     var bytes = Encoding.UTF8.GetBytes(line + "\n");
                     await writer.WriteAsync(bytes);
