@@ -204,10 +204,11 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
                     Logger = Logger
                 });
 
-                var syncStreamStatusCts = new CancellationTokenSource();
-                var _ = Task.Run(() =>
+                var syncStreamStatusCts = CancellationTokenSource.CreateLinkedTokenSource(masterCts.Token);
+                var syncStreamStatusListener = syncStreamImplementation.ListenAsync(syncStreamStatusCts.Token);
+                var _ = Task.Run(async () =>
                 {
-                    foreach (var update in syncStreamImplementation.Listen(syncStreamStatusCts.Token))
+                    await foreach (var update in syncStreamStatusListener)
                     {
                         if (update.StatusChanged != null)
                         {
@@ -280,34 +281,34 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
     /// <param name="cancellationToken">Optional cancellation token to abort the wait.</param>
     public async Task WaitForStatus(Func<SyncStatus, bool> predicate, CancellationToken? cancellationToken = null)
     {
+        var cts = cancellationToken == null
+            ? CancellationTokenSource.CreateLinkedTokenSource(masterCts.Token)
+            : CancellationTokenSource.CreateLinkedTokenSource(masterCts.Token, cancellationToken.Value);
+
+        var statusListener = ListenAsync(cts.Token);
+
         if (predicate(CurrentStatus))
         {
+            cts.Cancel();
             return;
         }
 
         var tcs = new TaskCompletionSource<bool>();
-        var cts = CancellationTokenSource.CreateLinkedTokenSource(masterCts.Token);
 
         _ = Task.Run(async () =>
         {
             try
             {
-                await foreach (var update in ListenAsync(cts.Token))
+                await foreach (var update in statusListener)
                 {
-                    if (update.StatusChanged != null && predicate(update.StatusChanged))
+                    if ((update.StatusChanged != null) && predicate(update.StatusChanged))
                     {
-                        cts.Cancel();
                         tcs.TrySetResult(true);
+                        cts.Cancel();
                     }
                 }
             }
             catch (OperationCanceledException) { }
-        });
-
-        cancellationToken?.Register(() =>
-        {
-            cts.Cancel();
-            tcs.TrySetCanceled();
         });
 
         await tcs.Task;
