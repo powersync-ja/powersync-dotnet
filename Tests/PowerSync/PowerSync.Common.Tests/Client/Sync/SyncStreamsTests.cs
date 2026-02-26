@@ -30,10 +30,12 @@ public class SyncStreamsTests : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        syncService.Close();
+        await db.Disconnect();
         await db.Execute("DELETE FROM ps_stream_subscriptions");
         await db.DisconnectAndClear();
+        syncService.Close();
         await db.Close();
+        DatabaseUtils.CleanDb(db.Database.Name);
     }
 
     [Fact]
