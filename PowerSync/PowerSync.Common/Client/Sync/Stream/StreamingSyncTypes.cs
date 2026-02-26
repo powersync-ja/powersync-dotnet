@@ -97,7 +97,7 @@ public class RequestStreamSubscription
     [JsonProperty("parameters")]
     public Dictionary<string, object> Parameters { get; set; } = new();
 
-    [JsonProperty("override_priority", NullValueHandling = NullValueHandling.Ignore)]
+    [JsonProperty("override_priority")]
     public int? OverridePriority { get; set; }
 
 }

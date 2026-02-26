@@ -171,74 +171,78 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvent>, ILockContext
         return dynamicParamsList;
     }
 
-    public async Task<T[]> GetAll<T>(string query, object?[]? parameters = null)
+    public Task<T[]> GetAll<T>(string query, object?[]? parameters = null)
     {
         DynamicParameters? dynamicParams = PrepareQuery(ref query, parameters);
-        return [.. await Db.QueryAsync<T>(query, dynamicParams, commandType: CommandType.Text)];
+        return Task.Run(async () => (await Db.QueryAsync<T>(query, dynamicParams, commandType: CommandType.Text)).ToArray());
     }
 
-    public async Task<dynamic[]> GetAll(string query, object?[]? parameters = null)
+    public Task<dynamic[]> GetAll(string query, object?[]? parameters = null)
     {
         DynamicParameters? dynamicParams = PrepareQuery(ref query, parameters);
-        return [.. await Db.QueryAsync(query, dynamicParams, commandType: CommandType.Text)];
+        return Task.Run(async () => (await Db.QueryAsync(query, dynamicParams, commandType: CommandType.Text)).ToArray());
     }
 
-    public async Task<T?> GetOptional<T>(string query, object?[]? parameters = null)
+    public Task<T?> GetOptional<T>(string query, object?[]? parameters = null)
     {
         DynamicParameters? dynamicParams = PrepareQuery(ref query, parameters);
-        return await Db.QueryFirstOrDefaultAsync<T>(query, dynamicParams, commandType: CommandType.Text);
+        return Task.Run(() => Db.QueryFirstOrDefaultAsync<T>(query, dynamicParams, commandType: CommandType.Text));
     }
 
-    public async Task<dynamic?> GetOptional(string query, object?[]? parameters = null)
+    public Task<dynamic?> GetOptional(string query, object?[]? parameters = null)
     {
         DynamicParameters? dynamicParams = PrepareQuery(ref query, parameters);
-        return await Db.QueryFirstOrDefaultAsync(query, dynamicParams, commandType: CommandType.Text);
+        return Task.Run(() => Db.QueryFirstOrDefaultAsync(query, dynamicParams, commandType: CommandType.Text));
     }
 
-    public async Task<T> Get<T>(string query, object?[]? parameters = null)
+    public Task<T> Get<T>(string query, object?[]? parameters = null)
     {
         DynamicParameters? dynamicParams = PrepareQuery(ref query, parameters);
-        return await Db.QueryFirstAsync<T>(query, dynamicParams, commandType: CommandType.Text);
+        return Task.Run(() => Db.QueryFirstAsync<T>(query, dynamicParams, commandType: CommandType.Text));
     }
 
-    public async Task<dynamic> Get(string query, object?[]? parameters = null)
+    public Task<dynamic> Get(string query, object?[]? parameters = null)
     {
         DynamicParameters? dynamicParams = PrepareQuery(ref query, parameters);
-        return await Db.QueryFirstAsync(query, dynamicParams, commandType: CommandType.Text);
+        return Task.Run(() => Db.QueryFirstAsync(query, dynamicParams, commandType: CommandType.Text));
     }
 
-    public async Task<NonQueryResult> Execute(string query, object?[]? parameters = null)
+    public Task<NonQueryResult> Execute(string query, object?[]? parameters = null)
     {
         DynamicParameters? dynamicParams = PrepareQuery(ref query, parameters);
-        int rowsAffected = await Db.ExecuteAsync(query, dynamicParams, commandType: CommandType.Text);
-
-        return new NonQueryResult
+        return Task.Run(async () =>
         {
-            InsertId = raw.sqlite3_last_insert_rowid(Db.Handle),
-            RowsAffected = rowsAffected,
-        };
+            int rowsAffected = await Db.ExecuteAsync(query, dynamicParams, commandType: CommandType.Text);
+            return new NonQueryResult
+            {
+                InsertId = raw.sqlite3_last_insert_rowid(Db.Handle),
+                RowsAffected = rowsAffected,
+            };
+        });
     }
 
-    public async Task<NonQueryResult> ExecuteBatch(string query, object?[][]? parameters = null)
+    public Task<NonQueryResult> ExecuteBatch(string query, object?[][]? parameters = null)
     {
         if (parameters == null || parameters.Length == 0)
         {
-            return new NonQueryResult { RowsAffected = 0 };
+            return Task.FromResult(new NonQueryResult { RowsAffected = 0 });
         }
 
         List<DynamicParameters>? dynamicParamsList = PrepareQuery(ref query, parameters);
         if (dynamicParamsList == null)
         {
-            return new NonQueryResult { RowsAffected = 0 };
+            return Task.FromResult(new NonQueryResult { RowsAffected = 0 });
         }
 
-        int rowsAffected = await Db.ExecuteAsync(query, dynamicParamsList, commandType: CommandType.Text);
-
-        return new NonQueryResult
+        return Task.Run(async () =>
         {
-            InsertId = raw.sqlite3_last_insert_rowid(Db.Handle),
-            RowsAffected = rowsAffected,
-        };
+            int rowsAffected = await Db.ExecuteAsync(query, dynamicParamsList, commandType: CommandType.Text);
+            return new NonQueryResult
+            {
+                InsertId = raw.sqlite3_last_insert_rowid(Db.Handle),
+                RowsAffected = rowsAffected,
+            };
+        });
     }
 
     public new void Close()
