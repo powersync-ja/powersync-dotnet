@@ -116,6 +116,16 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task QueriesRunOnAnotherThread()
+    {
+        int preCallThreadId = Environment.CurrentManagedThreadId;
+        await db.GetAll("select * from assets");
+        int postCallThreadId = Environment.CurrentManagedThreadId;
+
+        Assert.NotEqual(preCallThreadId, postCallThreadId);
+    }
+
+    [Fact]
     public async Task FailedInsertTest()
     {
         var name = "Test User";
@@ -354,15 +364,11 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
 
         await db.WriteLock(async context =>
         {
-            var tasks = Enumerable.Range(0, operationCount)
-                .Select(async index =>
-                {
-                    await context.Execute("SELECT * FROM assets");
-                    order.Add(index);
-                })
-                .ToArray();
-
-            await Task.WhenAll(tasks);
+            for (int i = 0; i < operationCount; i++)
+            {
+                await context.Execute("SELECT * FROM assets");
+                order.Add(i);
+            }
         });
 
         var expectedOrder = Enumerable.Range(0, operationCount).ToList();
@@ -700,13 +706,11 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
             {
                 await foreach (var result in listener)
                 {
-                    if (result.Length > 0)
-                    {
-                        lastCount = result[0].count;
-                    }
+                    lastCount = result[0].count;
                     sem.Release();
                 }
-            });
+            }, testCts.Token);
+            Assert.False(await sem.WaitAsync(200));
 
             var resolved = await db.GetSourceTables(QUERY, null);
             Assert.Single(resolved);

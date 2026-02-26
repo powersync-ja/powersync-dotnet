@@ -882,7 +882,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
                 powersyncTables,
                 currentListener,
                 currentRestartCts.Token,
-                isRestart || options?.TriggerImmediately == true
+                isRestart || (options?.TriggerImmediately == true)
             ).GetAsyncEnumerator(currentRestartCts.Token);
 
             // Continually wait for either OnChange or SchemaChanged to fire
@@ -971,6 +971,8 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
                 changedTables.Clear();
                 GetTablesFromNotification(e.TablesUpdated, changedTables);
                 changedTables.IntersectWith(watchedTables);
+
+                if (changedTables.Count == 0) continue;
 
                 yield return new WatchOnChangeEvent { ChangedTables = [.. changedTables] };
             }
