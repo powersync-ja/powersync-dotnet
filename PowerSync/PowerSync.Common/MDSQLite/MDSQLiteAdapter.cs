@@ -28,7 +28,7 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
     private readonly AsyncLock writeMutex = new();
 
     // Many readers
-    private Channel<MDSQLiteConnection> readPool = null!;
+    private MDSQLiteConnectionPool readPool = null!;
 
     private readonly Task initialized;
 
@@ -64,8 +64,6 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
 
     private async Task Init()
     {
-        writeConnection = await OpenConnection(options.Name);
-
         string[] baseStatements =
         [
             $"PRAGMA busy_timeout = {resolvedOptions.LockTimeoutMs}",
@@ -87,22 +85,28 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
             "PRAGMA query_only = true",
         ];
 
+
+        // Prepare write connection
+        writeConnection = await OpenConnection(options.Name);
         foreach (var statement in writeConnectionStatements)
         {
             await writeConnection!.Execute(statement);
         }
 
-        readPool = Channel.CreateBounded<MDSQLiteConnection>(resolvedOptions.ReadPoolSize);
-        for (int i = 0; i < resolvedOptions.ReadPoolSize; i++)
+        // Prepare read pool and create connection factory
+        Func<Task<MDSQLiteConnection>> readConnectionFactory = async () =>
         {
             var readConnection = await OpenConnection(options.Name);
             foreach (var statement in readConnectionStatements)
             {
                 await readConnection.Execute(statement);
             }
-            await readPool.Writer.WriteAsync(readConnection);
-        }
+            return readConnection;
+        };
+        readPool = new MDSQLiteConnectionPool(resolvedOptions, readConnectionFactory);
+        await readPool.Init();
 
+        // Register TablesUpdated listener
         tablesUpdatedCts = new CancellationTokenSource();
         tablesUpdatedTask = Task.Run(async () =>
         {
@@ -148,11 +152,7 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
         try { tablesUpdatedTask?.Wait(2000); } catch { /* expected */ }
         base.Close();
         writeConnection?.Close();
-        await WithAllReaders((connections) =>
-        {
-            foreach (var conn in connections) conn.Close();
-        });
-        readPool.Writer.Complete();
+        await readPool.Close();
     }
 
     public async Task<NonQueryResult> Execute(string query, object?[]? parameters = null)
@@ -203,16 +203,7 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
     public async Task<T> ReadLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null)
     {
         await initialized;
-
-        var conn = await readPool.Reader.ReadAsync();
-        try
-        {
-            return await fn(conn);
-        }
-        finally
-        {
-            readPool.Writer.TryWrite(conn);
-        }
+        return await readPool.Lease(fn);
     }
 
     public async Task WriteLock(Func<ILockContext, Task> fn, DBLockOptions? options = null)
@@ -299,18 +290,63 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
     {
         await initialized;
         await writeConnection.RefreshSchema();
-        await WithAllReaders(async (connections) =>
+        await readPool.LeaseAll(async (connections) =>
         {
             foreach (var conn in connections) await conn.RefreshSchema();
         });
     }
+}
 
-    private async Task WithAllReaders(Func<List<MDSQLiteConnection>, Task> callback)
+class MDSQLiteConnectionPool
+{
+    private readonly RequiredMDSQLiteOptions _options;
+    private readonly Channel<MDSQLiteConnection> _channel;
+    private readonly int _poolSize;
+    private readonly Func<Task<MDSQLiteConnection>> _connectionFactory;
+
+    private readonly Task _initialized;
+
+    public MDSQLiteConnectionPool(RequiredMDSQLiteOptions options, Func<Task<MDSQLiteConnection>> connectionFactory)
     {
-        var connections = new List<MDSQLiteConnection>(resolvedOptions.ReadPoolSize);
-        for (int i = 0; i < resolvedOptions.ReadPoolSize; i++)
+        _options = options;
+        _channel = Channel.CreateBounded<MDSQLiteConnection>(options.ReadPoolSize);
+        _poolSize = options.ReadPoolSize;
+        _connectionFactory = connectionFactory;
+        _initialized = Initialize();
+    }
+
+    public async Task Init() => await _initialized;
+
+    private async Task Initialize()
+    {
+        for (int i = 0; i < _poolSize; i++)
         {
-            connections.Add(await readPool.Reader.ReadAsync());
+            var connection = await _connectionFactory();
+            await _channel.Writer.WriteAsync(connection);
+        }
+    }
+
+    public async Task<T> Lease<T>(Func<MDSQLiteConnection, Task<T>> callback)
+    {
+        await _initialized;
+        var connection = await _channel.Reader.ReadAsync();
+        try
+        {
+            return await callback(connection);
+        }
+        finally
+        {
+            await _channel.Writer.WriteAsync(connection);
+        }
+    }
+
+    public async Task LeaseAll(Func<List<MDSQLiteConnection>, Task> callback)
+    {
+        await _initialized;
+        var connections = new List<MDSQLiteConnection>(_poolSize);
+        for (int i = 0; i < _poolSize; i++)
+        {
+            connections.Add(await _channel.Reader.ReadAsync());
         }
 
         try
@@ -321,30 +357,45 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
         {
             foreach (var conn in connections)
             {
-                readPool.Writer.TryWrite(conn);
+                _channel.Writer.TryWrite(conn);
             }
         }
     }
 
-    private async Task WithAllReaders(Action<List<MDSQLiteConnection>> callback)
+    private async Task<MDSQLiteConnection> OpenConnection(string dbFilename)
     {
-        var connections = new List<MDSQLiteConnection>(resolvedOptions.ReadPoolSize);
-        for (int i = 0; i < resolvedOptions.ReadPoolSize; i++)
-        {
-            connections.Add(await readPool.Reader.ReadAsync());
-        }
+        var db = OpenDatabase(dbFilename);
+        LoadExtension(db);
 
-        try
+        var connection = new MDSQLiteConnection(new MDSQLiteConnectionOptions(db));
+        await connection.Execute("SELECT powersync_init()");
+
+        return connection;
+    }
+
+    private static SqliteConnection OpenDatabase(string dbFilename)
+    {
+        string connectionString = $"Data Source={dbFilename};Pooling=False;";
+        var connection = new SqliteConnection(connectionString);
+        connection.Open();
+        return connection;
+    }
+
+    private void LoadExtension(SqliteConnection db)
+    {
+        string extensionPath = PowerSyncPathResolver.GetNativeLibraryPath(AppContext.BaseDirectory);
+        db.EnableExtensions(true);
+        db.LoadExtension(extensionPath, "sqlite3_powersync_init");
+    }
+
+    public async Task Close()
+    {
+        await LeaseAll((connections) =>
         {
-            callback(connections);
-        }
-        finally
-        {
-            foreach (var conn in connections)
-            {
-                readPool.Writer.TryWrite(conn);
-            }
-        }
+            foreach (var conn in connections) conn.Close();
+            return Task.CompletedTask;
+        });
+        _channel.Writer.TryComplete();
     }
 }
 
