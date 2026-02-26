@@ -706,13 +706,11 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
             {
                 await foreach (var result in listener)
                 {
-                    if (result.Length > 0)
-                    {
-                        lastCount = result[0].count;
-                    }
+                    lastCount = result[0].count;
                     sem.Release();
                 }
-            });
+            }, testCts.Token);
+            Assert.False(await sem.WaitAsync(200));
 
             var resolved = await db.GetSourceTables(QUERY, null);
             Assert.Single(resolved);
