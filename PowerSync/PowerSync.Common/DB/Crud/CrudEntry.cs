@@ -4,6 +4,8 @@ using System.Collections.Generic;
 
 using Newtonsoft.Json;
 
+using PowerSync.Common.Utils;
+
 public enum UpdateType
 {
     [JsonProperty("PUT")]
@@ -101,11 +103,23 @@ public class CrudEntry(
     public override bool Equals(object? obj)
     {
         if (obj is not CrudEntry other) return false;
-        return JsonConvert.SerializeObject(this) == JsonConvert.SerializeObject(other);
+        return ClientId == other.ClientId
+          && Id == other.Id
+          && Op == other.Op
+          && TransactionId == other.TransactionId
+          && Table == other.Table
+          && CompareUtils.DictionariesEqual(OpData, other.OpData);
     }
 
     public override int GetHashCode()
     {
-        return JsonConvert.SerializeObject(this).GetHashCode();
+        return HashCode.Combine(
+            ClientId,
+            Id,
+            Op,
+            Table,
+            TransactionId,
+            HashUtils.GetHashCodeDictionary(OpData)
+        );
     }
 }

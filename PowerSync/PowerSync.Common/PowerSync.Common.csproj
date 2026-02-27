@@ -37,6 +37,13 @@
     <PackageReference Include="System.Threading.Channels" Version="8.0.0" />
   </ItemGroup>
 
+  <!-- System.HashCode polyfill for .NET Standard 2.0 and .NET Framework 4.8 -->
+  <ItemGroup Condition="$(TargetFramework) == 'net48' OR $(TargetFramework) == 'netstandard2.0'">
+    <PackageReference Include="Microsoft.Bcl.HashCode">
+      <Version>6.0.0</Version>
+    </PackageReference>
+  </ItemGroup>
+
   <ItemGroup>
     <None Include="PowerSync.Common.targets" Pack="true" PackagePath="build\" />
     <None Include="PowerSync.Common.targets" Pack="true" PackagePath="buildTransitive\" />
