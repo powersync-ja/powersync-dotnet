@@ -89,17 +89,34 @@ public class RequiredPowerSyncConnectionOptions : BaseConnectionOptions
     public new bool IncludeDefaultStreams { get; set; } = default;
 }
 
-public class StreamingSyncImplementationEvent
+public class StreamingSyncImplementationEvents : EventManager
 {
-    /// <summary>
-    /// Set whenever a status update has been attempted to be made or refreshed.
-    /// </summary>
-    public SyncStatusOptions? StatusUpdated { get; set; }
+    public interface IStreamingSyncImplementationEvent;
+
+    public class StatusUpdatedEvent(SyncStatusOptions status) : IStreamingSyncImplementationEvent
+    {
+        public SyncStatusOptions Status { get; set; } = status;
+    }
+    public class StatusChangedEvent(SyncStatus status) : IStreamingSyncImplementationEvent
+    {
+        public SyncStatus Status { get; set; } = status;
+    }
 
     /// <summary>
-    /// Set whenever the status' members have changed in value.
+    /// See whenever a status update has been attempted to be made or refreshed.
     /// </summary>
-    public SyncStatus? StatusChanged { get; set; }
+    public EventStream<StatusUpdatedEvent> OnStatusUpdated { get; } = new();
+
+    /// <summary>
+    /// See whenever the status' members have changed in value.
+    /// </summary>
+    public EventStream<StatusChangedEvent> OnStatusChanged { get; } = new();
+
+    public StreamingSyncImplementationEvents()
+    {
+        Register(OnStatusUpdated);
+        Register(OnStatusChanged);
+    }
 }
 
 public class PowerSyncConnectionOptions(
@@ -131,7 +148,7 @@ public class SubscribedStream
 
 }
 
-public class StreamingSyncImplementation : EventStream<StreamingSyncImplementationEvent>
+public class StreamingSyncImplementation : ICloseable
 {
     public static RequiredPowerSyncConnectionOptions DEFAULT_STREAM_CONNECTION_OPTIONS = new()
     {
@@ -139,6 +156,8 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
         Params = [],
         IncludeDefaultStreams = true
     };
+
+    public StreamingSyncImplementationEvents Events { get; } = new();
 
     public static readonly int DEFAULT_CRUD_UPLOAD_THROTTLE_MS = 1000;
     public static readonly int DEFAULT_RETRY_DELAY_MS = 5000;
@@ -149,12 +168,15 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
 
     private Task? streamingSyncTask;
     public Action TriggerCrudUpload { get; }
+
     private CancellationTokenSource? crudUpdateCts;
+    private Task? crudUpdateTask;
 
     private readonly ILogger logger;
     private SubscribedStream[] activeStreams;
 
     private bool isUploadingCrud;
+    private Task? crudUploadTask;
     private Action? notifyCompletedUploads;
     private Action? handleActiveStreamsChange;
 
@@ -190,7 +212,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
             }
 
             isUploadingCrud = true;
-            Task.Run(async () =>
+            crudUploadTask = Task.Run(async () =>
             {
                 await InternalUploadAllCrud();
                 notifyCompletedUploads?.Invoke();
@@ -227,7 +249,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
         var cts = new CancellationTokenSource();
 
         // Subscribe to events before starting StreamingSync to not miss the Connected == true event
-        var listener = ListenAsync(cts.Token);
+        var listener = Events.OnStatusChanged.ListenAsync(cts.Token);
 
         streamingSyncTask = StreamingSync(CancellationTokenSource.Token, options);
 
@@ -235,7 +257,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
         {
             await foreach (var status in listener)
             {
-                if (status.StatusChanged?.Connected == true)
+                if (status.Status.Connected == true)
                 {
                     tcs.TrySetResult(true);
                     cts.Cancel();
@@ -274,10 +296,24 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
         catch (Exception ex)
         {
             // The operation might have failed, all we care about is if it has completed
-            logger.LogWarning("{Message}", ex.Message);
+            logger.LogWarning("Streaming sync task failed during disconnect: {Message}", ex.Message);
         }
         streamingSyncTask = null;
         CancellationTokenSource = null;
+
+        // Do the same for any pending CRUD uploads
+        if (crudUploadTask != null)
+        {
+            try
+            {
+                await crudUploadTask;
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning("CRUD upload task failed during disconnect: {Message}", ex.Message);
+            }
+            crudUploadTask = null;
+        }
 
         UpdateSyncStatus(new SyncStatusOptions { Connected = false, Connecting = false });
     }
@@ -291,9 +327,9 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
         }
 
         crudUpdateCts = new CancellationTokenSource();
-        var _ = Task.Run(() =>
+        crudUpdateTask = Task.Run(async () =>
         {
-            foreach (var _ in Options.Adapter.Listen(crudUpdateCts.Token))
+            await foreach (var _ in Options.Adapter.Events.OnCrudUpdate.ListenAsync(crudUpdateCts.Token))
             {
                 TriggerCrudUpload();
             }
@@ -307,6 +343,7 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
             nestedCts.Cancel();
             crudUpdateCts?.Cancel();
             crudUpdateCts = null;
+            try { crudUpdateTask?.Wait(2000); } catch (Exception) { }
             UpdateSyncStatus(new SyncStatusOptions
             {
                 Connected = false,
@@ -672,11 +709,12 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
         return new StreamingSyncIterationResult { ImmediateRestart = hideDisconnectOnRestart };
     }
 
-    public new void Close()
+    public void Close()
     {
         crudUpdateCts?.Cancel();
-        base.Close();
         crudUpdateCts = null;
+        try { crudUpdateTask?.Wait(2000); } catch (Exception) { }
+        Events.Close();
     }
 
     public record ResponseData(
@@ -816,11 +854,11 @@ public class StreamingSyncImplementation : EventStream<StreamingSyncImplementati
                 SyncStatus = updatedStatus;
                 logger.LogDebug("[Sync status changed]: {message}", updatedStatus.ToJSON());
                 // Only trigger this if there was a change
-                Emit(new StreamingSyncImplementationEvent { StatusChanged = updatedStatus });
+                Events.Emit(new StreamingSyncImplementationEvents.StatusChangedEvent(updatedStatus));
             }
 
             // Trigger this for all updates
-            Emit(new StreamingSyncImplementationEvent { StatusUpdated = options });
+            Events.Emit(new StreamingSyncImplementationEvents.StatusUpdatedEvent(options));
         }
         catch (Exception ex)
         {

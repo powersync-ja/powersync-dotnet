@@ -73,9 +73,7 @@ public class TableUpdateOperation(RowUpdateType OpType, long RowId)
     public long RowId { get; set; } = RowId;
 }
 
-public interface INotification
-{
-}
+public interface INotification;
 
 public class UpdateNotification(string table, RowUpdateType OpType, long RowId) : TableUpdateOperation(OpType, RowId), INotification
 {
@@ -89,9 +87,21 @@ public class BatchedUpdateNotification : INotification
     public Dictionary<string, TableUpdateOperation[]> GroupedUpdates { get; set; } = [];
 }
 
-public class DBAdapterEvent
+public class DBAdapterEvents : EventManager
 {
-    public INotification? TablesUpdated { get; set; }
+    public interface IDBAdapterEvent;
+
+    public class TablesUpdatedEvent(INotification tablesUpdatedNotification)
+    {
+        public INotification TablesUpdated { get; set; } = tablesUpdatedNotification;
+    }
+
+    public EventStream<TablesUpdatedEvent> OnTablesUpdated = new();
+
+    public DBAdapterEvents()
+    {
+        Register(OnTablesUpdated);
+    }
 }
 
 public class DBLockOptions
@@ -113,7 +123,7 @@ public class DBAdapterUtils
     }
 }
 
-public interface IDBAdapter : IEventStream<DBAdapterEvent>, ILockContext
+public interface IDBAdapter : ILockContext, ICloseable
 {
     /// <summary>
     /// Closes the adapter. 
@@ -124,6 +134,11 @@ public interface IDBAdapter : IEventStream<DBAdapterEvent>, ILockContext
     /// The name of the adapter.
     /// </summary>
     string Name { get; }
+
+    /// <summary>
+    /// The event manager for the adapter.
+    /// </summary>
+    DBAdapterEvents Events { get; }
 
     /// <summary>
     /// Executes a read lock with the given function.

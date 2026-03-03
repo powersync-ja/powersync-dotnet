@@ -79,14 +79,25 @@ public class StoredConnectionOptions(
     public PowerSyncConnectionOptions Options { get; set; } = options;
 }
 
-public class ConnectionManagerEvent
+public class ConnectionManagerEvents : EventManager
 {
-    public StreamingSyncImplementation? SyncStreamCreated { get; set; }
+    public interface IConnectionManagerEvent;
+
+    public class SyncStreamCreatedEvent(StreamingSyncImplementation ssi) : IConnectionManagerEvent
+    {
+        public StreamingSyncImplementation SyncStreamCreated { get; set; } = ssi;
+    }
+
+    public EventStream<SyncStreamCreatedEvent> OnSyncStreamCreated { get; } = new();
+
+    public ConnectionManagerEvents()
+    {
+        Register(OnSyncStreamCreated);
+    }
 }
 
-public class ConnectionManager : EventStream<ConnectionManagerEvent>
+public class ConnectionManager : ICloseable
 {
-
     /// <summary>
     /// Tracks active connection attempts
     /// </summary>
@@ -122,6 +133,7 @@ public class ConnectionManager : EventStream<ConnectionManagerEvent>
 
     public IPowerSyncBackendConnector? Connector => PendingConnectionOptions?.Connector;
 
+    public ConnectionManagerEvents Events { get; protected set; } = new();
 
     public PowerSyncConnectionOptions? ConnectionOptions => PendingConnectionOptions?.Options;
 
@@ -148,9 +160,9 @@ public class ConnectionManager : EventStream<ConnectionManagerEvent>
         SyncDisposer = null;
     }
 
-    public new void Close()
+    public void Close()
     {
-        base.Close();
+        Events.Close();
         SyncStreamImplementation?.Close();
         SyncDisposer?.Invoke();
     }
@@ -274,7 +286,7 @@ public class ConnectionManager : EventStream<ConnectionManagerEvent>
             RetryDelayMs = options.RetryDelayMs,
         });
 
-        Emit(new ConnectionManagerEvent { SyncStreamCreated = result.Sync });
+        Events.Emit(new ConnectionManagerEvents.SyncStreamCreatedEvent(result.Sync));
         SyncStreamImplementation = result.Sync;
         SyncDisposer = result.OnDispose;
         await SyncStreamImplementation.WaitForReady();

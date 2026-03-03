@@ -233,19 +233,16 @@ public class PowerSyncDatabase : IPowerSyncDatabase
                 });
 
                 var syncStreamStatusCts = CancellationTokenSource.CreateLinkedTokenSource(masterCts.Token);
-                var syncStreamStatusListener = syncStreamImplementation.ListenAsync(syncStreamStatusCts.Token);
+                var syncStreamStatusListener = syncStreamImplementation.Events.OnStatusChanged.ListenAsync(syncStreamStatusCts.Token);
                 var _ = Task.Run(async () =>
                 {
                     await foreach (var update in syncStreamStatusListener)
                     {
-                        if (update.StatusChanged != null)
+                        CurrentStatus = new SyncStatus(new SyncStatusOptions(update.Status.Options)
                         {
-                            CurrentStatus = new SyncStatus(new SyncStatusOptions(update.StatusChanged.Options)
-                            {
-                                HasSynced = CurrentStatus?.HasSynced == true || update.StatusChanged.LastSyncedAt != null,
-                            });
-                            Events.Emit(new PowerSyncDBEvents.StatusChangedEvent(CurrentStatus));
-                        }
+                            HasSynced = CurrentStatus?.HasSynced == true || update.Status.LastSyncedAt != null,
+                        });
+                        Events.Emit(new PowerSyncDBEvents.StatusChangedEvent(CurrentStatus));
                     }
                 });
 
@@ -784,7 +781,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
             ? CancellationTokenSource.CreateLinkedTokenSource(masterCts.Token, options.Signal.Value)
             : CancellationTokenSource.CreateLinkedTokenSource(masterCts.Token);
 
-        var listener = Database.ListenAsync(signal.Token);
+        var listener = Database.Events.OnTablesUpdated.ListenAsync(signal.Token);
 
         // Return the actual IAsyncEnumerable here, using OnChange as a synchronous wrapper that blocks until the
         // connection is established
@@ -793,7 +790,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
 
     private async IAsyncEnumerable<WatchOnChangeEvent> OnChangeCore(
         HashSet<string> watchedTables,
-        IAsyncEnumerable<DBAdapterEvent> listener,
+        IAsyncEnumerable<DBAdapterEvents.TablesUpdatedEvent> listener,
         [EnumeratorCancellation] CancellationToken signal,
         bool triggerImmediately
     )
@@ -807,7 +804,6 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         await foreach (var e in listener)
         {
             if (signal.IsCancellationRequested) yield break;
-            if (e.TablesUpdated == null) continue;
 
             changedTables.Clear();
             GetTablesFromNotification(e.TablesUpdated, changedTables);
@@ -857,7 +853,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         // so that table changes between Watch() being called and iteration starting are not missed.
         // This mirrors the pattern used in OnChange().
         var initialRestartCts = CancellationTokenSource.CreateLinkedTokenSource(signal.Token);
-        var initialListener = Database.ListenAsync(initialRestartCts.Token);
+        var initialListener = Database.Events.OnTablesUpdated.ListenAsync(initialRestartCts.Token);
 
         return WatchCore<T>(sql, parameters, options, signal, initialRestartCts, initialListener);
     }
@@ -868,7 +864,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         SQLWatchOptions options,
         CancellationTokenSource signal,
         CancellationTokenSource initialRestartCts,
-        IAsyncEnumerable<DBAdapterEvent> initialListener
+        IAsyncEnumerable<DBAdapterEvents.TablesUpdatedEvent> initialListener
     )
     {
         var schemaChanged = new TaskCompletionSource<bool>();
@@ -930,7 +926,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
                     // Establish a new listener BEFORE resolving source tables in the next iteration,
                     // so that changes during the async GetSourceTables call are not missed.
                     currentRestartCts = CancellationTokenSource.CreateLinkedTokenSource(signal.Token);
-                    currentListener = Database.ListenAsync(currentRestartCts.Token);
+                    currentListener = Database.Events.OnTablesUpdated.ListenAsync(currentRestartCts.Token);
 
                     break;
                 }
@@ -977,7 +973,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
 
     private async IAsyncEnumerable<WatchOnChangeEvent> OnRawTableChange(
         HashSet<string> watchedTables,
-        IAsyncEnumerable<DBAdapterEvent> listener,
+        IAsyncEnumerable<DBAdapterEvents.TablesUpdatedEvent> listener,
         [EnumeratorCancellation] CancellationToken token,
         bool triggerImmediately = false
     )
@@ -990,19 +986,16 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         HashSet<string> changedTables = new();
         await foreach (var e in listener)
         {
-            if (e.TablesUpdated != null)
-            {
-                if (token.IsCancellationRequested) break;
+            if (token.IsCancellationRequested) break;
 
-                // Extract the changed tables and intersect with the watched tables
-                changedTables.Clear();
-                GetTablesFromNotification(e.TablesUpdated, changedTables);
-                changedTables.IntersectWith(watchedTables);
+            // Extract the changed tables and intersect with the watched tables
+            changedTables.Clear();
+            GetTablesFromNotification(e.TablesUpdated, changedTables);
+            changedTables.IntersectWith(watchedTables);
 
-                if (changedTables.Count == 0) continue;
+            if (changedTables.Count == 0) continue;
 
-                yield return new WatchOnChangeEvent { ChangedTables = [.. changedTables] };
-            }
+            yield return new WatchOnChangeEvent { ChangedTables = [.. changedTables] };
         }
     }
 

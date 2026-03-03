@@ -18,9 +18,8 @@ public class MDSQLiteConnectionOptions(SqliteConnection database)
     public SqliteConnection Database { get; set; } = database;
 }
 
-public class MDSQLiteConnection : EventStream<DBAdapterEvent>, ILockContext
+public class MDSQLiteConnection : EventStream<DBAdapterEvents.TablesUpdatedEvent>, ILockContext
 {
-
     public SqliteConnection Db;
     private readonly List<UpdateNotification> updateBuffer;
     public MDSQLiteConnection(MDSQLiteConnectionOptions options)
@@ -71,7 +70,7 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvent>, ILockContext
         };
 
         updateBuffer.Clear();
-        Emit(new DBAdapterEvent { TablesUpdated = batchedUpdate });
+        Emit(new DBAdapterEvents.TablesUpdatedEvent(batchedUpdate));
     }
 
     private static List<string> PrepareQueryString(ref string query, int parameterCount)

@@ -62,7 +62,7 @@ public class EventManager : IEventManager
         }
         else
         {
-            throw new InvalidOperationException($"No stream emits events of type {nameof(T)}.");
+            throw new InvalidOperationException($"No stream emits events of type {typeof(T).Name}.");
         }
     }
 

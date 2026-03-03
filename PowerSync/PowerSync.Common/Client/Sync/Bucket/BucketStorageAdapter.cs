@@ -100,13 +100,23 @@ public static class PSInternalTable
     public static readonly string UNTYPED = "ps_untyped";
 }
 
-public class BucketStorageEvent
+public class BucketStorageEvents : EventManager
 {
-    public bool CrudUpdate { get; set; }
+    public interface IBucketStorageEvent;
+
+    public class CrudUpdateEvent : IBucketStorageEvent;
+
+    public EventStream<CrudUpdateEvent> OnCrudUpdate = new();
+
+    public BucketStorageEvents()
+    {
+        Register(OnCrudUpdate);
+    }
 }
 
-public interface IBucketStorageAdapter : IEventStream<BucketStorageEvent>
+public interface IBucketStorageAdapter : ICloseable
 {
+    BucketStorageEvents Events { get; }
     Task Init();
 
     Task<CrudEntry?> NextCrudItem();
