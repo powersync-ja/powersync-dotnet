@@ -520,7 +520,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         ConnectionManager.Close();
         BucketStorageAdapter?.Close();
 
-        Database.Close();
+        await Database.Close();
         Closed = true;
 
         Events.Emit(new PowerSyncDBEvents.ClosedEvent());

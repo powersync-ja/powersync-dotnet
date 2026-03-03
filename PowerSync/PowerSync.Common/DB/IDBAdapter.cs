@@ -123,12 +123,12 @@ public class DBAdapterUtils
     }
 }
 
-public interface IDBAdapter : ILockContext, ICloseable
+public interface IDBAdapter : ILockContext, ICloseableAsync
 {
     /// <summary>
     /// Closes the adapter. 
     /// </summary>
-    new void Close();
+    new Task Close();
 
     /// <summary>
     /// The name of the adapter.
