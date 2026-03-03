@@ -53,7 +53,7 @@ public class PowerSyncDatabaseOptions() : BasePowerSyncDatabaseOptions()
     public Func<IPowerSyncBackendConnector, Remote>? RemoteFactory { get; set; }
 }
 
-public class PowerSyncDBEvents : EventManager<PowerSyncDBEvents.IPowerSyncDBEvent>
+public class PowerSyncDBEvents : EventManager
 {
     public interface IPowerSyncDBEvent;
 
@@ -80,60 +80,18 @@ public class PowerSyncDBEvents : EventManager<PowerSyncDBEvents.IPowerSyncDBEven
     public EventStream<StatusChangedEvent> OnStatusChanged { get; } = new();
     public EventStream<StatusUpdatedEvent> OnStatusUpdated { get; } = new();
 
-    public override bool TryGetStream<T>(out EventStream<T> stream)
+    public PowerSyncDBEvents()
     {
-        if (typeof(T) == typeof(PowerSyncDBEvents.InitializedEvent))
-        {
-            stream = (EventStream<T>)(object)OnInitialized;
-            return true;
-        }
-
-        if (typeof(T) == typeof(PowerSyncDBEvents.ClosingEvent))
-        {
-            stream = (EventStream<T>)(object)OnClosing;
-            return true;
-        }
-
-        if (typeof(T) == typeof(PowerSyncDBEvents.ClosedEvent))
-        {
-            stream = (EventStream<T>)(object)OnClosed;
-            return true;
-        }
-
-        if (typeof(T) == typeof(PowerSyncDBEvents.SchemaChangedEvent))
-        {
-            stream = (EventStream<T>)(object)OnSchemaChanged;
-            return true;
-        }
-
-        if (typeof(T) == typeof(PowerSyncDBEvents.StatusChangedEvent))
-        {
-            stream = (EventStream<T>)(object)OnStatusChanged;
-            return true;
-        }
-
-        if (typeof(T) == typeof(PowerSyncDBEvents.StatusUpdatedEvent))
-        {
-            stream = (EventStream<T>)(object)OnStatusUpdated;
-            return true;
-        }
-
-        stream = null!;
-        return false;
-    }
-
-    public override void Close()
-    {
-        OnInitialized.Close();
-        OnClosing.Close();
-        OnClosed.Close();
-        OnSchemaChanged.Close();
-        OnStatusChanged.Close();
-        OnStatusUpdated.Close();
+        Register(OnInitialized);
+        Register(OnClosing);
+        Register(OnClosed);
+        Register(OnSchemaChanged);
+        Register(OnStatusChanged);
+        Register(OnStatusUpdated);
     }
 }
 
-public interface IPowerSyncDatabase
+public interface IPowerSyncDatabase : ICloseableAsync
 {
     public Task Connect(IPowerSyncBackendConnector connector, PowerSyncConnectionOptions? options = null);
     public ISyncStream SyncStream(string name, Dictionary<string, object>? parameters = null);
