@@ -2,6 +2,29 @@
 
 ## 0.0.11-alpha.1
 
+- Converted most instances of a class inheriting from `EventStream<T>` into a class with an `EventManager` property called `Events`. This allows for subscribing to individual events instead of subscribing to all events and then filtering events manually.
+
+```csharp
+// Old
+var listener = db.Listen(cts.Token);
+foreach (PowerSyncDBEvent update in listener)
+{
+    // Manually filter updates
+    if (update.StatusChanged != null)
+    {
+        Console.WriteLine("status changed: " + update.StatusChanged!);
+    }
+}
+
+// New
+var listener = db.Events.OnStatusChanged.Listen(cts.Token);
+foreach (PowerSyncDBEvents.StatusChangedEvent update in listener)
+{
+    // Events are filtered inherently
+    Console.WriteLine("status changed: " + update.Status);
+}
+```
+
 - Updated to the latest version (0.4.11) of the core extension.
 - `MDSQLiteConnection` now runs query operations on another thread, which stops the caller thread from blocking.
 - Removed the `RunListener` and `RunListenerAsync` APIs from `IEventStream`. Users are encouraged to use the `Listen` or `ListenAsync` APIs instead (`RunListener` itself was implemented using the `Listen` API).
