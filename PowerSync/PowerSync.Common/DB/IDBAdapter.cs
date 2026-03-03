@@ -118,7 +118,7 @@ public interface IDBAdapter : IEventStream<DBAdapterEvent>, ILockContext
     /// <summary>
     /// Closes the adapter. 
     /// </summary>
-    new void Close();
+    new Task Close();
 
     /// <summary>
     /// The name of the adapter.

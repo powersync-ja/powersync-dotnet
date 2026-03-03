@@ -2,6 +2,7 @@
 
 ## 0.0.11-alpha.1
 
+- Pool read connections in `MDSQLiteAdapter`, improving performance in any case where multiple queries run simultaneously (eg. via `Watch`). The number of connections can be set via `MDSQLiteOptions.ReadPoolSize` and defaults to 5.
 - Updated to the latest version (0.4.11) of the core extension.
 - `MDSQLiteConnection` now runs query operations on another thread, which stops the caller thread from blocking.
 - Removed the `RunListener` and `RunListenerAsync` APIs from `IEventStream`. Users are encouraged to use the `Listen` or `ListenAsync` APIs instead (`RunListener` itself was implemented using the `Listen` API).
