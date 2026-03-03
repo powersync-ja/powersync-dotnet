@@ -137,11 +137,11 @@ public class MDSQLiteAdapter : IDBAdapter
 
     public void Close()
     {
-        Events.Close();
         tablesUpdatedCts?.Cancel();
         try { tablesUpdatedTask?.Wait(TimeSpan.FromSeconds(2)); } catch { }
         writeConnection?.Close();
         readConnection?.Close();
+        Events.Close();
     }
 
     public async Task<NonQueryResult> Execute(string query, object?[]? parameters = null)

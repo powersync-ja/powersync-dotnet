@@ -106,7 +106,7 @@ public class BucketStorageEvents : EventManager
 
     public class CrudUpdateEvent : IBucketStorageEvent;
 
-    public EventStream<CrudUpdateEvent> OnCrudUpdate = new();
+    public EventStream<CrudUpdateEvent> OnCrudUpdate { get; } = new();
 
     public BucketStorageEvents()
     {

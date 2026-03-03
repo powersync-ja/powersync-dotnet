@@ -91,12 +91,12 @@ public class DBAdapterEvents : EventManager
 {
     public interface IDBAdapterEvent;
 
-    public class TablesUpdatedEvent(INotification tablesUpdatedNotification)
+    public class TablesUpdatedEvent(INotification tablesUpdatedNotification) : IDBAdapterEvent
     {
         public INotification TablesUpdated { get; set; } = tablesUpdatedNotification;
     }
 
-    public EventStream<TablesUpdatedEvent> OnTablesUpdated = new();
+    public EventStream<TablesUpdatedEvent> OnTablesUpdated { get; } = new();
 
     public DBAdapterEvents()
     {
