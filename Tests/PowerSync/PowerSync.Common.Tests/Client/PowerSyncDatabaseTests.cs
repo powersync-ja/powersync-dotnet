@@ -34,15 +34,12 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     public async Task DisposeAsync()
     {
         testCts.Cancel();
+        testCts.Dispose();
 
         await db.DisconnectAndClear();
         await db.Close();
 
-        try { File.Delete(dbName); }
-        catch { }
-
-        testCts.Dispose();
-        testCts = new();
+        DatabaseUtils.CleanDb(dbName);
     }
 
     private record IdResult(string id);

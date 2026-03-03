@@ -19,15 +19,30 @@ public static class TestUtils
         }
     }
 
-    public static async Task WaitForAsync(Func<bool> condition, TimeSpan? timeout = null)
+    public static async Task WaitForAsync(Func<bool> condition, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
     {
         timeout ??= TimeSpan.FromSeconds(5);
         var start = DateTime.UtcNow;
         while (DateTime.UtcNow - start < timeout)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (condition())
                 return;
-            await Task.Delay(50);
+            await Task.Delay(50, cancellationToken);
+        }
+        throw new TimeoutException("Condition not met within timeout");
+    }
+
+    public static async Task WaitForAsync(Func<Task<bool>> condition, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
+    {
+        timeout ??= TimeSpan.FromSeconds(5);
+        var start = DateTime.UtcNow;
+        while (DateTime.UtcNow - start < timeout)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (await condition())
+                return;
+            await Task.Delay(50, cancellationToken);
         }
         throw new TimeoutException("Condition not met within timeout");
     }

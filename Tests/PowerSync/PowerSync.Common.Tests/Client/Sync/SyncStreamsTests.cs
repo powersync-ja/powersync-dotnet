@@ -108,7 +108,8 @@ public class SyncStreamsTests : IAsyncLifetime
             Assert.Null(statusForStream!.Subscription.LastSyncedAt);
             Assert.True(statusForStream!.Subscription.HasExplicitSubscription);
         }
-        await Task.Delay(100);
+        // Ensure the previous status update is fully settled before listening for the next one
+        await Task.Yield();
         statusTask = MockSyncService.NextStatus(db);
 
         syncService.PushLine(
@@ -158,7 +159,7 @@ public class SyncStreamsTests : IAsyncLifetime
             )
         );
 
-        await Task.Delay(100);
+        await statusTask;
         var subscription = await db.SyncStream("a").Subscribe();
 
         await TestUtils.WaitForAsync(() => syncService.Requests.Count > 1);
