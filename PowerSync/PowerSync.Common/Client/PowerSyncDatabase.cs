@@ -53,17 +53,87 @@ public class PowerSyncDatabaseOptions() : BasePowerSyncDatabaseOptions()
     public Func<IPowerSyncBackendConnector, Remote>? RemoteFactory { get; set; }
 }
 
-public class PowerSyncDBEvent : StreamingSyncImplementationEvent
+public class PowerSyncDBEvents : EventManager<PowerSyncDBEvents.IPowerSyncDBEvent>
 {
-    public bool? Initialized { get; set; }
-    public Schema? SchemaChanged { get; set; }
+    public interface IPowerSyncDBEvent;
 
-    public bool? Closing { get; set; }
+    public class InitializedEvent : IPowerSyncDBEvent;
+    public class ClosingEvent : IPowerSyncDBEvent;
+    public class ClosedEvent : IPowerSyncDBEvent;
+    public class SchemaChangedEvent(Schema schema) : IPowerSyncDBEvent
+    {
+        public Schema Schema { get; set; } = schema;
+    }
+    public class StatusChangedEvent(SyncStatus status) : IPowerSyncDBEvent
+    {
+        public SyncStatus Status { get; set; } = status;
+    }
+    public class StatusUpdatedEvent(SyncStatusOptions status) : IPowerSyncDBEvent
+    {
+        public SyncStatusOptions Status { get; set; } = status;
+    }
 
-    public bool? Closed { get; set; }
+    public EventStream<InitializedEvent> OnInitialized { get; } = new();
+    public EventStream<ClosingEvent> OnClosing { get; } = new();
+    public EventStream<ClosedEvent> OnClosed { get; } = new();
+    public EventStream<SchemaChangedEvent> OnSchemaChanged { get; } = new();
+    public EventStream<StatusChangedEvent> OnStatusChanged { get; } = new();
+    public EventStream<StatusUpdatedEvent> OnStatusUpdated { get; } = new();
+
+    public override bool TryGetStream<T>(out EventStream<T> stream)
+    {
+        if (typeof(T) == typeof(PowerSyncDBEvents.InitializedEvent))
+        {
+            stream = (EventStream<T>)(object)OnInitialized;
+            return true;
+        }
+
+        if (typeof(T) == typeof(PowerSyncDBEvents.ClosingEvent))
+        {
+            stream = (EventStream<T>)(object)OnClosing;
+            return true;
+        }
+
+        if (typeof(T) == typeof(PowerSyncDBEvents.ClosedEvent))
+        {
+            stream = (EventStream<T>)(object)OnClosed;
+            return true;
+        }
+
+        if (typeof(T) == typeof(PowerSyncDBEvents.SchemaChangedEvent))
+        {
+            stream = (EventStream<T>)(object)OnSchemaChanged;
+            return true;
+        }
+
+        if (typeof(T) == typeof(PowerSyncDBEvents.StatusChangedEvent))
+        {
+            stream = (EventStream<T>)(object)OnStatusChanged;
+            return true;
+        }
+
+        if (typeof(T) == typeof(PowerSyncDBEvents.StatusUpdatedEvent))
+        {
+            stream = (EventStream<T>)(object)OnStatusUpdated;
+            return true;
+        }
+
+        stream = null!;
+        return false;
+    }
+
+    public override void Close()
+    {
+        OnInitialized.Close();
+        OnClosing.Close();
+        OnClosed.Close();
+        OnSchemaChanged.Close();
+        OnStatusChanged.Close();
+        OnStatusUpdated.Close();
+    }
 }
 
-public interface IPowerSyncDatabase : IEventStream<PowerSyncDBEvent>
+public interface IPowerSyncDatabase
 {
     public Task Connect(IPowerSyncBackendConnector connector, PowerSyncConnectionOptions? options = null);
     public ISyncStream SyncStream(string name, Dictionary<string, object>? parameters = null);
@@ -96,10 +166,9 @@ public interface IPowerSyncDatabase : IEventStream<PowerSyncDBEvent>
 
     Task WriteTransaction(Func<ITransaction, Task> fn, DBLockOptions? options = null);
     Task<T> WriteTransaction<T>(Func<ITransaction, Task<T>> fn, DBLockOptions? options = null);
-
 }
 
-public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDatabase
+public class PowerSyncDatabase : IPowerSyncDatabase
 {
     public IDBAdapter Database { get; protected set; }
     private CompiledSchema schema;
@@ -107,8 +176,10 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
     private static readonly int DEFAULT_WATCH_THROTTLE_MS = 30;
     private static readonly Regex POWERSYNC_TABLE_MATCH = new Regex(@"(^ps_data__|^ps_data_local__)", RegexOptions.Compiled);
 
-    public new bool Closed { get; protected set; }
+    public bool Closed { get; protected set; }
     public bool Ready { get; protected set; }
+
+    public PowerSyncDBEvents Events { get; protected set; } = new();
 
     protected Task IsReadyTask;
     protected ConnectionManager ConnectionManager;
@@ -137,7 +208,6 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
 
     public bool Connected => CurrentStatus.Connected;
     public bool Connecting => CurrentStatus.Connecting;
-
 
     public PowerSyncConnectionOptions? ConnectionOptions => ConnectionManager.ConnectionOptions;
 
@@ -216,7 +286,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
                             {
                                 HasSynced = CurrentStatus?.HasSynced == true || update.StatusChanged.LastSyncedAt != null,
                             });
-                            Emit(new PowerSyncDBEvent { StatusChanged = CurrentStatus });
+                            Events.Emit(new PowerSyncDBEvents.StatusChangedEvent(CurrentStatus));
                         }
                     }
                 });
@@ -285,7 +355,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
             ? CancellationTokenSource.CreateLinkedTokenSource(masterCts.Token)
             : CancellationTokenSource.CreateLinkedTokenSource(masterCts.Token, cancellationToken.Value);
 
-        var statusListener = ListenAsync(cts.Token);
+        var statusListener = Events.OnStatusChanged.ListenAsync(cts.Token);
 
         if (predicate(CurrentStatus))
         {
@@ -301,7 +371,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
             {
                 await foreach (var update in statusListener)
                 {
-                    if ((update.StatusChanged != null) && predicate(update.StatusChanged))
+                    if (predicate(update.Status))
                     {
                         tcs.TrySetResult(true);
                         cts.Cancel();
@@ -322,7 +392,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         await ResolveOfflineSyncStatus();
         await Database.Execute("PRAGMA RECURSIVE_TRIGGERS=TRUE");
         Ready = true;
-        Emit(new PowerSyncDBEvent { Initialized = true });
+        Events.Emit(new PowerSyncDBEvents.InitializedEvent());
     }
 
     private record VersionResult(string version);
@@ -366,7 +436,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         if (!updatedStatus.IsEqual(CurrentStatus))
         {
             CurrentStatus = updatedStatus;
-            Emit(new PowerSyncDBEvent { StatusChanged = CurrentStatus });
+            Events.Emit(new PowerSyncDBEvents.StatusChangedEvent(CurrentStatus));
         }
     }
 
@@ -394,7 +464,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         this.schema = compiledSchema;
         await Database.Execute("SELECT powersync_replace_schema(?)", [compiledSchema.ToJSON()]);
         await Database.RefreshSchema();
-        Emit(new PowerSyncDBEvent { SchemaChanged = schema });
+        Events.Emit(new PowerSyncDBEvents.SchemaChangedEvent(schema));
     }
 
     /// <summary>
@@ -458,7 +528,7 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
 
         // The data has been deleted - reset the sync status
         CurrentStatus = new SyncStatus(new SyncStatusOptions());
-        Emit(new PowerSyncDBEvent { StatusChanged = CurrentStatus });
+        Events.Emit(new PowerSyncDBEvents.StatusChangedEvent(CurrentStatus));
     }
 
     /// <summary>
@@ -479,17 +549,15 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
     /// Once close is called, this connection cannot be used again - a new one
     /// must be constructed.
     /// </summary>
-    public new async Task Close()
+    public async Task Close()
     {
         await WaitForReady();
 
         if (Closed) return;
 
-        Emit(new PowerSyncDBEvent { Closing = true });
+        Events.Emit(new PowerSyncDBEvents.ClosingEvent());
 
         await Disconnect();
-
-        base.Close();
 
         masterCts.Cancel();
         masterCts.Dispose();
@@ -499,7 +567,10 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
 
         Database.Close();
         Closed = true;
-        Emit(new PowerSyncDBEvent { Closed = true });
+
+        Events.Emit(new PowerSyncDBEvents.ClosedEvent());
+
+        Events.Close();
     }
 
     private record UploadQueueStatsSizeCountResult(long size, long count);
@@ -847,14 +918,11 @@ public class PowerSyncDatabase : EventStream<PowerSyncDBEvent>, IPowerSyncDataba
         // Listen for schema changes in the background
         _ = Task.Run(async () =>
         {
-            await foreach (var update in ListenAsync(signal.Token))
+            await foreach (var update in Events.OnSchemaChanged.ListenAsync(signal.Token))
             {
-                if (update.SchemaChanged != null)
-                {
-                    // Swap schemaChanged with an unresolved TCS
-                    var oldTcs = Interlocked.Exchange(ref schemaChanged, new());
-                    oldTcs.TrySetResult(true);
-                }
+                // Swap schemaChanged with an unresolved TCS
+                var oldTcs = Interlocked.Exchange(ref schemaChanged, new());
+                oldTcs.TrySetResult(true);
             }
         }, signal.Token);
 
