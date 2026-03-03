@@ -8,6 +8,12 @@ public interface IEventManager : ICloseable
     void Register<T>(EventStream<T> stream);
 
     /// <summary>
+    /// <para>Deregisters the stream associated with the EventManager.</para>
+    /// <para>This does NOT close the stream in the default implementation.</para>
+    /// </summary>
+    bool Deregister<T>();
+
+    /// <summary>
     /// Attempts to retreive the EventStream associated with events of type T.
     /// </summary>
     bool TryGetStream<T>(out EventStream<T> stream);
@@ -30,6 +36,11 @@ public class EventManager : IEventManager
     public void Register<T>(EventStream<T> stream)
     {
         _streams[typeof(T)] = stream;
+    }
+
+    public bool Deregister<T>()
+    {
+        return _streams.Remove(typeof(T));
     }
 
     public bool TryGetStream<T>(out EventStream<T> stream)
