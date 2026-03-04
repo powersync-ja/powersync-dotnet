@@ -809,7 +809,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.True(await moveNext);
 
         var current = enumerator.Current;
-        Assert.Equal(1, current.Length);
+        Assert.Single(current);
         Assert.Equal(3, current[0].count);
     }
 
@@ -835,7 +835,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.True(await moveNext);
 
         var current = enumerator.Current;
-        Assert.Equal(1, current.Length);
+        Assert.Single(current);
         Assert.Equal(3, current[0].count);
     }
 

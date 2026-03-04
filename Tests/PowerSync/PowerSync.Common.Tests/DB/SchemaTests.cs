@@ -29,20 +29,20 @@ public class SchemaTests
     ]
     class Asset
     {
-        public string id { get; set; }
+        public string id { get; set; } = "";
 
         public DateTime created_at { get; set; }
 
-        public string make { get; set; }
+        public string make { get; set; } = "";
 
-        public string model { get; set; }
+        public string model { get; set; } = "";
 
         public int quantity { get; set; }
 
         public string? description { get; set; }
 
         [Ignored]
-        public string non_table_field { get; set; }
+        public string non_table_field { get; set; } = "";
     }
 
     [Fact]
@@ -87,12 +87,12 @@ public class SchemaTests
     ]
     class Product
     {
-        public string id { get; set; }
+        public string id { get; set; } = "";
 
         [Column(ColumnType = ColumnType.Real)]
         public DateTime created_at { get; set; }
 
-        public string description { get; set; }
+        public string description { get; set; } = "";
 
         [Column(TrackPrevious = true)]
         public int quantity { get; set; }
@@ -100,7 +100,7 @@ public class SchemaTests
         [Column(TrackPrevious = true)]
         public decimal ppu { get; set; }
 
-        public string seller_id { get; set; }
+        public string seller_id { get; set; } = "";
     }
 
     [Fact]
@@ -158,10 +158,10 @@ public class SchemaTests
     class Log
     {
         [Column("id")]
-        public string LogId { get; set; }
+        public string LogId { get; set; } = "";
 
         [Column("description")]
-        public string Description { get; set; }
+        public string Description { get; set; } = "";
 
         [Column("timestamp")]
         public DateTimeOffset Timestamp { get; set; }
@@ -199,13 +199,14 @@ public class SchemaTests
         TestParser(typeof(Log), expected);
     }
 
-    class Invalid1 { public string id { get; set; } }
+    class Invalid1 { public string id { get; set; } = ""; }
     [Fact]
     public async void AttributeParser_InvalidSchema_1()
     {
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
         {
             new AttributeParser(typeof(Invalid1)).ParseTable();
+            return Task.CompletedTask;
         });
         Assert.Contains("must be marked with TableAttribute", ex.Message);
     }
@@ -215,9 +216,10 @@ public class SchemaTests
     [Fact]
     public async void AttributeParser_InvalidSchema_2()
     {
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
         {
             new AttributeParser(typeof(Invalid2)).ParseTable();
+            return Task.CompletedTask;
         });
         Assert.Contains("'id' property is required", ex.Message);
     }
@@ -227,9 +229,10 @@ public class SchemaTests
     [Fact]
     public async void AttributeParser_InvalidSchema_3()
     {
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
         {
             new AttributeParser(typeof(Invalid3)).ParseTable();
+            return Task.CompletedTask;
         });
         Assert.Contains("must be of type string", ex.Message);
     }
@@ -238,14 +241,15 @@ public class SchemaTests
     class Invalid4
     {
         [Column(ColumnType = ColumnType.Real)]
-        public string id { get; set; }
+        public string id { get; set; } = "";
     }
     [Fact]
     public async void AttributeParser_InvalidSchema_4()
     {
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
         {
             new AttributeParser(typeof(Invalid4)).ParseTable();
+            return Task.CompletedTask;
         });
         Assert.Contains("must have ColumnType set to ColumnType.Text or ColumnType.Inferred", ex.Message);
     }
@@ -253,15 +257,16 @@ public class SchemaTests
     [Table("invalid")]
     class Invalid5
     {
-        public string id { get; set; }
-        public Invalid1 invalid_type { get; set; }
+        public string id { get; set; } = "";
+        public Invalid1 invalid_type { get; set; } = default!;
     }
     [Fact]
     public async void AttributeParser_InvalidSchema_5()
     {
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
         {
             new AttributeParser(typeof(Invalid5)).ParseTable();
+            return Task.CompletedTask;
         });
         Assert.Contains("Unable to automatically infer ColumnType", ex.Message);
     }
@@ -269,14 +274,15 @@ public class SchemaTests
     [Table("invalid", TrackPreviousValues = TrackPrevious.Columns | TrackPrevious.Table)]
     class Invalid6
     {
-        public string id { get; set; }
+        public string id { get; set; } = "";
     }
     [Fact]
     public async void AttributeParser_InvalidSchema_6()
     {
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
         {
             new AttributeParser(typeof(Invalid6)).ParseTable();
+            return Task.CompletedTask;
         });
         Assert.Contains("Cannot specify both TrackPrevious.Columns and TrackPrevious.Table", ex.Message);
     }
@@ -284,20 +290,21 @@ public class SchemaTests
     [Table("invalid", TrackPreviousValues = TrackPrevious.OnlyWhenChanged)]
     class Invalid7
     {
-        public string id { get; set; }
+        public string id { get; set; } = "";
     }
     [Fact]
     public async void AttributeParser_InvalidSchema_7()
     {
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
         {
             new AttributeParser(typeof(Invalid7)).ParseTable();
+            return Task.CompletedTask;
         });
         Assert.Contains("Cannot specify TrackPrevious.OnlyWhenChanged without also specifying", ex.Message);
     }
 
     [Fact]
-    public async void AttributeParser_TypeMap_CustomRegistered()
+    public void AttributeParser_TypeMap_CustomRegistered()
     {
         // Log has Column aliases
         new AttributeParser(typeof(Log)).RegisterDapperTypeMap();
@@ -306,7 +313,7 @@ public class SchemaTests
     }
 
     [Fact]
-    public async void AttributeParser_TypeMap_DefaultRegistered()
+    public void AttributeParser_TypeMap_DefaultRegistered()
     {
         // Asset has no Column aliases
         new AttributeParser(typeof(Asset)).RegisterDapperTypeMap();

@@ -154,7 +154,7 @@ public class MockRemote : Remote
         this.connectedListeners = connectedListeners;
     }
 
-    public override async Task<Stream> PostStreamRaw(SyncStreamOptions options)
+    public override Task<Stream> PostStreamRaw(SyncStreamOptions options)
     {
         connectedListeners.Add(options.Data);
 
@@ -181,27 +181,27 @@ public class MockRemote : Remote
             }
         });
 
-        return pipe.Reader.AsStream();
+        return Task.FromResult(pipe.Reader.AsStream());
     }
 
-    public override async Task<T> Get<T>(string path, Dictionary<string, string>? headers = null)
+    public override Task<T> Get<T>(string path, Dictionary<string, string>? headers = null)
     {
         var response = new StreamingSyncImplementation.ApiResponse(
             new StreamingSyncImplementation.ResponseData("1")
         );
 
-        return (T)(object)response;
+        return Task.FromResult((T)(object)response);
     }
 }
 
 public class TestConnector : IPowerSyncBackendConnector
 {
-    public async Task<PowerSyncCredentials?> FetchCredentials()
+    public Task<PowerSyncCredentials?> FetchCredentials()
     {
-        return new PowerSyncCredentials(
+        return Task.FromResult<PowerSyncCredentials?>(new PowerSyncCredentials(
             endpoint: "https://powersync.example.org",
             token: "test"
-        );
+        ));
     }
 
     public async Task UploadData(IPowerSyncDatabase database)

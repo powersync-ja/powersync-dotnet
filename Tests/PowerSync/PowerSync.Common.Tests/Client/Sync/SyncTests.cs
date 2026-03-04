@@ -14,10 +14,11 @@ public class SyncTests : IAsyncLifetime
     MockSyncService syncService = null!;
     PowerSyncDatabase db = null!;
 
-    public async Task InitializeAsync()
+    public Task InitializeAsync()
     {
         syncService = new MockSyncService();
         db = syncService.CreateDatabase();
+        return Task.CompletedTask;
     }
 
     public async Task DisposeAsync()
