@@ -110,7 +110,7 @@ public class EventStreamTests
     }
 
     [Fact]
-    public async Task EventManager_RegistersStreamsCorrectly()
+    public void EventManager_RegistersStreamsCorrectly()
     {
         var manager = new EventManager();
         var stream1 = new EventStream<bool>();
@@ -126,13 +126,13 @@ public class EventStreamTests
 
         Assert.Equal(stream1, obtainedStream1);
         Assert.Equal(stream2, obtainedStream2);
-        Assert.Equal(null, obtainedStream3);
+        Assert.Null(obtainedStream3);
 
         manager.Close();
     }
 
     [Fact]
-    public async Task EventManager_CloseRemovesAndClosesStreams()
+    public void EventManager_CloseRemovesAndClosesStreams()
     {
         var manager = new EventManager();
         var stream1 = new EventStream<bool>();
@@ -148,9 +148,9 @@ public class EventStreamTests
         Assert.False(manager.TryGetStream<string>(out var obtainedStream2));
         Assert.False(manager.TryGetStream<int>(out var obtainedStream3));
 
-        Assert.Equal(null, obtainedStream1);
-        Assert.Equal(null, obtainedStream2);
-        Assert.Equal(null, obtainedStream3);
+        Assert.Null(obtainedStream1);
+        Assert.Null(obtainedStream2);
+        Assert.Null(obtainedStream3);
 
         Assert.True(stream1.Closed);
         Assert.True(stream2.Closed);

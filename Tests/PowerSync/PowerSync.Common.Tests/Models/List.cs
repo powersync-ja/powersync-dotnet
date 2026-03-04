@@ -7,14 +7,14 @@ using PowerSync.Common.DB.Schema.Attributes;
 public class List
 {
     [Column("id")]
-    public string ListId { get; set; }
+    public string ListId { get; set; } = "";
 
     [Column("created_at")]
     public DateTime CreatedAt { get; set; }
 
     [Column("name")]
-    public string Name { get; set; }
+    public string Name { get; set; } = "";
 
     [Column("owner_id")]
-    public string OwnerId { get; set; }
+    public string OwnerId { get; set; } = "";
 }

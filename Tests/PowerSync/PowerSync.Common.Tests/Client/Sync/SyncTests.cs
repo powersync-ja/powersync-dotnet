@@ -14,10 +14,11 @@ public class SyncTests : IAsyncLifetime
     MockSyncService syncService = null!;
     PowerSyncDatabase db = null!;
 
-    public async Task InitializeAsync()
+    public Task InitializeAsync()
     {
         syncService = new MockSyncService();
         db = syncService.CreateDatabase();
+        return Task.CompletedTask;
     }
 
     public async Task DisposeAsync()
@@ -74,7 +75,12 @@ public class SyncTests : IAsyncLifetime
             syncService.PushLine(line);
         }
 
-        await Task.Delay(500); // Wait for sync to process
+        // Wait for sync to process
+        await TestUtils.WaitForAsync(async () =>
+        {
+            var rows = await db.GetAll<dynamic>("SELECT * FROM lists");
+            return rows.Length == 0;
+        });
 
         var result = await db.GetAll<dynamic>("SELECT * FROM lists");
         Assert.Empty(result);
@@ -105,7 +111,8 @@ public class SyncTests : IAsyncLifetime
 
         await db.Execute("insert into lists (id, name, owner_id, created_at) values (uuid(), 'New User', ?, datetime())", ["78bb787c-ff0b-41b2-a297-6a7701648f4a"]);
 
-        await Task.Delay(500); // Wait for local change to be registered
+        // Wait for local change to be registered
+        await TestUtils.WaitForAsync(() => db.CurrentStatus.DataFlowStatus.Uploading == false);
         Assert.Null(db.CurrentStatus.DataFlowStatus.UploadError);
 
         foreach (var line in syncAfterLocalCreate)
@@ -113,7 +120,8 @@ public class SyncTests : IAsyncLifetime
             syncService.PushLine(line);
         }
 
-        await Task.Delay(500); // Wait for sync to process
+        // Wait for sync to process
+        await TestUtils.WaitForAsync(() => db.CurrentStatus.DataFlowStatus.Downloading == false);
         Assert.Null(db.CurrentStatus.DataFlowStatus.DownloadError);
     }
 

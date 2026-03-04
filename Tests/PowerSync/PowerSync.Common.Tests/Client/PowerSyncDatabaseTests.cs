@@ -34,15 +34,12 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     public async Task DisposeAsync()
     {
         testCts.Cancel();
+        testCts.Dispose();
 
         await db.DisconnectAndClear();
         await db.Close();
 
-        try { File.Delete(dbName); }
-        catch { }
-
-        testCts.Dispose();
-        testCts = new();
+        DatabaseUtils.CleanDb(dbName);
     }
 
     private record IdResult(string id);
@@ -50,40 +47,42 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
 
     private class AssetResult
     {
-        public string id { get; set; }
-        public string description { get; set; }
+        public string id { get; set; } = "";
+        public string description { get; set; } = "";
         public string? make { get; set; }
     }
 
     [Fact]
-    public async Task QueryWithoutParamsTest()
+    public async Task QueryWithoutParams()
     {
-        var name = "Test User";
-        var age = 30;
+        var id = Guid.NewGuid().ToString();
+        var description = "some desc";
+        var make = "some make";
 
         await db.Execute(
             "INSERT INTO assets(id, description, make) VALUES(?, ?, ?)",
-            [Guid.NewGuid().ToString(), name, age.ToString()]
+            [id, description, make]
         );
 
         var result = await db.GetAll<AssetResult>("SELECT id, description, make FROM assets");
 
         Assert.Single(result);
         var row = result.First();
-        Assert.Equal(name, row.description);
-        Assert.Equal(age.ToString(), row.make);
+        Assert.Equal(id, row.id);
+        Assert.Equal(description, row.description);
+        Assert.Equal(make, row.make);
     }
 
     [Fact]
-    public async Task QueryWithParamsTest()
+    public async Task QueryWithParams()
     {
         var id = Guid.NewGuid().ToString();
-        var name = "Test User";
-        var age = 30;
+        var description = "some desc";
+        var make = "some make";
 
         await db.Execute(
             "INSERT INTO assets(id, description, make) VALUES(?, ?, ?)",
-            [id, name, age.ToString()]
+            [id, description, make]
         );
 
         var result = await db.GetAll<AssetResult>("SELECT id, description, make FROM assets WHERE id = ?", [id]);
@@ -91,8 +90,8 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.Single(result);
         var row = result.First();
         Assert.Equal(id, row.id);
-        Assert.Equal(name, row.description);
-        Assert.Equal(age.ToString(), row.make);
+        Assert.Equal(description, row.description);
+        Assert.Equal(make, row.make);
     }
 
     [Fact]
@@ -116,26 +115,26 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task QueriesRunOnAnotherThread()
+    public async Task QueriesDoNotBlockCaller()
     {
-        int preCallThreadId = Environment.CurrentManagedThreadId;
-        await db.GetAll("select * from assets");
-        int postCallThreadId = Environment.CurrentManagedThreadId;
+        var writeTask = db.WriteLock(async ctx =>
+        {
+            // Simulate slow query
+            await Task.Delay(200);
+        });
 
-        Assert.NotEqual(preCallThreadId, postCallThreadId);
+        Assert.False(writeTask.IsCompleted, "Write task with 200ms delay completed synchronously instead of yielding");
+        await writeTask;
     }
 
     [Fact]
-    public async Task FailedInsertTest()
+    public async Task FailedInsert()
     {
-        var name = "Test User";
-        var age = 30;
-
         var exception = await Assert.ThrowsAsync<SqliteException>(async () =>
         {
             await db.Execute(
                 "INSERT INTO assetsfail (id, description, make) VALUES(?, ?, ?)",
-                [Guid.NewGuid().ToString(), name, age.ToString()]
+                [Guid.NewGuid().ToString(), "some desc", "some make"]
             );
         });
 
@@ -143,7 +142,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task SimpleReadTransactionTest()
+    public async Task SimpleReadTransaction()
     {
         await db.Execute("INSERT INTO assets(id) VALUES(?)", ["O3"]);
 
@@ -156,7 +155,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task ManualCommitTest()
+    public async Task ManualCommit()
     {
         await db.WriteTransaction(async tx =>
         {
@@ -171,7 +170,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task AutoCommitTest()
+    public async Task AutoCommit()
     {
         await db.WriteTransaction(async tx =>
         {
@@ -185,7 +184,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task ManualRollbackTest()
+    public async Task ManualRollback()
     {
         await db.WriteTransaction(async tx =>
         {
@@ -198,7 +197,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task AutoRollbackTest()
+    public async Task AutoRollback()
     {
         bool exceptionThrown = false;
         try
@@ -221,7 +220,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task WriteTransactionWithReturnTest()
+    public async Task WriteTransactionWithReturn()
     {
         var result = await db.WriteTransaction(async tx =>
         {
@@ -234,7 +233,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task WriteTransactionNestedQueryTest()
+    public async Task WriteTransactionNestedQuery()
     {
         await db.WriteTransaction(async tx =>
         {
@@ -249,7 +248,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task ReadLockReadOnlyTest()
+    public async Task ReadLockReadOnly()
     {
         string id = Guid.NewGuid().ToString();
         bool exceptionThrown = false;
@@ -277,7 +276,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task ReadLocksQueueIfExceedNumberOfConnectionsTest()
+    public async Task ReadLocksQueueIfExceedNumberOfConnections()
     {
         string id = Guid.NewGuid().ToString();
 
@@ -302,7 +301,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     }
 
     [Fact(Timeout = 2000)]
-    public async Task ReadWhileWriteIsRunningTest()
+    public async Task ReadWhileWriteIsRunning()
     {
         var sem = new TaskCompletionSource<bool>();
 
@@ -327,7 +326,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task BatchExecuteTest()
+    public async Task BatchExecute()
     {
         var id1 = Guid.NewGuid().ToString();
         var description1 = "Asset 1";
@@ -357,7 +356,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     }
 
     [Fact(Timeout = 2000)]
-    public async Task QueueSimultaneousExecutionsTest()
+    public async Task QueueSimultaneousExecutions()
     {
         var order = new List<int>();
         var operationCount = 5;
@@ -376,7 +375,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     }
 
     [Fact(Timeout = 2000)]
-    public async Task CallUpdateHookOnChangesTest()
+    public async Task CallUpdateHookOnChanges()
     {
         var result = new TaskCompletionSource<bool>();
 
@@ -401,7 +400,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     }
 
     [Fact(Timeout = 2000)]
-    public async Task ReflectWriteTransactionUpdatesOnReadConnectionsTest()
+    public async Task ReflectWriteTransactionUpdatesOnReadConnections()
     {
         var watched = new TaskCompletionSource<bool>();
 
@@ -428,7 +427,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     }
 
     [Fact(Timeout = 5000)]
-    public async Task ReflectWriteLockUpdatesOnReadConnectionsTest()
+    public async Task ReflectWriteLockUpdatesOnReadConnections()
     {
         var numberOfAssets = 10_000;
 
@@ -464,7 +463,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     }
 
     [Fact(Timeout = 5000)]
-    public async Task Insert1000Records_CompleteWithinTimeLimitTest()
+    public async Task Insert1000Records_CompleteWithinTimeLimit()
     {
         var random = new Random();
         var stopwatch = Stopwatch.StartNew();
@@ -487,7 +486,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     }
 
     [Fact(Timeout = 5000)]
-    public async Task TestConcurrentReadsTest()
+    public async Task TestConcurrentReads()
     {
         await db.Execute("INSERT INTO assets(id) VALUES(?)", ["O6-conccurent-1"]);
         var sem = new TaskCompletionSource<bool>();
@@ -517,7 +516,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     }
 
     [Fact(Timeout = 5000)]
-    public async Task GetUploadQueueStatsTest()
+    public async Task GetUploadQueueStats()
     {
         for (var i = 0; i < 100; i++)
         {
@@ -530,7 +529,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task QueryDynamicTest()
+    public async Task QueryDynamic()
     {
         string id = Guid.NewGuid().ToString();
         string description = "new description";
@@ -547,7 +546,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     }
 
     [Fact(Timeout = 2500)]
-    public async Task WatchDynamicTest()
+    public async Task Watch_Dynamic()
     {
         string id = Guid.NewGuid().ToString();
         string description = "dynamic description";
@@ -584,7 +583,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     }
 
     [Fact(Timeout = 2000)]
-    public async Task WatchCancelledTest()
+    public async Task Watch_Cancelled()
     {
         int callCount = 0;
         using var sem = new SemaphoreSlim(0);
@@ -601,20 +600,14 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.True(await sem.WaitAsync(100));
         Assert.Equal(1, callCount);
 
-        await db.Execute(
-            "insert into assets(id, description, make) values (?, ?, ?)",
-            [Guid.NewGuid().ToString(), "some desc", "some make"]
-        );
+        await TestUtils.InsertRandomAsset(db);
 
         Assert.True(await sem.WaitAsync(100));
         Assert.Equal(2, callCount);
 
         testCts.Cancel();
 
-        await db.Execute(
-            "insert into assets(id, description, make) values (?, ?, ?)",
-            [Guid.NewGuid().ToString(), "some desc", "some make"]
-        );
+        await TestUtils.InsertRandomAsset(db);
 
         // This is failing
         Assert.False(await sem.WaitAsync(100));
@@ -622,7 +615,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     }
 
     [Fact(Timeout = 3000)]
-    public async Task WatchMultipleCancelledTest()
+    public async Task Watch_MultipleCancelled()
     {
         int callCount = 0;
 
@@ -647,20 +640,14 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         RunQuery(ctsAlwaysRunning, semAlwaysRunning);
         RunQuery(ctsCancelled, semCancelled);
 
-        await db.Execute(
-            "insert into assets(id, description, make) values (?, ?, ?)",
-            [Guid.NewGuid().ToString(), "some desc", "some make"]
-        );
+        await TestUtils.InsertRandomAsset(db);
         await Task.WhenAll(semAlwaysRunning.WaitAsync(), semCancelled.WaitAsync());
         Assert.Equal(2, callCount);
 
         // Close one query
         ctsCancelled.Cancel();
 
-        await db.Execute(
-            "insert into assets(id, description, make) values (?, ?, ?)",
-            [Guid.NewGuid().ToString(), "some desc", "some make"]
-        );
+        await TestUtils.InsertRandomAsset(db);
 
         // Ensure nothing received from cancelled result
         Assert.False(await semCancelled.WaitAsync(100));
@@ -671,10 +658,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         // Sanity check
         ctsAlwaysRunning.Cancel();
 
-        await db.Execute(
-            "insert into assets(id, description, make) values (?, ?, ?)",
-            [Guid.NewGuid().ToString(), "some desc", "some make"]
-        );
+        await TestUtils.InsertRandomAsset(db);
 
         Assert.False(await semAlwaysRunning.WaitAsync(100));
         Assert.False(await semCancelled.WaitAsync(100));
@@ -682,7 +666,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     }
 
     [Fact(Timeout = 3000)]
-    public async Task WatchSchemaResetTest()
+    public async Task Watch_SchemaReset()
     {
         var dbId = Guid.NewGuid().ToString();
         var localDbName = $"PowerSyncWatchReset_{dbId}.db";
@@ -701,7 +685,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
             long lastCount = 0;
 
             const string QUERY = "SELECT COUNT(*) AS count FROM assets";
-            var listener = db.Watch<CountResult>(QUERY, null, new() { Signal = testCts.Token });
+            var listener = db.Watch<CountResult>(QUERY, null, new() { Signal = testCts.Token, TriggerImmediately = true });
             _ = Task.Run(async () =>
             {
                 await foreach (var result in listener)
@@ -709,8 +693,11 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
                     lastCount = result[0].count;
                     sem.Release();
                 }
-            }, testCts.Token);
-            Assert.False(await sem.WaitAsync(200));
+
+                // Called on cancellation
+                sem.Release();
+            });
+            Assert.True(await sem.WaitAsync(100));
 
             var resolved = await db.GetSourceTables(QUERY, null);
             Assert.Single(resolved);
@@ -718,10 +705,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
 
             for (int i = 0; i < 3; i++)
             {
-                await db.Execute(
-                    "insert into assets(id, description, make) values (?, ?, ?)",
-                    [Guid.NewGuid().ToString(), "some desc", "some make"]
-                );
+                await TestUtils.InsertRandomAsset(db);
                 Assert.True(await sem.WaitAsync(100));
                 Assert.Equal(i + 1, lastCount);
             }
@@ -742,7 +726,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
 
             // Sanity check
             testCts.Cancel();
-            await Task.Delay(100);
+            Assert.True(await sem.WaitAsync(500));
 
             await db.Execute("delete from assets");
             Assert.False(await sem.WaitAsync(100));
@@ -774,7 +758,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
             var createdAt = DateTimeOffset.Now;
 
             await db.Execute(
-                "INSERT INTO todos(id, description, completed, created_at, list_id) VALUES(?, ?, ?, ?, uuid())",
+                "INSERT INTO todos (id, description, completed, created_at) VALUES (?, ?, ?, ?)",
                 [id, description, completed, createdAt]
             );
 
@@ -805,5 +789,80 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.Single(result); // id
         result = await db.GetAll("PRAGMA index_info('ps_data__assets__makemodel')");
         Assert.Equal(2, result.Length); // make, model
+    }
+
+    [Fact]
+    public async Task Watch_TriggerImmediately_True()
+    {
+        // Insert some data
+        await TestUtils.InsertRandomAssets(db, 3);
+
+        var listener = db.Watch<CountResult>(
+            "SELECT COUNT(*) AS count FROM assets",
+            null,
+            new() { Signal = testCts.Token, TriggerImmediately = true });
+        var enumerator = listener.GetAsyncEnumerator();
+
+        var moveNext = enumerator.MoveNextAsync().AsTask();
+        var timeout = Task.Delay(500);
+        Assert.NotEqual(timeout, await Task.WhenAny(moveNext, timeout));
+        Assert.True(await moveNext);
+
+        var current = enumerator.Current;
+        Assert.Single(current);
+        Assert.Equal(3, current[0].count);
+    }
+
+    [Fact]
+    public async Task Watch_TriggerImmediately_False()
+    {
+        var listener = db.Watch<CountResult>(
+            "SELECT COUNT(*) AS count FROM assets",
+            null,
+            new() { TriggerImmediately = false });
+
+        var enumerator = listener.GetAsyncEnumerator();
+
+        var moveNext = enumerator.MoveNextAsync().AsTask();
+        var timeout = Task.Delay(200);
+        Assert.Equal(timeout, await Task.WhenAny(moveNext, timeout));
+
+        // Trigger the watch to run
+        await TestUtils.InsertRandomAssets(db, 3);
+
+        timeout = Task.Delay(500);
+        Assert.NotEqual(timeout, await Task.WhenAny(moveNext, timeout));
+        Assert.True(await moveNext);
+
+        var current = enumerator.Current;
+        Assert.Single(current);
+        Assert.Equal(3, current[0].count);
+    }
+
+    [Fact(Timeout = 2000)]
+    public async Task Watch_CancelsOnTokenCancellation()
+    {
+        var cts = CancellationTokenSource.CreateLinkedTokenSource(testCts.Token);
+        var tcs = new TaskCompletionSource<bool>();
+        var sem = new SemaphoreSlim(0);
+        var listener = db.Watch<CountResult>(
+            "SELECT COUNT(*) AS count FROM assets",
+            null,
+            new() { Signal = cts.Token, TriggerImmediately = false });
+
+        // Sem == received result
+        // TCS == received cancellation
+        _ = Task.Run(async () =>
+        {
+            await foreach (var _ in listener) { sem.Release(); }
+            tcs.TrySetResult(true);
+        });
+
+        await TestUtils.InsertRandomAssets(db, 3);
+        Assert.True(await sem.WaitAsync(200));
+
+        cts.Cancel();
+
+        Assert.True(await tcs.Task);
     }
 }
