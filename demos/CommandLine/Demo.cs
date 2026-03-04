@@ -121,12 +121,9 @@ class Demo
 
         _ = Task.Run(async () =>
         {
-            await foreach (var update in db.ListenAsync(new CancellationToken()))
+            await foreach (var update in db.Events.OnStatusChanged.ListenAsync(new CancellationToken()))
             {
-                if (update.StatusChanged != null)
-                {
-                    connected = update.StatusChanged.Connected;
-                }
+                connected = update.Status.Connected;
             }
         });
 

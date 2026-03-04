@@ -65,13 +65,10 @@ public class MockSyncService : EventStream<string>
 
         _ = Task.Run(async () =>
         {
-            await foreach (var update in db.ListenAsync(cts.Token))
+            await foreach (var update in db.Events.OnStatusChanged.ListenAsync(cts.Token))
             {
-                if (update.StatusChanged != null)
-                {
-                    tcs.TrySetResult(update.StatusChanged);
-                    cts?.Cancel();
-                }
+                tcs.TrySetResult(update.Status);
+                cts?.Cancel();
             }
         });
 

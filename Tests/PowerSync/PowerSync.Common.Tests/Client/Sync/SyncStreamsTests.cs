@@ -1,14 +1,8 @@
 namespace PowerSync.Common.Tests.Client.Sync;
 
-using System.Runtime.CompilerServices;
-
 using Common.Client.Sync.Stream;
 
-using Newtonsoft.Json;
-
 using PowerSync.Common.Client;
-using PowerSync.Common.DB.Crud;
-using PowerSync.Common.DB.Schema;
 using PowerSync.Common.Tests.Utils;
 using PowerSync.Common.Tests.Utils.Sync;
 
@@ -211,6 +205,4 @@ public class SyncStreamsTests : IAsyncLifetime
         await db.Connect(new TestConnector(), new PowerSyncConnectionOptions());
         TestUtils.DeepEquivalent(new RequestStream { IncludeDefaults = true, Subscriptions = [] }, syncService.Requests[0].Streams);
     }
-
-
 }

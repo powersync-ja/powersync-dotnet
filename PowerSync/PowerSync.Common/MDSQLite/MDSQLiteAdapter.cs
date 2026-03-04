@@ -19,9 +19,11 @@ public class MDSQLiteAdapterOptions()
     public MDSQLiteOptions? SqliteOptions;
 }
 
-public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
+public class MDSQLiteAdapter : IDBAdapter
 {
     public string Name => options.Name;
+
+    public DBAdapterEvents Events { get; } = new();
 
     // One writer
     private MDSQLiteConnection writeConnection = null!;
@@ -114,7 +116,7 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
             {
                 if (notification.TablesUpdated != null)
                 {
-                    Emit(notification);
+                    Events.Emit(notification);
                 }
             }
         });
@@ -146,13 +148,13 @@ public class MDSQLiteAdapter : EventStream<DBAdapterEvent>, IDBAdapter
         db.LoadExtension(extensionPath, "sqlite3_powersync_init");
     }
 
-    public new async Task Close()
+    public async Task Close()
     {
         tablesUpdatedCts?.Cancel();
         try { tablesUpdatedTask?.Wait(2000); } catch { /* expected */ }
-        base.Close();
         writeConnection?.Close();
         await readPool.Close();
+        Events.Close();
     }
 
     public async Task<NonQueryResult> Execute(string query, object?[]? parameters = null)
