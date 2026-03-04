@@ -22,15 +22,12 @@ public partial class ListsPage
 
         _ = Task.Run(async () =>
         {
-            await foreach (var update in database.Db.ListenAsync(new CancellationToken()))
+            await foreach (var update in database.Db.Events.OnStatusChanged.ListenAsync(new CancellationToken()))
             {
-                if (update.StatusChanged != null)
+                MainThread.BeginInvokeOnMainThread(() =>
                 {
-                    MainThread.BeginInvokeOnMainThread(() =>
-                    {
-                        WifiStatusItem.IconImageSource = update.StatusChanged.Connected ? "wifi.png" : "wifi_off.png";
-                    });
-                }
+                    WifiStatusItem.IconImageSource = update.Status.Connected ? "wifi.png" : "wifi_off.png";
+                });
             }
         });
 
