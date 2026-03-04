@@ -74,7 +74,7 @@ public class SyncTests : IAsyncLifetime
             syncService.PushLine(line);
         }
 
-        // Wait for delete to propagate
+        // Wait for sync to process
         await TestUtils.WaitForAsync(async () =>
         {
             var rows = await db.GetAll<dynamic>("SELECT * FROM lists");
@@ -110,6 +110,7 @@ public class SyncTests : IAsyncLifetime
 
         await db.Execute("insert into lists (id, name, owner_id, created_at) values (uuid(), 'New User', ?, datetime())", ["78bb787c-ff0b-41b2-a297-6a7701648f4a"]);
 
+        // Wait for local change to be registered
         await TestUtils.WaitForAsync(() => db.CurrentStatus.DataFlowStatus.Uploading == false);
         Assert.Null(db.CurrentStatus.DataFlowStatus.UploadError);
 
@@ -118,6 +119,7 @@ public class SyncTests : IAsyncLifetime
             syncService.PushLine(line);
         }
 
+        // Wait for sync to process
         await TestUtils.WaitForAsync(() => db.CurrentStatus.DataFlowStatus.Downloading == false);
         Assert.Null(db.CurrentStatus.DataFlowStatus.DownloadError);
     }

@@ -162,12 +162,13 @@ public class SyncStreamsTests : IAsyncLifetime
         await statusTask;
         var subscription = await db.SyncStream("a").Subscribe();
 
+        // Wait for subscription request to register
         await TestUtils.WaitForAsync(() => syncService.Requests.Count > 1);
         Assert.Single(syncService.Requests[1]?.Streams?.Subscriptions!);
 
         // Given that the subscription has a TTL, dropping the handle should not re-subscribe.
         subscription.Unsubscribe();
-        await Task.Delay(100);
+        await TestUtils.WaitForAsync(() => syncService.Requests.Count == 2);
         Assert.Equal(2, syncService.Requests.Count);
     }
 
