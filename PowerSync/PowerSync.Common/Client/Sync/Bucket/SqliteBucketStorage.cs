@@ -12,12 +12,12 @@ using Newtonsoft.Json;
 
 using PowerSync.Common.DB;
 using PowerSync.Common.DB.Crud;
-using PowerSync.Common.Utils;
 
-public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStorageAdapter
+public class SqliteBucketStorage : IBucketStorageAdapter
 {
-
     public static readonly string MAX_OP_ID = "9223372036854775807";
+
+    public BucketStorageEvents Events { get; } = new();
 
     private readonly IDBAdapter db;
     private bool hasCompletedSync;
@@ -27,29 +27,27 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
     private readonly ILogger logger;
 
     private readonly CancellationTokenSource updateCts;
+    private readonly Task updateTask;
 
     private record ExistingTableRowsResult(string name);
 
     public SqliteBucketStorage(IDBAdapter db, ILogger? logger = null)
     {
         this.db = db;
-        this.logger = logger ?? NullLogger.Instance; ;
+        this.logger = logger ?? NullLogger.Instance;
         hasCompletedSync = false;
         tableNames = [];
 
         updateCts = new CancellationTokenSource();
 
-        var _ = Task.Run(() =>
+        updateTask = Task.Run(() =>
         {
-            foreach (var update in db.Listen(updateCts.Token))
+            foreach (var update in db.Events.OnTablesUpdated.Listen(updateCts.Token))
             {
-                if (update.TablesUpdated != null)
+                var tables = DBAdapterUtils.ExtractTableUpdates(update.TablesUpdated);
+                if (tables.Contains(PSInternalTable.CRUD))
                 {
-                    var tables = DBAdapterUtils.ExtractTableUpdates(update.TablesUpdated);
-                    if (tables.Contains(PSInternalTable.CRUD))
-                    {
-                        Emit(new BucketStorageEvent { CrudUpdate = true });
-                    }
+                    Events.Emit(new BucketStorageEvents.CrudUpdateEvent());
                 }
             }
         });
@@ -67,10 +65,11 @@ public class SqliteBucketStorage : EventStream<BucketStorageEvent>, IBucketStora
         }
     }
 
-    public new void Close()
+    public void Close()
     {
         updateCts.Cancel();
-        base.Close();
+        try { updateTask.Wait(2000); } catch (Exception) { }
+        Events.Close();
     }
 
     private record ClientIdResult(string? client_id);

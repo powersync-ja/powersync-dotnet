@@ -4,7 +4,7 @@ using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 
-public interface IEventStream<T>
+public interface IEventStream<T> : ICloseable
 {
     void Emit(T item);
 
@@ -13,8 +13,6 @@ public interface IEventStream<T>
     IEnumerable<T> Listen(CancellationToken cancellationToken);
 
     IAsyncEnumerable<T> ListenAsync(CancellationToken cancellationToken);
-
-    void Close();
 }
 
 public class EventStream<T> : IEventStream<T>
