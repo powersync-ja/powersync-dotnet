@@ -47,40 +47,42 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
 
     private class AssetResult
     {
-        public string id { get; set; }
-        public string description { get; set; }
+        public string id { get; set; } = "";
+        public string description { get; set; } = "";
         public string? make { get; set; }
     }
 
     [Fact]
     public async Task QueryWithoutParams()
     {
-        var name = "Test User";
-        var age = 30;
+        var id = Guid.NewGuid().ToString();
+        var description = "some desc";
+        var make = "some make";
 
         await db.Execute(
             "INSERT INTO assets(id, description, make) VALUES(?, ?, ?)",
-            [Guid.NewGuid().ToString(), name, age.ToString()]
+            [id, description, make]
         );
 
         var result = await db.GetAll<AssetResult>("SELECT id, description, make FROM assets");
 
         Assert.Single(result);
         var row = result.First();
-        Assert.Equal(name, row.description);
-        Assert.Equal(age.ToString(), row.make);
+        Assert.Equal(id, row.id);
+        Assert.Equal(description, row.description);
+        Assert.Equal(make, row.make);
     }
 
     [Fact]
     public async Task QueryWithParams()
     {
         var id = Guid.NewGuid().ToString();
-        var name = "Test User";
-        var age = 30;
+        var description = "some desc";
+        var make = "some make";
 
         await db.Execute(
             "INSERT INTO assets(id, description, make) VALUES(?, ?, ?)",
-            [id, name, age.ToString()]
+            [id, description, make]
         );
 
         var result = await db.GetAll<AssetResult>("SELECT id, description, make FROM assets WHERE id = ?", [id]);
@@ -88,8 +90,8 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.Single(result);
         var row = result.First();
         Assert.Equal(id, row.id);
-        Assert.Equal(name, row.description);
-        Assert.Equal(age.ToString(), row.make);
+        Assert.Equal(description, row.description);
+        Assert.Equal(make, row.make);
     }
 
     [Fact]
@@ -113,26 +115,26 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task QueriesRunOnAnotherThread()
+    public async Task QueriesDoNotBlockCaller()
     {
-        int preCallThreadId = Environment.CurrentManagedThreadId;
-        await db.GetAll("select * from assets");
-        int postCallThreadId = Environment.CurrentManagedThreadId;
+        var writeTask = db.WriteLock(async ctx =>
+        {
+            // Simulate slow query
+            await Task.Delay(200);
+        });
 
-        Assert.NotEqual(preCallThreadId, postCallThreadId);
+        Assert.False(writeTask.IsCompleted, "Write task with 200ms delay completed synchronously instead of yielding");
+        await writeTask;
     }
 
     [Fact]
     public async Task FailedInsert()
     {
-        var name = "Test User";
-        var age = 30;
-
         var exception = await Assert.ThrowsAsync<SqliteException>(async () =>
         {
             await db.Execute(
                 "INSERT INTO assetsfail (id, description, make) VALUES(?, ?, ?)",
-                [Guid.NewGuid().ToString(), name, age.ToString()]
+                [Guid.NewGuid().ToString(), "some desc", "some make"]
             );
         });
 
@@ -598,20 +600,14 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.True(await sem.WaitAsync(100));
         Assert.Equal(1, callCount);
 
-        await db.Execute(
-            "insert into assets(id, description, make) values (?, ?, ?)",
-            [Guid.NewGuid().ToString(), "some desc", "some make"]
-        );
+        await TestUtils.InsertRandomAsset(db);
 
         Assert.True(await sem.WaitAsync(100));
         Assert.Equal(2, callCount);
 
         testCts.Cancel();
 
-        await db.Execute(
-            "insert into assets(id, description, make) values (?, ?, ?)",
-            [Guid.NewGuid().ToString(), "some desc", "some make"]
-        );
+        await TestUtils.InsertRandomAsset(db);
 
         // This is failing
         Assert.False(await sem.WaitAsync(100));
@@ -644,20 +640,14 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         RunQuery(ctsAlwaysRunning, semAlwaysRunning);
         RunQuery(ctsCancelled, semCancelled);
 
-        await db.Execute(
-            "insert into assets(id, description, make) values (?, ?, ?)",
-            [Guid.NewGuid().ToString(), "some desc", "some make"]
-        );
+        await TestUtils.InsertRandomAsset(db);
         await Task.WhenAll(semAlwaysRunning.WaitAsync(), semCancelled.WaitAsync());
         Assert.Equal(2, callCount);
 
         // Close one query
         ctsCancelled.Cancel();
 
-        await db.Execute(
-            "insert into assets(id, description, make) values (?, ?, ?)",
-            [Guid.NewGuid().ToString(), "some desc", "some make"]
-        );
+        await TestUtils.InsertRandomAsset(db);
 
         // Ensure nothing received from cancelled result
         Assert.False(await semCancelled.WaitAsync(100));
@@ -668,10 +658,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         // Sanity check
         ctsAlwaysRunning.Cancel();
 
-        await db.Execute(
-            "insert into assets(id, description, make) values (?, ?, ?)",
-            [Guid.NewGuid().ToString(), "some desc", "some make"]
-        );
+        await TestUtils.InsertRandomAsset(db);
 
         Assert.False(await semAlwaysRunning.WaitAsync(100));
         Assert.False(await semCancelled.WaitAsync(100));
@@ -718,10 +705,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
 
             for (int i = 0; i < 3; i++)
             {
-                await db.Execute(
-                    "insert into assets(id, description, make) values (?, ?, ?)",
-                    [Guid.NewGuid().ToString(), "some desc", "some make"]
-                );
+                await TestUtils.InsertRandomAsset(db);
                 Assert.True(await sem.WaitAsync(100));
                 Assert.Equal(i + 1, lastCount);
             }
@@ -774,7 +758,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
             var createdAt = DateTimeOffset.Now;
 
             await db.Execute(
-                "INSERT INTO todos(id, description, completed, created_at, list_id) VALUES(?, ?, ?, ?, uuid())",
+                "INSERT INTO todos (id, description, completed, created_at) VALUES (?, ?, ?, ?)",
                 [id, description, completed, createdAt]
             );
 
@@ -811,14 +795,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     public async Task Watch_TriggerImmediately_True()
     {
         // Insert some data
-        await db.ExecuteBatch(
-            "insert into assets(id, description, make) values (?, ?, ?)",
-            [
-                [Guid.NewGuid().ToString(), "some desc", "some make"],
-                [Guid.NewGuid().ToString(), "some desc", "some make"],
-                [Guid.NewGuid().ToString(), "some desc", "some make"],
-            ]
-        );
+        await TestUtils.InsertRandomAssets(db, 3);
 
         var listener = db.Watch<CountResult>(
             "SELECT COUNT(*) AS count FROM assets",
@@ -851,14 +828,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.Equal(timeout, await Task.WhenAny(moveNext, timeout));
 
         // Trigger the watch to run
-        await db.ExecuteBatch(
-            "insert into assets(id, description, make) values (?, ?, ?)",
-            [
-                [Guid.NewGuid().ToString(), "some desc", "some make"],
-                [Guid.NewGuid().ToString(), "some desc", "some make"],
-                [Guid.NewGuid().ToString(), "some desc", "some make"],
-            ]
-        );
+        await TestUtils.InsertRandomAssets(db, 3);
 
         timeout = Task.Delay(500);
         Assert.NotEqual(timeout, await Task.WhenAny(moveNext, timeout));
@@ -880,21 +850,15 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
             null,
             new() { Signal = cts.Token, TriggerImmediately = false });
 
+        // Sem == received result
+        // TCS == received cancellation
         _ = Task.Run(async () =>
         {
             await foreach (var _ in listener) { sem.Release(); }
             tcs.TrySetResult(true);
         });
 
-        await db.ExecuteBatch(
-            "insert into assets(id, description, make) values (?, ?, ?)",
-            [
-                [Guid.NewGuid().ToString(), "some desc", "some make"],
-                [Guid.NewGuid().ToString(), "some desc", "some make"],
-                [Guid.NewGuid().ToString(), "some desc", "some make"],
-            ]
-        );
-
+        await TestUtils.InsertRandomAssets(db, 3);
         Assert.True(await sem.WaitAsync(200));
 
         cts.Cancel();

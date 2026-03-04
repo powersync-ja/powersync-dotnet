@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using PowerSync.Common.Client;
 
 namespace PowerSync.Common.Tests.Utils;
 
@@ -43,5 +44,31 @@ public static class TestUtils
             await Task.Delay(50);
         }
         throw new TimeoutException("Condition not met within timeout");
+    }
+
+    public static async Task<string> InsertRandomAsset(PowerSyncDatabase db)
+    {
+        var id = Guid.NewGuid().ToString();
+        await db.Execute(
+            "insert into assets(id, description, make) values (?, ?, ?)",
+            [id, "some desc", "some make"]
+        );
+        return id;
+    }
+
+    public static async Task<string[]> InsertRandomAssets(PowerSyncDatabase db, int assetCount)
+    {
+        var ids = Enumerable
+            .Range(0, assetCount)
+            .Select(_ => Guid.NewGuid().ToString())
+            .ToArray();
+        var parameters = ids
+            .Select<string, object?[]>(id => [id, "some desc", "some make"])
+            .ToArray();
+        await db.ExecuteBatch(
+            "insert into assets(id, description, make) values (?, ?, ?)",
+            parameters
+        );
+        return ids;
     }
 }
