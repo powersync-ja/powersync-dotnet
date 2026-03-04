@@ -2,6 +2,7 @@
 
 ## 0.0.11-alpha.1
 
+- `StatusUpdated` and `StatusChanged` now both emit `SyncStatus` objects instead of just `StatusChanged`.
 - Converted most instances of a class inheriting from `EventStream<T>` into a class with an `EventManager` property called `Events`. This allows for subscribing to individual events instead of subscribing to all events and then filtering events manually.
 
 ```csharp
@@ -16,9 +17,28 @@ foreach (PowerSyncDBEvent update in listener)
     }
 }
 
+// Old (async)
+var listener = db.ListenAsync(cts.Token);
+await foreach (PowerSyncDBEvent update in listener)
+{
+    // Manually filter updates
+    if (update.StatusChanged != null)
+    {
+        Console.WriteLine("status changed: " + update.StatusChanged!);
+    }
+}
+
 // New
 var listener = db.Events.OnStatusChanged.Listen(cts.Token);
-foreach (PowerSyncDBEvents.StatusChangedEvent update in listener)
+await foreach (PowerSyncDBEvents.StatusChanged update in listener)
+{
+    // Events are filtered inherently
+    Console.WriteLine("status changed: " + update.Status);
+}
+
+// New (async) - recommended for most use cases
+var listener = db.Events.OnStatusChanged.ListenAsync(cts.Token);
+await foreach (PowerSyncDBEvents.StatusChanged update in listener)
 {
     // Events are filtered inherently
     Console.WriteLine("status changed: " + update.Status);

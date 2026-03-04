@@ -93,9 +93,9 @@ public class StreamingSyncImplementationEvents : EventManager
 {
     public interface IStreamingSyncImplementationEvent;
 
-    public class StatusUpdatedEvent(SyncStatusOptions status) : IStreamingSyncImplementationEvent
+    public class StatusUpdatedEvent(SyncStatus status) : IStreamingSyncImplementationEvent
     {
-        public SyncStatusOptions Status { get; set; } = status;
+        public SyncStatus Status { get; set; } = status;
     }
     public class StatusChangedEvent(SyncStatus status) : IStreamingSyncImplementationEvent
     {
@@ -853,12 +853,20 @@ public class StreamingSyncImplementation : ICloseable
             {
                 SyncStatus = updatedStatus;
                 logger.LogDebug("[Sync status changed]: {message}", updatedStatus.ToJSON());
-                // Only trigger this if there was a change
-                Events.Emit(new StreamingSyncImplementationEvents.StatusChangedEvent(updatedStatus));
-            }
 
-            // Trigger this for all updates
-            Events.Emit(new StreamingSyncImplementationEvents.StatusUpdatedEvent(options));
+                // Emit events using new SyncStatus objects to prevent local modifications propagating to StreamingSyncImplementation
+
+                // Only trigger this if there was a change
+                Events.Emit(new StreamingSyncImplementationEvents.StatusChangedEvent(new SyncStatus(updatedStatus.Options)));
+
+                // Emit StatusUpdated event wrapping a new SyncStatus object (prevents race conditions)
+                Events.Emit(new StreamingSyncImplementationEvents.StatusUpdatedEvent(new SyncStatus(updatedStatus.Options)));
+            }
+            else
+            {
+                // Emit StatusUpdated event directly wrapping `updatedStatus` (not exposed elsewhere)
+                Events.Emit(new StreamingSyncImplementationEvents.StatusUpdatedEvent(updatedStatus));
+            }
         }
         catch (Exception ex)
         {
