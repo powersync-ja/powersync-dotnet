@@ -74,6 +74,7 @@ public class SyncTests : IAsyncLifetime
             syncService.PushLine(line);
         }
 
+        // Wait for delete to propagate
         await TestUtils.WaitForAsync(async () =>
         {
             var rows = await db.GetAll<dynamic>("SELECT * FROM lists");
