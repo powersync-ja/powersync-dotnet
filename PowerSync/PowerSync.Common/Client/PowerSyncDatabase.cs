@@ -1,16 +1,16 @@
 namespace PowerSync.Common.Client;
 
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 using Newtonsoft.Json;
-
 using Nito.AsyncEx;
+using ThrottleDebounce;
 
 using PowerSync.Common.Client.Connection;
 using PowerSync.Common.Client.Sync.Bucket;
@@ -990,7 +990,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
     private async IAsyncEnumerable<WatchOnChangeEvent> OnRawTableChange(
         HashSet<string> watchedTables,
         IAsyncEnumerable<DBAdapterEvents.TablesUpdatedEvent> listener,
-        [EnumeratorCancellation] CancellationToken token,
+        [EnumeratorCancellation] CancellationToken signal,
         bool triggerImmediately = false,
         int throttleMs = DEFAULT_WATCH_THROTTLE_MS
     )
@@ -1014,100 +1014,64 @@ public class PowerSyncDatabase : IPowerSyncDatabase
             yield break;
         }
 
-        // Leading + trailing edge throttle
-        var enumerator = listener.GetAsyncEnumerator(token);
-        try
+        // Throttled - publish via throttled call to an action that flushes accumulated changes into this channel
+        var channel = Channel.CreateUnbounded<WatchOnChangeEvent>();
+        var accumulatedTables = new HashSet<string>();
+
+        _ = Task.Run(async () =>
         {
-            var accumulatedTables = new HashSet<string>();
-            var changedTables = new HashSet<string>();
-            long lastYieldTime = 0;
+            using var throttledFlush = Throttler.Throttle(() =>
+                {
+                    // Safe to lock directly on accumulatedTables because it's a local variable
+                    lock (accumulatedTables)
+                    {
+                        if (accumulatedTables.Count == 0) return;
+                        channel.Writer.TryWrite(new WatchOnChangeEvent { ChangedTables = [.. accumulatedTables] });
+                        accumulatedTables.Clear();
+                    }
+                },
+                TimeSpan.FromMilliseconds(throttleMs),
+                leading: false,
+                trailing: true
+            );
 
-            Task<bool> moveNextTask = enumerator.MoveNextAsync().AsTask();
-            Task? throttleTask = null;
-
-            while (true)
+            try
             {
-                if (throttleTask != null)
-                    await Task.WhenAny(moveNextTask, throttleTask);
-                else
+                var changedTables = new HashSet<string>();
+                await foreach (var e in listener)
                 {
-                    try { await moveNextTask; }
-                    catch (OperationCanceledException) { break; }
-                }
+                    GetTablesFromNotification(e.TablesUpdated, changedTables);
+                    changedTables.IntersectWith(watchedTables);
+                    if (changedTables.Count == 0) continue;
 
-                if (throttleTask != null && throttleTask.IsCompleted && !moveNextTask.IsCompleted)
+                    lock (accumulatedTables) { accumulatedTables.UnionWith(changedTables); }
+                    throttledFlush.Invoke();
+                }
+            }
+            catch (OperationCanceledException) { }
+            finally
+            {
+                // Flush any remaining events and close the channel
+                lock (accumulatedTables)
                 {
-                    // Throttle timer expired without a new event
                     if (accumulatedTables.Count > 0)
                     {
-                        lastYieldTime = Stopwatch.GetTimestamp();
-                        yield return new WatchOnChangeEvent { ChangedTables = [.. accumulatedTables] };
+                        channel.Writer.TryWrite(new WatchOnChangeEvent { ChangedTables = [.. accumulatedTables] });
                         accumulatedTables.Clear();
                     }
-                    throttleTask = null;
-                    continue;
                 }
-
-                // A new event arrived (possibly alongside throttle)
-                // Check if the event actually exists or if this is the end of the enumerator
-                bool hasNext;
-                try { hasNext = await moveNextTask; }
-                catch (OperationCanceledException) { break; }
-                if (!hasNext) break;
-
-                // Accumulate changed tables from the most recent OnTablesUpdated event
-                GetTablesFromNotification(enumerator.Current.TablesUpdated, changedTables);
-
-                // Filter only watched tables and add to accumulatedTables set
-                changedTables.IntersectWith(watchedTables);
-                accumulatedTables.UnionWith(changedTables);
-
-                if (accumulatedTables.Count > 0)
-                {
-                    var now = Stopwatch.GetTimestamp();
-
-                    // There's a nice built-in method for this (Stopwatch.GetElapsedTime), but
-                    // it's not supported in .NET 6.0. :(
-                    var elapsedMs = (now - lastYieldTime) * 1000.0 / Stopwatch.Frequency;
-
-                    if (elapsedMs >= throttleMs)
-                    {
-                        // First event since throttle expiration
-                        // Fire immediately (leading edge) and reset throttle timer
-                        lastYieldTime = now;
-                        yield return new WatchOnChangeEvent { ChangedTables = [.. accumulatedTables] };
-                        accumulatedTables.Clear();
-                        throttleTask = null;
-                    }
-                    else
-                    {
-                        throttleTask ??= Task.Delay((int)(throttleMs - elapsedMs), token);
-                    }
-                }
-
-                moveNextTask = enumerator.MoveNextAsync().AsTask();
+                channel.Writer.Complete();
             }
+        });
 
-            // Flush any remaining events
-            if (accumulatedTables.Count > 0)
-                yield return new WatchOnChangeEvent { ChangedTables = [.. accumulatedTables] };
-        }
-        finally
+        // Continuously pull values from channel and publish to the consumer
+        while (await channel.Reader.WaitToReadAsync(CancellationToken.None))
         {
-            await enumerator.DisposeAsync();
+            while (channel.Reader.TryRead(out var evt))
+            {
+                yield return evt;
+            }
         }
-    }
-
-    private static void AccumulateMatchingTables(
-        DBAdapterEvents.TablesUpdatedEvent e,
-        HashSet<string> watchedTables,
-        HashSet<string> accumulated
-    )
-    {
-        var tables = new HashSet<string>();
-        GetTablesFromNotification(e.TablesUpdated, tables);
-        tables.IntersectWith(watchedTables);
-        accumulated.UnionWith(tables);
     }
 
     private static void GetTablesFromNotification(INotification updateNotification, HashSet<string> changedTables)

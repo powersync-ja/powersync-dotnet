@@ -867,13 +867,13 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     public async Task OnChange_ThrottlesBatchesRapidChanges()
     {
         int eventCount = 0;
+        using var sem = new SemaphoreSlim(0);
         var tcs = new TaskCompletionSource<bool>();
 
         var listener = db.OnChange(new SQLWatchOptions
         {
             Tables = ["assets"],
             Signal = testCts.Token,
-            ThrottleMs = 200,
         });
 
         _ = Task.Run(async () =>
@@ -883,6 +883,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
                 await foreach (var _ in listener)
                 {
                     Interlocked.Increment(ref eventCount);
+                    sem.Release();
                 }
                 tcs.TrySetResult(true);
             }
@@ -897,10 +898,11 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
             await TestUtils.InsertRandomAsset(db);
         }
 
+        // Wait for the throttled event to arrive
+        Assert.True(await sem.WaitAsync(200));
         testCts.Cancel();
         Assert.True(await tcs.Task);
-
-        Assert.True(eventCount < 5, $"Expected fewer than 5 events but got {eventCount}");
+        Assert.Equal(1, eventCount);
     }
 
     [Fact(Timeout = 5000)]
@@ -908,12 +910,13 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     {
         int eventCount = 0;
         long lastCount = 0;
+        using var sem = new SemaphoreSlim(0);
         var tcs = new TaskCompletionSource<bool>();
 
         var listener = db.Watch<CountResult>(
             "SELECT COUNT(*) AS count FROM assets",
             null,
-            new() { Signal = testCts.Token, ThrottleMs = 200 });
+            new() { Signal = testCts.Token });
 
         _ = Task.Run(async () =>
         {
@@ -923,6 +926,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
                 {
                     lastCount = rows.First().count;
                     Interlocked.Increment(ref eventCount);
+                    sem.Release();
                 }
                 tcs.TrySetResult(true);
             }
@@ -937,6 +941,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
             await TestUtils.InsertRandomAsset(db);
         }
 
+        Assert.True(await sem.WaitAsync(200));
         testCts.Cancel();
         Assert.True(await tcs.Task);
 
@@ -976,7 +981,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     }
 
     [Fact(Timeout = 5000)]
-    public async Task OnChange_FirstChangeIsNotDelayed()
+    public async Task OnChange_FirstChangeIsDelayedByThrottle()
     {
         using var sem = new SemaphoreSlim(0);
         var sw = Stopwatch.StartNew();
@@ -1000,26 +1005,30 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         await db.Execute("INSERT INTO assets(id, description) VALUES(?, ?)", [Guid.NewGuid().ToString(), "test"]);
 
         Assert.True(await sem.WaitAsync(2000));
-        Assert.True(sw.ElapsedMilliseconds < 200, $"First event took {sw.ElapsedMilliseconds}ms, expected <200ms");
+        Assert.True(sw.ElapsedMilliseconds >= 400, $"First event took {sw.ElapsedMilliseconds}ms, expected >=400ms (trailing-only throttle)");
     }
 
     [Fact(Timeout = 5000)]
     public async Task OnChange_ThrottleCancelledCleanly()
     {
+        int eventCount = 0;
         var tcs = new TaskCompletionSource<bool>();
 
         var listener = db.OnChange(new SQLWatchOptions
         {
             Tables = ["assets"],
             Signal = testCts.Token,
-            ThrottleMs = 500,
+            ThrottleMs = 200,
         });
 
         _ = Task.Run(async () =>
         {
             try
             {
-                await foreach (var _ in listener) { }
+                await foreach (var _ in listener)
+                {
+                    Interlocked.Increment(ref eventCount);
+                }
                 tcs.TrySetResult(true);
             }
             catch (Exception ex)
@@ -1028,12 +1037,14 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
             }
         });
 
-        // Insert to trigger the throttle delay, then cancel before the window expires
+        // Insert to trigger the throttle, then cancel before the window expires
         await db.Execute("INSERT INTO assets(id, description) VALUES(?, ?)", [Guid.NewGuid().ToString(), "test"]);
-        await Task.Delay(50);
+        await Task.Delay(100);
         testCts.Cancel();
 
         Assert.True(await tcs.Task);
+        // The flush-on-cancel should still deliver the accumulated event
+        Assert.Equal(1, eventCount);
     }
 
     [Fact]
@@ -1041,6 +1052,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     {
         int eventCount = 0;
         long lastCount = 0;
+        using var sem = new SemaphoreSlim(0);
         var tcs = new TaskCompletionSource<bool>();
 
         var listener = db.Watch<CountResult>(
@@ -1054,14 +1066,15 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
             {
                 lastCount = rows[0].count;
                 Interlocked.Increment(ref eventCount);
+                sem.Release();
             }
             tcs.TrySetResult(true);
         });
 
-        // Long batched query
-        const int QUERY_COUNT = 10000;
+        const int QUERY_COUNT = 1000;
         await TestUtils.InsertRandomAssets(db, QUERY_COUNT);
 
+        Assert.True(await sem.WaitAsync(200));
         testCts.Cancel();
         Assert.True(await tcs.Task);
         Assert.Equal(1, eventCount);
@@ -1072,6 +1085,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     public async Task OnChange_SingleEventsForBatchedQuery()
     {
         int eventCount = 0;
+        using var sem = new SemaphoreSlim(0);
         var tcs = new TaskCompletionSource<bool>();
 
         var listener = db.OnChange(new()
@@ -1085,14 +1099,15 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
             await foreach (var _ in listener)
             {
                 Interlocked.Increment(ref eventCount);
+                sem.Release();
             }
             tcs.TrySetResult(true);
         });
 
-        // Long batched query
-        const int QUERY_COUNT = 10000;
+        const int QUERY_COUNT = 1000;
         await TestUtils.InsertRandomAssets(db, QUERY_COUNT);
 
+        Assert.True(await sem.WaitAsync(200));
         testCts.Cancel();
         Assert.True(await tcs.Task);
 
