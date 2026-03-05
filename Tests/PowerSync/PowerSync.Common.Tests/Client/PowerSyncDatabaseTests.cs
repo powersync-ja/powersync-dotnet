@@ -1067,4 +1067,35 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.Equal(1, eventCount);
         Assert.Equal(QUERY_COUNT, lastCount);
     }
+
+    [Fact]
+    public async Task OnChange_SingleEventsForBatchedQuery()
+    {
+        int eventCount = 0;
+        var tcs = new TaskCompletionSource<bool>();
+
+        var listener = db.OnChange(new()
+        {
+            Tables = ["assets"],
+            Signal = testCts.Token,
+        });
+
+        _ = Task.Run(async () =>
+        {
+            await foreach (var _ in listener)
+            {
+                Interlocked.Increment(ref eventCount);
+            }
+            tcs.TrySetResult(true);
+        });
+
+        // Long batched query
+        const int QUERY_COUNT = 10000;
+        await TestUtils.InsertRandomAssets(db, QUERY_COUNT);
+
+        testCts.Cancel();
+        Assert.True(await tcs.Task);
+
+        Assert.Equal(1, eventCount);
+    }
 }

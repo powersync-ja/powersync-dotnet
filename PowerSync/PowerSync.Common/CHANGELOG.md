@@ -2,6 +2,7 @@
 
 ## 0.0.11-alpha.1
 
+- Implemented throttling for `Watch<T>` and `OnChange` (default 30ms).
 - `StatusUpdated` and `StatusChanged` now both emit `SyncStatus` objects instead of just `StatusChanged`.
 - Converted most instances of a class inheriting from `EventStream<T>` into a class with an `EventManager` property called `Events`. This allows for subscribing to individual events instead of subscribing to all events and then filtering events manually.
 
