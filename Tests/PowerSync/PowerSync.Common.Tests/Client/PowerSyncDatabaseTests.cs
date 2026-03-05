@@ -1035,4 +1035,36 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
 
         Assert.True(await tcs.Task);
     }
+
+    [Fact]
+    public async Task Watch_SingleEventForBatchedQuery()
+    {
+        int eventCount = 0;
+        long lastCount = 0;
+        var tcs = new TaskCompletionSource<bool>();
+
+        var listener = db.Watch<CountResult>(
+            "select count(*) as count from assets",
+            null,
+            new() { Signal = testCts.Token });
+
+        _ = Task.Run(async () =>
+        {
+            await foreach (var rows in listener)
+            {
+                lastCount = rows[0].count;
+                Interlocked.Increment(ref eventCount);
+            }
+            tcs.TrySetResult(true);
+        });
+
+        // Long batched query
+        const int QUERY_COUNT = 10000;
+        await TestUtils.InsertRandomAssets(db, QUERY_COUNT);
+
+        testCts.Cancel();
+        Assert.True(await tcs.Task);
+        Assert.Equal(1, eventCount);
+        Assert.Equal(QUERY_COUNT, lastCount);
+    }
 }
