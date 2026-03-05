@@ -1002,7 +1002,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
 
         if (throttleMs <= 0)
         {
-            // Fast path: no throttling
+            // No throttling
             HashSet<string> changedTables = new();
             await foreach (var e in listener)
             {
@@ -1015,7 +1015,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
             yield break;
         }
 
-        // Throttled path: Task.WhenAny loop with leading-edge emit
+        // Leading + trailing edge throttle
         var listenerEnumerator = listener.GetAsyncEnumerator(token);
         try
         {
@@ -1058,11 +1058,14 @@ public class PowerSyncDatabase : IPowerSyncDatabase
                 if (accumulated.Count > 0)
                 {
                     var now = Stopwatch.GetTimestamp();
+
+                    // There's a nice built-in method for this (Stopwatch.GetElapsedTime), but
+                    // it's not supported in .NET 6.0. :(
                     var elapsedMs = (now - lastYieldTime) * 1000.0 / Stopwatch.Frequency;
 
                     if (elapsedMs >= throttleMs)
                     {
-                        // Leading edge: emit immediately
+                        // First event in series - fire immediately and start collecting future events
                         lastYieldTime = now;
                         yield return new WatchOnChangeEvent { ChangedTables = [.. accumulated] };
                         accumulated.Clear();
