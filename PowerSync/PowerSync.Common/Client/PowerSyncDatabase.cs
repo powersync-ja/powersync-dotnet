@@ -1006,7 +1006,6 @@ public class PowerSyncDatabase : IPowerSyncDatabase
             HashSet<string> changedTables = new();
             await foreach (var e in listener)
             {
-                changedTables.Clear();
                 GetTablesFromNotification(e.TablesUpdated, changedTables);
                 changedTables.IntersectWith(watchedTables);
                 if (changedTables.Count == 0) continue;
@@ -1016,12 +1015,14 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         }
 
         // Leading + trailing edge throttle
-        var listenerEnumerator = listener.GetAsyncEnumerator(token);
+        var enumerator = listener.GetAsyncEnumerator(token);
         try
         {
-            var accumulated = new HashSet<string>();
+            var accumulatedTables = new HashSet<string>();
+            var changedTables = new HashSet<string>();
             long lastYieldTime = 0;
-            Task<bool> moveNextTask = listenerEnumerator.MoveNextAsync().AsTask();
+
+            Task<bool> moveNextTask = enumerator.MoveNextAsync().AsTask();
             Task? throttleTask = null;
 
             while (true)
@@ -1034,28 +1035,34 @@ public class PowerSyncDatabase : IPowerSyncDatabase
                     catch (OperationCanceledException) { break; }
                 }
 
-                // Throttle timer fired without a new event
                 if (throttleTask != null && throttleTask.IsCompleted && !moveNextTask.IsCompleted)
                 {
-                    if (accumulated.Count > 0)
+                    // Throttle timer expired without a new event
+                    if (accumulatedTables.Count > 0)
                     {
                         lastYieldTime = Stopwatch.GetTimestamp();
-                        yield return new WatchOnChangeEvent { ChangedTables = [.. accumulated] };
-                        accumulated.Clear();
+                        yield return new WatchOnChangeEvent { ChangedTables = [.. accumulatedTables] };
+                        accumulatedTables.Clear();
                     }
                     throttleTask = null;
                     continue;
                 }
 
                 // A new event arrived (possibly alongside throttle)
+                // Check if the event actually exists or if this is the end of the enumerator
                 bool hasNext;
                 try { hasNext = await moveNextTask; }
                 catch (OperationCanceledException) { break; }
                 if (!hasNext) break;
 
-                AccumulateMatchingTables(listenerEnumerator.Current, watchedTables, accumulated);
+                // Accumulate changed tables from the most recent OnTablesUpdated event
+                GetTablesFromNotification(enumerator.Current.TablesUpdated, changedTables);
 
-                if (accumulated.Count > 0)
+                // Filter only watched tables and add to accumulatedTables set
+                changedTables.IntersectWith(watchedTables);
+                accumulatedTables.UnionWith(changedTables);
+
+                if (accumulatedTables.Count > 0)
                 {
                     var now = Stopwatch.GetTimestamp();
 
@@ -1065,10 +1072,11 @@ public class PowerSyncDatabase : IPowerSyncDatabase
 
                     if (elapsedMs >= throttleMs)
                     {
-                        // First event in series - fire immediately and start collecting future events
+                        // First event since throttle expiration
+                        // Fire immediately (leading edge) and reset throttle timer
                         lastYieldTime = now;
-                        yield return new WatchOnChangeEvent { ChangedTables = [.. accumulated] };
-                        accumulated.Clear();
+                        yield return new WatchOnChangeEvent { ChangedTables = [.. accumulatedTables] };
+                        accumulatedTables.Clear();
                         throttleTask = null;
                     }
                     else
@@ -1077,15 +1085,16 @@ public class PowerSyncDatabase : IPowerSyncDatabase
                     }
                 }
 
-                moveNextTask = listenerEnumerator.MoveNextAsync().AsTask();
+                moveNextTask = enumerator.MoveNextAsync().AsTask();
             }
 
-            if (accumulated.Count > 0)
-                yield return new WatchOnChangeEvent { ChangedTables = [.. accumulated] };
+            // Flush any remaining events
+            if (accumulatedTables.Count > 0)
+                yield return new WatchOnChangeEvent { ChangedTables = [.. accumulatedTables] };
         }
         finally
         {
-            await listenerEnumerator.DisposeAsync();
+            await enumerator.DisposeAsync();
         }
     }
 
@@ -1103,6 +1112,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
 
     private static void GetTablesFromNotification(INotification updateNotification, HashSet<string> changedTables)
     {
+        changedTables.Clear();
         string[] tables = [];
         if (updateNotification is BatchedUpdateNotification batchedUpdate)
         {
