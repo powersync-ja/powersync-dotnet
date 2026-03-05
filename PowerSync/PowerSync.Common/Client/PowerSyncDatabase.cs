@@ -1,5 +1,6 @@
 namespace PowerSync.Common.Client;
 
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -131,7 +132,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
     public IDBAdapter Database { get; protected set; }
     private CompiledSchema schema;
 
-    private static readonly int DEFAULT_WATCH_THROTTLE_MS = 30;
+    private const int DEFAULT_WATCH_THROTTLE_MS = 30;
     private static readonly Regex POWERSYNC_TABLE_MATCH = new Regex(@"(^ps_data__|^ps_data_local__)", RegexOptions.Compiled);
 
     public bool Closed { get; protected set; }
@@ -785,19 +786,21 @@ public class PowerSyncDatabase : IPowerSyncDatabase
 
         // Return the actual IAsyncEnumerable here, using OnChange as a synchronous wrapper that blocks until the
         // connection is established
-        return OnChangeCore(powersyncTables, listener, signal, options?.TriggerImmediately == true);
+        var throttleMs = options?.ThrottleMs ?? DEFAULT_WATCH_THROTTLE_MS;
+        return OnChangeCore(powersyncTables, listener, signal, options?.TriggerImmediately == true, throttleMs);
     }
 
     private async IAsyncEnumerable<WatchOnChangeEvent> OnChangeCore(
         HashSet<string> watchedTables,
         IAsyncEnumerable<DBAdapterEvents.TablesUpdatedEvent> listener,
         CancellationTokenSource signal,
-        bool triggerImmediately
+        bool triggerImmediately,
+        int throttleMs = DEFAULT_WATCH_THROTTLE_MS
     )
     {
         try
         {
-            await foreach (var update in OnRawTableChange(watchedTables, listener, signal.Token, triggerImmediately))
+            await foreach (var update in OnRawTableChange(watchedTables, listener, signal.Token, triggerImmediately, throttleMs))
             {
                 // Convert from 'ps_data__<name>' to '<name>'
                 for (int i = 0; i < update.ChangedTables.Length; i++)
@@ -875,6 +878,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         bool isRestart = false;
         var currentRestartCts = initialRestartCts;
         var currentListener = initialListener;
+        var throttleMs = options?.ThrottleMs ?? DEFAULT_WATCH_THROTTLE_MS;
 
         try
         {
@@ -898,7 +902,8 @@ public class PowerSyncDatabase : IPowerSyncDatabase
                     powersyncTables,
                     currentListener,
                     currentRestartCts.Token,
-                    isRestart || (options?.TriggerImmediately == true)
+                    isRestart || (options?.TriggerImmediately == true),
+                    throttleMs
                 ).GetAsyncEnumerator();
 
                 // Continually wait for either OnChange or SchemaChanged to fire
@@ -986,7 +991,8 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         HashSet<string> watchedTables,
         IAsyncEnumerable<DBAdapterEvents.TablesUpdatedEvent> listener,
         [EnumeratorCancellation] CancellationToken token,
-        bool triggerImmediately = false
+        bool triggerImmediately = false,
+        int throttleMs = DEFAULT_WATCH_THROTTLE_MS
     )
     {
         if (triggerImmediately)
@@ -994,18 +1000,102 @@ public class PowerSyncDatabase : IPowerSyncDatabase
             yield return new WatchOnChangeEvent { ChangedTables = [] };
         }
 
-        HashSet<string> changedTables = new();
-        await foreach (var e in listener)
+        if (throttleMs <= 0)
         {
-            // Extract the changed tables and intersect with the watched tables
-            changedTables.Clear();
-            GetTablesFromNotification(e.TablesUpdated, changedTables);
-            changedTables.IntersectWith(watchedTables);
-
-            if (changedTables.Count == 0) continue;
-
-            yield return new WatchOnChangeEvent { ChangedTables = [.. changedTables] };
+            // Fast path: no throttling
+            HashSet<string> changedTables = new();
+            await foreach (var e in listener)
+            {
+                changedTables.Clear();
+                GetTablesFromNotification(e.TablesUpdated, changedTables);
+                changedTables.IntersectWith(watchedTables);
+                if (changedTables.Count == 0) continue;
+                yield return new WatchOnChangeEvent { ChangedTables = [.. changedTables] };
+            }
+            yield break;
         }
+
+        // Throttled path: Task.WhenAny loop with leading-edge emit
+        var listenerEnumerator = listener.GetAsyncEnumerator(token);
+        try
+        {
+            var accumulated = new HashSet<string>();
+            long lastYieldTime = 0;
+            Task<bool> moveNextTask = listenerEnumerator.MoveNextAsync().AsTask();
+            Task? throttleTask = null;
+
+            while (true)
+            {
+                if (throttleTask != null)
+                    await Task.WhenAny(moveNextTask, throttleTask);
+                else
+                {
+                    try { await moveNextTask; }
+                    catch (OperationCanceledException) { break; }
+                }
+
+                // Throttle timer fired without a new event
+                if (throttleTask != null && throttleTask.IsCompleted && !moveNextTask.IsCompleted)
+                {
+                    if (accumulated.Count > 0)
+                    {
+                        lastYieldTime = Stopwatch.GetTimestamp();
+                        yield return new WatchOnChangeEvent { ChangedTables = [.. accumulated] };
+                        accumulated.Clear();
+                    }
+                    throttleTask = null;
+                    continue;
+                }
+
+                // A new event arrived (possibly alongside throttle)
+                bool hasNext;
+                try { hasNext = await moveNextTask; }
+                catch (OperationCanceledException) { break; }
+                if (!hasNext) break;
+
+                AccumulateMatchingTables(listenerEnumerator.Current, watchedTables, accumulated);
+
+                if (accumulated.Count > 0)
+                {
+                    var now = Stopwatch.GetTimestamp();
+                    var elapsedMs = (now - lastYieldTime) * 1000.0 / Stopwatch.Frequency;
+
+                    if (elapsedMs >= throttleMs)
+                    {
+                        // Leading edge: emit immediately
+                        lastYieldTime = now;
+                        yield return new WatchOnChangeEvent { ChangedTables = [.. accumulated] };
+                        accumulated.Clear();
+                        throttleTask = null;
+                    }
+                    else
+                    {
+                        throttleTask ??= Task.Delay((int)(throttleMs - elapsedMs), token);
+                    }
+                }
+
+                moveNextTask = listenerEnumerator.MoveNextAsync().AsTask();
+            }
+
+            if (accumulated.Count > 0)
+                yield return new WatchOnChangeEvent { ChangedTables = [.. accumulated] };
+        }
+        finally
+        {
+            await listenerEnumerator.DisposeAsync();
+        }
+    }
+
+    private static void AccumulateMatchingTables(
+        DBAdapterEvents.TablesUpdatedEvent e,
+        HashSet<string> watchedTables,
+        HashSet<string> accumulated
+    )
+    {
+        var tables = new HashSet<string>();
+        GetTablesFromNotification(e.TablesUpdated, tables);
+        tables.IntersectWith(watchedTables);
+        accumulated.UnionWith(tables);
     }
 
     private static void GetTablesFromNotification(INotification updateNotification, HashSet<string> changedTables)
