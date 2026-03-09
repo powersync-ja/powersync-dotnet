@@ -135,6 +135,38 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvents.TablesUpdatedEvent
         return dynamicParams;
     }
 
+    private static List<string> PrepareCommandParameters(SqliteCommand command, ref string query, int parameterCount)
+    {
+        var parameterNames = PrepareQueryString(ref query, parameterCount);
+
+        command.CommandText = query;
+
+        foreach (var paramName in parameterNames)
+        {
+            var parameter = command.CreateParameter();
+            parameter.ParameterName = paramName;
+            command.Parameters.Add(parameter);
+        }
+
+        return parameterNames;
+    }
+
+    private static void PrepareCommand(SqliteCommand command, ref string query, object?[]? parameters)
+    {
+        int parameterCount = parameters?.Length ?? 0;
+        var parameterNames = PrepareCommandParameters(command, ref query, parameterCount);
+
+        if (parameters != null)
+        {
+            for (int i = 0; i < parameters.Length; i++)
+            {
+                command.Parameters[i].Value = parameters[i] ?? DBNull.Value;
+            }
+        }
+
+        command.CommandText = query;
+    }
+
     private static List<DynamicParameters>? PrepareQuery(ref string query, object?[][]? parameters)
     {
         if (parameters == null || parameters.Length == 0)
@@ -206,19 +238,18 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvents.TablesUpdatedEvent
         return Task.Run(() => Db.QueryFirstAsync(query, dynamicParams, commandType: CommandType.Text));
     }
 
-    public Task<NonQueryResult> Execute(string query, object?[]? parameters = null)
+    public Task<NonQueryResult> Execute(string query, object?[]? parameters = null) => Task.Run(() =>
     {
-        DynamicParameters? dynamicParams = PrepareQuery(ref query, parameters);
-        return Task.Run(async () =>
+        using var command = Db.CreateCommand();
+        PrepareCommand(command, ref query, parameters);
+
+        int rowsAffected = command.ExecuteNonQuery();
+        return new NonQueryResult
         {
-            int rowsAffected = await Db.ExecuteAsync(query, dynamicParams, commandType: CommandType.Text);
-            return new NonQueryResult
-            {
-                InsertId = raw.sqlite3_last_insert_rowid(Db.Handle),
-                RowsAffected = rowsAffected,
-            };
-        });
-    }
+            InsertId = raw.sqlite3_last_insert_rowid(Db.Handle),
+            RowsAffected = rowsAffected,
+        };
+    });
 
     public Task<NonQueryResult> ExecuteBatch(string query, object?[][]? parameters = null)
     {
@@ -227,19 +258,36 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvents.TablesUpdatedEvent
             return Task.FromResult(new NonQueryResult { RowsAffected = 0 });
         }
 
-        List<DynamicParameters>? dynamicParamsList = PrepareQuery(ref query, parameters);
-        if (dynamicParamsList == null)
+        int parameterCount = parameters[0].Length;
+        if (parameterCount == 0)
         {
             return Task.FromResult(new NonQueryResult { RowsAffected = 0 });
         }
 
-        return Task.Run(async () =>
+        return Task.Run(() =>
         {
-            int rowsAffected = await Db.ExecuteAsync(query, dynamicParamsList, commandType: CommandType.Text);
+            int totalRowsAffected = 0;
+
+            using var command = Db.CreateCommand();
+            PrepareCommandParameters(command, ref query, parameterCount);
+
+            foreach (var paramSet in parameters)
+            {
+                if (paramSet != null)
+                {
+                    for (int i = 0; i < paramSet.Length; i++)
+                    {
+                        command.Parameters[i].Value = paramSet[i] ?? DBNull.Value;
+                    }
+                }
+
+                totalRowsAffected += command.ExecuteNonQuery();
+            }
+
             return new NonQueryResult
             {
                 InsertId = raw.sqlite3_last_insert_rowid(Db.Handle),
-                RowsAffected = rowsAffected,
+                RowsAffected = totalRowsAffected,
             };
         });
     }
