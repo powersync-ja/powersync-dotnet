@@ -56,11 +56,11 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvents.TablesUpdatedEvent
         }
 
         var groupedUpdates = updateBuffer
-       .GroupBy(update => update.Table)
-       .ToDictionary(
-           group => group.Key,
-           group => group.Select(update => new TableUpdateOperation(update.OpType, update.RowId)).ToArray()
-       );
+            .GroupBy(update => update.Table)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Select(update => new TableUpdateOperation(update.OpType, update.RowId)).ToArray()
+            );
 
         var batchedUpdate = new BatchedUpdateNotification
         {
@@ -81,19 +81,15 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvents.TablesUpdatedEvent
             return parameterList;
         }
 
-        int placeholderCount = query.Count(c => c == '?');
-        if (placeholderCount != parameterCount)
-        {
-            throw new ArgumentException($"Number of parameters ({parameterCount}) does not match the number of `?` placeholders ({placeholderCount}) in the query.");
-        }
-
         // Replace `?` sequentially with named parameters
-        var sb = new StringBuilder();
+        var sb = new StringBuilder(query.Length + parameterCount * 7);
         int lastPos = 0;
         int currentPos;
         for (int i = 0; i < parameterCount; i++)
         {
             currentPos = query.IndexOf('?', lastPos);
+            if (currentPos == -1)
+                throw new ArgumentException($"Not enough `?` placeholders for {parameterCount} parameters.");
 
             string paramName = $"@param{i}";
             parameterList.Add(paramName);
@@ -115,7 +111,7 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvents.TablesUpdatedEvent
         return parameterList;
     }
 
-    private static DynamicParameters? PrepareQuery(ref string query, object?[]? parameters)
+    private static Dictionary<string, object?>? PrepareQuery(ref string query, object?[]? parameters)
     {
         if (parameters == null || parameters.Length == 0)
         {
@@ -125,100 +121,90 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvents.TablesUpdatedEvent
         int parameterCount = parameters.Length;
         var parameterNames = PrepareQueryString(ref query, parameterCount);
 
-        var dynamicParams = new DynamicParameters();
+        var paramDict = new Dictionary<string, object?>(parameterCount);
 
         for (int i = 0; i < parameterCount; i++)
         {
-            dynamicParams.Add(parameterNames[i], parameters[i]);
+            paramDict[parameterNames[i]] = parameters[i];
         }
 
-        return dynamicParams;
-    }
-
-    private static List<DynamicParameters>? PrepareQuery(ref string query, object?[][]? parameters)
-    {
-        if (parameters == null || parameters.Length == 0)
-        {
-            return null;
-        }
-
-        var parameterCount = parameters[0].Length;
-        if (parameterCount == 0)
-        {
-            return null;
-        }
-
-        var parameterNames = PrepareQueryString(ref query, parameterCount);
-
-        var dynamicParamsList = new List<DynamicParameters>();
-
-        foreach (var paramSet in parameters)
-        {
-            if (paramSet.Length != parameterCount)
-            {
-                throw new ArgumentException("Parameter sets have different number of arguments.");
-            }
-
-            var dynamicParams = new DynamicParameters();
-            for (int i = 0; i < parameterCount; i++)
-            {
-                dynamicParams.Add(parameterNames[i], paramSet[i]);
-            }
-            dynamicParamsList.Add(dynamicParams);
-        }
-
-        return dynamicParamsList;
+        return paramDict;
     }
 
     public Task<T[]> GetAll<T>(string query, object?[]? parameters = null)
     {
-        DynamicParameters? dynamicParams = PrepareQuery(ref query, parameters);
+        var dynamicParams = PrepareQuery(ref query, parameters);
         return Task.Run(async () => (await Db.QueryAsync<T>(query, dynamicParams, commandType: CommandType.Text)).ToArray());
     }
 
     public Task<dynamic[]> GetAll(string query, object?[]? parameters = null)
     {
-        DynamicParameters? dynamicParams = PrepareQuery(ref query, parameters);
+        var dynamicParams = PrepareQuery(ref query, parameters);
         return Task.Run(async () => (await Db.QueryAsync(query, dynamicParams, commandType: CommandType.Text)).ToArray());
     }
 
     public Task<T?> GetOptional<T>(string query, object?[]? parameters = null)
     {
-        DynamicParameters? dynamicParams = PrepareQuery(ref query, parameters);
+        var dynamicParams = PrepareQuery(ref query, parameters);
         return Task.Run(() => Db.QueryFirstOrDefaultAsync<T>(query, dynamicParams, commandType: CommandType.Text));
     }
 
     public Task<dynamic?> GetOptional(string query, object?[]? parameters = null)
     {
-        DynamicParameters? dynamicParams = PrepareQuery(ref query, parameters);
+        var dynamicParams = PrepareQuery(ref query, parameters);
         return Task.Run(() => Db.QueryFirstOrDefaultAsync(query, dynamicParams, commandType: CommandType.Text));
     }
 
     public Task<T> Get<T>(string query, object?[]? parameters = null)
     {
-        DynamicParameters? dynamicParams = PrepareQuery(ref query, parameters);
+        var dynamicParams = PrepareQuery(ref query, parameters);
         return Task.Run(() => Db.QueryFirstAsync<T>(query, dynamicParams, commandType: CommandType.Text));
     }
 
     public Task<dynamic> Get(string query, object?[]? parameters = null)
     {
-        DynamicParameters? dynamicParams = PrepareQuery(ref query, parameters);
+        var dynamicParams = PrepareQuery(ref query, parameters);
         return Task.Run(() => Db.QueryFirstAsync(query, dynamicParams, commandType: CommandType.Text));
     }
 
-    public Task<NonQueryResult> Execute(string query, object?[]? parameters = null)
+    private static void PrepareCommandParameters(SqliteCommand command, ref string query, int parameterCount)
     {
-        DynamicParameters? dynamicParams = PrepareQuery(ref query, parameters);
-        return Task.Run(async () =>
+        var parameterNames = PrepareQueryString(ref query, parameterCount);
+        command.CommandText = query;
+        foreach (var paramName in parameterNames)
         {
-            int rowsAffected = await Db.ExecuteAsync(query, dynamicParams, commandType: CommandType.Text);
-            return new NonQueryResult
-            {
-                InsertId = raw.sqlite3_last_insert_rowid(Db.Handle),
-                RowsAffected = rowsAffected,
-            };
-        });
+            var parameter = command.CreateParameter();
+            parameter.ParameterName = paramName;
+            command.Parameters.Add(parameter);
+        }
     }
+
+    private static void PrepareCommand(SqliteCommand command, ref string query, object?[]? parameters)
+    {
+        int parameterCount = parameters?.Length ?? 0;
+        PrepareCommandParameters(command, ref query, parameterCount);
+
+        if (parameters != null)
+        {
+            for (int i = 0; i < parameters.Length; i++)
+            {
+                command.Parameters[i].Value = parameters[i] ?? DBNull.Value;
+            }
+        }
+    }
+
+    public Task<NonQueryResult> Execute(string query, object?[]? parameters = null) => Task.Run(() =>
+    {
+        using var command = Db.CreateCommand();
+        PrepareCommand(command, ref query, parameters);
+
+        int rowsAffected = command.ExecuteNonQuery();
+        return new NonQueryResult
+        {
+            InsertId = raw.sqlite3_last_insert_rowid(Db.Handle),
+            RowsAffected = rowsAffected,
+        };
+    });
 
     public Task<NonQueryResult> ExecuteBatch(string query, object?[][]? parameters = null)
     {
@@ -227,19 +213,36 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvents.TablesUpdatedEvent
             return Task.FromResult(new NonQueryResult { RowsAffected = 0 });
         }
 
-        List<DynamicParameters>? dynamicParamsList = PrepareQuery(ref query, parameters);
-        if (dynamicParamsList == null)
+        int parameterCount = parameters[0].Length;
+        if (parameterCount == 0)
         {
             return Task.FromResult(new NonQueryResult { RowsAffected = 0 });
         }
 
-        return Task.Run(async () =>
+        return Task.Run(() =>
         {
-            int rowsAffected = await Db.ExecuteAsync(query, dynamicParamsList, commandType: CommandType.Text);
+            int totalRowsAffected = 0;
+
+            using var command = Db.CreateCommand();
+            PrepareCommandParameters(command, ref query, parameterCount);
+
+            foreach (var paramSet in parameters)
+            {
+                if (paramSet != null)
+                {
+                    for (int i = 0; i < paramSet.Length; i++)
+                    {
+                        command.Parameters[i].Value = paramSet[i] ?? DBNull.Value;
+                    }
+                }
+
+                totalRowsAffected += command.ExecuteNonQuery();
+            }
+
             return new NonQueryResult
             {
                 InsertId = raw.sqlite3_last_insert_rowid(Db.Handle),
-                RowsAffected = rowsAffected,
+                RowsAffected = totalRowsAffected,
             };
         });
     }

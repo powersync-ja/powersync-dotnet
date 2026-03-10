@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+
 using PowerSync.Common.Client;
 
 namespace PowerSync.Common.Tests.Utils;
