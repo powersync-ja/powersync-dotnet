@@ -115,7 +115,7 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvents.TablesUpdatedEvent
         return parameterList;
     }
 
-    private static DynamicParameters? PrepareQuery(ref string query, object?[]? parameters)
+    private static Dictionary<string, object?>? PrepareQuery(ref string query, object?[]? parameters)
     {
         if (parameters == null || parameters.Length == 0)
         {
@@ -125,36 +125,61 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvents.TablesUpdatedEvent
         int parameterCount = parameters.Length;
         var parameterNames = PrepareQueryString(ref query, parameterCount);
 
-        var dynamicParams = new DynamicParameters();
+        var paramDict = new Dictionary<string, object?>(parameterCount);
 
         for (int i = 0; i < parameterCount; i++)
         {
-            dynamicParams.Add(parameterNames[i], parameters[i]);
+            paramDict[parameterNames[i]] = parameters[i];
         }
 
-        return dynamicParams;
+        return paramDict;
     }
 
-    private static List<string> PrepareCommandParameters(SqliteCommand command, ref string query, int parameterCount)
+    private static void PrepareCommandParameters(SqliteCommand command, ref string query, int parameterCount)
     {
-        var parameterNames = PrepareQueryString(ref query, parameterCount);
-
-        command.CommandText = query;
-
-        foreach (var paramName in parameterNames)
+        if (parameterCount == 0)
         {
+            command.CommandText = query;
+            return;
+        }
+
+        int placeholderCount = query.Count(c => c == '?');
+        if (placeholderCount != parameterCount)
+        {
+            throw new ArgumentException($"Number of parameters ({parameterCount}) does not match the number of `?` placeholders ({placeholderCount}) in the query.");
+        }
+
+        var sb = new StringBuilder();
+        int lastPos = 0;
+        int currentPos;
+        for (int i = 0; i < parameterCount; i++)
+        {
+            currentPos = query.IndexOf('?', lastPos);
+
+            string paramName = $"@param{i}";
+
+            sb.Append(query, lastPos, currentPos - lastPos);
+            sb.Append(paramName);
+
             var parameter = command.CreateParameter();
             parameter.ParameterName = paramName;
             command.Parameters.Add(parameter);
+
+            lastPos = currentPos + 1;
         }
 
-        return parameterNames;
+        if (lastPos < query.Length)
+        {
+            sb.Append(query, lastPos, query.Length - lastPos);
+        }
+
+        command.CommandText = sb.ToString();
     }
 
     private static void PrepareCommand(SqliteCommand command, ref string query, object?[]? parameters)
     {
         int parameterCount = parameters?.Length ?? 0;
-        var parameterNames = PrepareCommandParameters(command, ref query, parameterCount);
+        PrepareCommandParameters(command, ref query, parameterCount);
 
         if (parameters != null)
         {
@@ -163,8 +188,6 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvents.TablesUpdatedEvent
                 command.Parameters[i].Value = parameters[i] ?? DBNull.Value;
             }
         }
-
-        command.CommandText = query;
     }
 
     private static List<DynamicParameters>? PrepareQuery(ref string query, object?[][]? parameters)
@@ -182,7 +205,7 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvents.TablesUpdatedEvent
 
         var parameterNames = PrepareQueryString(ref query, parameterCount);
 
-        var dynamicParamsList = new List<DynamicParameters>();
+        var preparedParamsList = new List<DynamicParameters>();
 
         foreach (var paramSet in parameters)
         {
@@ -191,51 +214,51 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvents.TablesUpdatedEvent
                 throw new ArgumentException("Parameter sets have different number of arguments.");
             }
 
-            var dynamicParams = new DynamicParameters();
+            var preparedParams = new DynamicParameters();
             for (int i = 0; i < parameterCount; i++)
             {
-                dynamicParams.Add(parameterNames[i], paramSet[i]);
+                preparedParams.Add(parameterNames[i], paramSet[i]);
             }
-            dynamicParamsList.Add(dynamicParams);
+            preparedParamsList.Add(preparedParams);
         }
 
-        return dynamicParamsList;
+        return preparedParamsList;
     }
 
     public Task<T[]> GetAll<T>(string query, object?[]? parameters = null)
     {
-        DynamicParameters? dynamicParams = PrepareQuery(ref query, parameters);
-        return Task.Run(async () => (await Db.QueryAsync<T>(query, dynamicParams, commandType: CommandType.Text)).ToArray());
+        var preparedParams = PrepareQuery(ref query, parameters);
+        return Task.Run(async () => (await Db.QueryAsync<T>(query, preparedParams, commandType: CommandType.Text)).ToArray());
     }
 
     public Task<dynamic[]> GetAll(string query, object?[]? parameters = null)
     {
-        DynamicParameters? dynamicParams = PrepareQuery(ref query, parameters);
-        return Task.Run(async () => (await Db.QueryAsync(query, dynamicParams, commandType: CommandType.Text)).ToArray());
+        var preparedParams = PrepareQuery(ref query, parameters);
+        return Task.Run(async () => (await Db.QueryAsync(query, preparedParams, commandType: CommandType.Text)).ToArray());
     }
 
     public Task<T?> GetOptional<T>(string query, object?[]? parameters = null)
     {
-        DynamicParameters? dynamicParams = PrepareQuery(ref query, parameters);
-        return Task.Run(() => Db.QueryFirstOrDefaultAsync<T>(query, dynamicParams, commandType: CommandType.Text));
+        var preparedParams = PrepareQuery(ref query, parameters);
+        return Task.Run(() => Db.QueryFirstOrDefaultAsync<T>(query, preparedParams, commandType: CommandType.Text));
     }
 
     public Task<dynamic?> GetOptional(string query, object?[]? parameters = null)
     {
-        DynamicParameters? dynamicParams = PrepareQuery(ref query, parameters);
-        return Task.Run(() => Db.QueryFirstOrDefaultAsync(query, dynamicParams, commandType: CommandType.Text));
+        var preparedParams = PrepareQuery(ref query, parameters);
+        return Task.Run(() => Db.QueryFirstOrDefaultAsync(query, preparedParams, commandType: CommandType.Text));
     }
 
     public Task<T> Get<T>(string query, object?[]? parameters = null)
     {
-        DynamicParameters? dynamicParams = PrepareQuery(ref query, parameters);
-        return Task.Run(() => Db.QueryFirstAsync<T>(query, dynamicParams, commandType: CommandType.Text));
+        var preparedParams = PrepareQuery(ref query, parameters);
+        return Task.Run(() => Db.QueryFirstAsync<T>(query, preparedParams, commandType: CommandType.Text));
     }
 
     public Task<dynamic> Get(string query, object?[]? parameters = null)
     {
-        DynamicParameters? dynamicParams = PrepareQuery(ref query, parameters);
-        return Task.Run(() => Db.QueryFirstAsync(query, dynamicParams, commandType: CommandType.Text));
+        var preparedParams = PrepareQuery(ref query, parameters);
+        return Task.Run(() => Db.QueryFirstAsync(query, preparedParams, commandType: CommandType.Text));
     }
 
     public Task<NonQueryResult> Execute(string query, object?[]? parameters = null) => Task.Run(() =>
