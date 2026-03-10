@@ -56,11 +56,11 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvents.TablesUpdatedEvent
         }
 
         var groupedUpdates = updateBuffer
-       .GroupBy(update => update.Table)
-       .ToDictionary(
-           group => group.Key,
-           group => group.Select(update => new TableUpdateOperation(update.OpType, update.RowId)).ToArray()
-       );
+            .GroupBy(update => update.Table)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Select(update => new TableUpdateOperation(update.OpType, update.RowId)).ToArray()
+            );
 
         var batchedUpdate = new BatchedUpdateNotification
         {
@@ -81,19 +81,15 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvents.TablesUpdatedEvent
             return parameterList;
         }
 
-        int placeholderCount = query.Count(c => c == '?');
-        if (placeholderCount != parameterCount)
-        {
-            throw new ArgumentException($"Number of parameters ({parameterCount}) does not match the number of `?` placeholders ({placeholderCount}) in the query.");
-        }
-
         // Replace `?` sequentially with named parameters
-        var sb = new StringBuilder();
+        var sb = new StringBuilder(query.Length + parameterCount * 7);
         int lastPos = 0;
         int currentPos;
         for (int i = 0; i < parameterCount; i++)
         {
             currentPos = query.IndexOf('?', lastPos);
+            if (currentPos == -1)
+                throw new ArgumentException($"Not enough `?` placeholders for {parameterCount} parameters.");
 
             string paramName = $"@param{i}";
             parameterList.Add(paramName);
@@ -137,43 +133,14 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvents.TablesUpdatedEvent
 
     private static void PrepareCommandParameters(SqliteCommand command, ref string query, int parameterCount)
     {
-        if (parameterCount == 0)
+        var parameterNames = PrepareQueryString(ref query, parameterCount);
+        command.CommandText = query;
+        foreach (var paramName in parameterNames)
         {
-            command.CommandText = query;
-            return;
-        }
-
-        int placeholderCount = query.Count(c => c == '?');
-        if (placeholderCount != parameterCount)
-        {
-            throw new ArgumentException($"Number of parameters ({parameterCount}) does not match the number of `?` placeholders ({placeholderCount}) in the query.");
-        }
-
-        var sb = new StringBuilder();
-        int lastPos = 0;
-        int currentPos;
-        for (int i = 0; i < parameterCount; i++)
-        {
-            currentPos = query.IndexOf('?', lastPos);
-
-            string paramName = $"@param{i}";
-
-            sb.Append(query, lastPos, currentPos - lastPos);
-            sb.Append(paramName);
-
             var parameter = command.CreateParameter();
             parameter.ParameterName = paramName;
             command.Parameters.Add(parameter);
-
-            lastPos = currentPos + 1;
         }
-
-        if (lastPos < query.Length)
-        {
-            sb.Append(query, lastPos, query.Length - lastPos);
-        }
-
-        command.CommandText = sb.ToString();
     }
 
     private static void PrepareCommand(SqliteCommand command, ref string query, object?[]? parameters)
@@ -188,41 +155,6 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvents.TablesUpdatedEvent
                 command.Parameters[i].Value = parameters[i] ?? DBNull.Value;
             }
         }
-    }
-
-    private static List<DynamicParameters>? PrepareQuery(ref string query, object?[][]? parameters)
-    {
-        if (parameters == null || parameters.Length == 0)
-        {
-            return null;
-        }
-
-        var parameterCount = parameters[0].Length;
-        if (parameterCount == 0)
-        {
-            return null;
-        }
-
-        var parameterNames = PrepareQueryString(ref query, parameterCount);
-
-        var preparedParamsList = new List<DynamicParameters>();
-
-        foreach (var paramSet in parameters)
-        {
-            if (paramSet.Length != parameterCount)
-            {
-                throw new ArgumentException("Parameter sets have different number of arguments.");
-            }
-
-            var preparedParams = new DynamicParameters();
-            for (int i = 0; i < parameterCount; i++)
-            {
-                preparedParams.Add(parameterNames[i], paramSet[i]);
-            }
-            preparedParamsList.Add(preparedParams);
-        }
-
-        return preparedParamsList;
     }
 
     public Task<T[]> GetAll<T>(string query, object?[]? parameters = null)
