@@ -131,6 +131,42 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvents.TablesUpdatedEvent
         return paramDict;
     }
 
+    public Task<T[]> GetAll<T>(string query, object?[]? parameters = null)
+    {
+        var dynamicParams = PrepareQuery(ref query, parameters);
+        return Task.Run(async () => (await Db.QueryAsync<T>(query, dynamicParams, commandType: CommandType.Text)).ToArray());
+    }
+
+    public Task<dynamic[]> GetAll(string query, object?[]? parameters = null)
+    {
+        var dynamicParams = PrepareQuery(ref query, parameters);
+        return Task.Run(async () => (await Db.QueryAsync(query, dynamicParams, commandType: CommandType.Text)).ToArray());
+    }
+
+    public Task<T?> GetOptional<T>(string query, object?[]? parameters = null)
+    {
+        var dynamicParams = PrepareQuery(ref query, parameters);
+        return Task.Run(() => Db.QueryFirstOrDefaultAsync<T>(query, dynamicParams, commandType: CommandType.Text));
+    }
+
+    public Task<dynamic?> GetOptional(string query, object?[]? parameters = null)
+    {
+        var dynamicParams = PrepareQuery(ref query, parameters);
+        return Task.Run(() => Db.QueryFirstOrDefaultAsync(query, dynamicParams, commandType: CommandType.Text));
+    }
+
+    public Task<T> Get<T>(string query, object?[]? parameters = null)
+    {
+        var dynamicParams = PrepareQuery(ref query, parameters);
+        return Task.Run(() => Db.QueryFirstAsync<T>(query, dynamicParams, commandType: CommandType.Text));
+    }
+
+    public Task<dynamic> Get(string query, object?[]? parameters = null)
+    {
+        var dynamicParams = PrepareQuery(ref query, parameters);
+        return Task.Run(() => Db.QueryFirstAsync(query, dynamicParams, commandType: CommandType.Text));
+    }
+
     private static void PrepareCommandParameters(SqliteCommand command, ref string query, int parameterCount)
     {
         var parameterNames = PrepareQueryString(ref query, parameterCount);
@@ -155,42 +191,6 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvents.TablesUpdatedEvent
                 command.Parameters[i].Value = parameters[i] ?? DBNull.Value;
             }
         }
-    }
-
-    public Task<T[]> GetAll<T>(string query, object?[]? parameters = null)
-    {
-        var preparedParams = PrepareQuery(ref query, parameters);
-        return Task.Run(async () => (await Db.QueryAsync<T>(query, preparedParams, commandType: CommandType.Text)).ToArray());
-    }
-
-    public Task<dynamic[]> GetAll(string query, object?[]? parameters = null)
-    {
-        var preparedParams = PrepareQuery(ref query, parameters);
-        return Task.Run(async () => (await Db.QueryAsync(query, preparedParams, commandType: CommandType.Text)).ToArray());
-    }
-
-    public Task<T?> GetOptional<T>(string query, object?[]? parameters = null)
-    {
-        var preparedParams = PrepareQuery(ref query, parameters);
-        return Task.Run(() => Db.QueryFirstOrDefaultAsync<T>(query, preparedParams, commandType: CommandType.Text));
-    }
-
-    public Task<dynamic?> GetOptional(string query, object?[]? parameters = null)
-    {
-        var preparedParams = PrepareQuery(ref query, parameters);
-        return Task.Run(() => Db.QueryFirstOrDefaultAsync(query, preparedParams, commandType: CommandType.Text));
-    }
-
-    public Task<T> Get<T>(string query, object?[]? parameters = null)
-    {
-        var preparedParams = PrepareQuery(ref query, parameters);
-        return Task.Run(() => Db.QueryFirstAsync<T>(query, preparedParams, commandType: CommandType.Text));
-    }
-
-    public Task<dynamic> Get(string query, object?[]? parameters = null)
-    {
-        var preparedParams = PrepareQuery(ref query, parameters);
-        return Task.Run(() => Db.QueryFirstAsync(query, preparedParams, commandType: CommandType.Text));
     }
 
     public Task<NonQueryResult> Execute(string query, object?[]? parameters = null) => Task.Run(() =>
