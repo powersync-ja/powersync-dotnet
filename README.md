@@ -146,5 +146,5 @@ RUN_PERFORMANCE_TESTS=true dotnet test -v n --framework net8.0 --filter "Categor
 
 ## Using the PowerSync.Common package in your project
 ```bash
-dotnet add package PowerSync.Common --prerelease
+dotnet add package PowerSync.Common
 ```

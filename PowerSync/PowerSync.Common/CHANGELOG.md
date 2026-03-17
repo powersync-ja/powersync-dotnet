@@ -1,6 +1,6 @@
 # PowerSync.Common Changelog
 
-## 0.0.1-beta.1
+## 0.1.0
 
 - Beta release.
 
