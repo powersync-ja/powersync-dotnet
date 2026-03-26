@@ -1,5 +1,9 @@
 # PowerSync.Common Changelog
 
+## 0.1.0
+
+- Beta release.
+
 ## 0.0.11-alpha.1
 
 - Implemented throttling for `Watch<T>` and `OnChange` (default 30ms).

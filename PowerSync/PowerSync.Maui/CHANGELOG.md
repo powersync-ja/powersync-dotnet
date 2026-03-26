@@ -1,5 +1,9 @@
 # PowerSync.Maui Changelog
 
+## 0.1.0
+
+- Beta release.
+
 ## 0.0.9-alpha.1
 
 - Upstream PowerSync.Common version bump (See Powersync.Common changelog 0.0.11-alpha.1 for more information)

@@ -4,16 +4,14 @@ This package contains a .NET implementation of a PowerSync database connector an
 
 ## ⚠️ Project Status & Release Note
 
-This package is currently in an alpha state, intended strictly for testing. Expect breaking changes and instability as development continues.
-
-Do not rely on this package for production use.
+This package is in beta and is considered ready for production use for tested use cases. See our feature status definitions [here](https://docs.powersync.com/resources/feature-status).
 
 ## Installation
 
 This package is published on [NuGet](https://www.nuget.org/packages/PowerSync.Common).
 
 ```bash
-dotnet add package PowerSync.Common --prerelease
+dotnet add package PowerSync.Common
 ```
 
 ## Usage
@@ -58,4 +56,3 @@ _ = Task.Run(async () =>
     }
 }, cts.Token);
 ```
-
