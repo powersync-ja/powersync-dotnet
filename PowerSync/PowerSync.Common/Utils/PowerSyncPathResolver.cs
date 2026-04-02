@@ -39,7 +39,7 @@ public static class PowerSyncPathResolver
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
             if (RuntimeInformation.ProcessArchitecture == Architecture.Arm64)
-                return "windows-arm64";
+                return "win-arm64";
             else
                 return "win-x64";
         }
