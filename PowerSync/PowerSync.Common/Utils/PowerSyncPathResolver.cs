@@ -38,7 +38,10 @@ public static class PowerSyncPathResolver
         }
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
-            return "win-x64";
+            if (RuntimeInformation.ProcessArchitecture == Architecture.Arm64)
+                return "windows-arm64";
+            else
+                return "win-x64";
         }
         throw new PlatformNotSupportedException("Unsupported platform.");
     }

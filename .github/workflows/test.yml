@@ -5,15 +5,18 @@ on:
 
 jobs:
   build:
-    name: Test Packages
-    runs-on: windows-latest
+    strategy:
+      matrix: 
+        runner: [windows-latest, windows-11-arm]
+    name: Test Packages ${{ matrix.runner }}
+    runs-on: ${{ matrix.runner }}
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '8.0' 
 
