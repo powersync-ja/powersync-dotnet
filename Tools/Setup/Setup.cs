@@ -10,7 +10,7 @@ using System.IO.Compression;
 /// </summary>
 public class PowerSyncSetup
 {
-    private const string VERSION = "0.4.11";
+    private const string VERSION = "0.4.12";
 
     private const string GITHUB_BASE_URL = $"https://github.com/powersync-ja/powersync-sqlite-core/releases/download/v{VERSION}";
     private const string MAVEN_BASE_URL = $"https://repo1.maven.org/maven2/com/powersync/powersync-sqlite-core/{VERSION}";
@@ -59,7 +59,8 @@ public class PowerSyncSetup
             { "osx-arm64", new RuntimeConfig("libpowersync_aarch64.macos.dylib", "libpowersync.dylib") },
             { "linux-x64", new RuntimeConfig("libpowersync_x64.linux.so", "libpowersync.so") },
             { "linux-arm64", new RuntimeConfig("libpowersync_aarch64.linux.so", "libpowersync.so") },
-            { "win-x64", new RuntimeConfig("powersync_x64.dll", "powersync.dll") }
+            { "win-x64", new RuntimeConfig("powersync_x64.dll", "powersync.dll") },
+            { "win-arm64", new RuntimeConfig("powersync_aarch64.dll", "powersync.dll") }
         };
     }
 

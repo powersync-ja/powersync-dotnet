@@ -1,5 +1,10 @@
 # PowerSync.Common Changelog
 
+## 0.1.1 (unreleased)
+
+- Support Windows ARM.
+- Update the PowerSync SQLite core extension to 0.4.12.
+
 ## 0.1.0
 
 - Beta release.
