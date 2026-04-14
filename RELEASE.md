@@ -13,3 +13,12 @@
    - Extract version numbers from the changelogs.
    - Create a release for both packages on Nuget.
    - Create a Github release containing the changelog contents.
+
+## Dev Releases
+
+1. Ensure all changes you want to release are merged into `main`.
+
+2. **!! IMPORTANT !!** Ensure the changelog files have release numbers ending in `-dev.xxx`, eg. `0.1.0-dev.1`.
+   - If you don't add the suffix, the workflow might try to create a release with a version number you didn't expect.
+
+3. Run the `Create Dev Release` workflow on Github, selecting the branch with your changes as the base branch.
