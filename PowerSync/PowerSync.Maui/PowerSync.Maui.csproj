@@ -20,7 +20,6 @@
     <NoWarn>NU5100</NoWarn>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <IsBindingProject>true</IsBindingProject>
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <IncludeBuildOutput>true</IncludeBuildOutput>
   </PropertyGroup>
 
