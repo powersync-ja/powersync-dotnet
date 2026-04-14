@@ -1,6 +1,6 @@
 # PowerSync.Maui Changelog
 
-## 0.1.2
+## 0.1.2-dev.1
 
 - Fix `net9.0-android` and `net9.0-ios` not being in TargetFrameworks.
 
