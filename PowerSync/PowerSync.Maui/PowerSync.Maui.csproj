@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.0;net6.0;net8.0;net9.0;net8.0-ios;net8.0-android</TargetFrameworks>
+    <TargetFrameworks>netstandard2.0;net6.0;net8.0;net9.0;net8.0-ios;net8.0-android;net9.0-ios;net9.0-android</TargetFrameworks>
     <LangVersion>12</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -20,12 +20,11 @@
     <NoWarn>NU5100</NoWarn>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <IsBindingProject>true</IsBindingProject>
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <IncludeBuildOutput>true</IncludeBuildOutput>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\PowerSync.Common\PowerSync.Common.csproj" />
+    <ProjectReference Include="..\PowerSync.Common\PowerSync.Common.csproj" SetTargetFramework="TargetFramework=$(TargetFramework)" />
   </ItemGroup>
   
   <ItemGroup>
@@ -45,4 +44,15 @@
       <SmartLink>False</SmartLink>
      </NativeReference>
   </ItemGroup>
+
+  <!-- Prevent e_sqlite3.a from being frozen into the binding manifest. It is provided by
+       SQLitePCLRaw.lib.e_sqlite3.ios with separate device/simulator variants, selected at
+       consuming-project build time via buildTransitive targets. Capturing it here would bake
+       in the device-only variant and break simulator builds in consuming projects. -->
+  <Target Name="_RemoveE_Sqlite3FromBindingManifest" BeforeTargets="_SanitizeNativeReferences" Condition="'$(IsBindingProject)' == 'true'">
+    <ItemGroup>
+      <NativeReference Remove="@(NativeReference)" Condition="'%(Filename)' == 'e_sqlite3'" />
+    </ItemGroup>
+  </Target>
+
 </Project>
