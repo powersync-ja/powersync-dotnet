@@ -44,4 +44,15 @@
       <SmartLink>False</SmartLink>
      </NativeReference>
   </ItemGroup>
+
+  <!-- Prevent e_sqlite3.a from being frozen into the binding manifest. It is provided by
+       SQLitePCLRaw.lib.e_sqlite3.ios with separate device/simulator variants, selected at
+       consuming-project build time via buildTransitive targets. Capturing it here would bake
+       in the device-only variant and break simulator builds in consuming projects. -->
+  <Target Name="_RemoveE_Sqlite3FromBindingManifest" BeforeTargets="_SanitizeNativeReferences" Condition="'$(IsBindingProject)' == 'true'">
+    <ItemGroup>
+      <NativeReference Remove="@(NativeReference)" Condition="'%(Filename)' == 'e_sqlite3'" />
+    </ItemGroup>
+  </Target>
+
 </Project>
