@@ -3,7 +3,7 @@
 name: Create Dev Release
 
 on: workflow_dispatch
-    
+
 jobs:
   dev-release:
     name: Publish Dev Packages
@@ -18,24 +18,28 @@ jobs:
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: "8.0.x"
 
       - name: Install MAUI Workloads
         run: dotnet workload restore
 
       - name: Download PowerSync extension
-        run: dotnet run --project Tools/Setup    
+        run: dotnet run --project Tools/Setup
 
       - name: Restore dependencies
         run: dotnet restore
-      
+
       - name: Extract Common Package Version from CHANGELOG.md
         id: extract_version
         shell: bash
         run: |
           COMMON_VERSION=$(awk '/^## [0-9]+\.[0-9]+\.[0-9]+-dev(\.[0-9]+)?$/ {print $2; exit}' PowerSync/PowerSync.Common/CHANGELOG.md)
+          if [[ -z "$COMMON_VERSION" ]]; then
+            echo "Error: Invalid dev version found in PowerSync.Common/CHANGELOG.md. Expected format: x.x.x-dev.x"
+            exit 1
+          fi
           echo "Detected Version: $COMMON_VERSION"
-          echo "VERSION=$COMMON_VERSION" >> $GITHUB_ENV 
+          echo "VERSION=$COMMON_VERSION" >> $GITHUB_ENV
 
       - name: Run Pack For Common
         run: dotnet pack PowerSync/PowerSync.Common -c Release -o ${{ github.workspace }}/output
@@ -49,9 +53,13 @@ jobs:
         shell: bash
         run: |
           MAUI_VERSION=$(awk '/^## [0-9]+\.[0-9]+\.[0-9]+-dev(\.[0-9]+)?$/ {print $2; exit}' PowerSync/PowerSync.Maui/CHANGELOG.md)
+          if [[ -z "$MAUI_VERSION" ]]; then
+            echo "Error: Invalid dev version found in PowerSync.Maui/CHANGELOG.md. Expected format: x.x.x-dev.x"
+            exit 1
+          fi
           echo "Detected Version: $MAUI_VERSION"
-          echo "VERSION=$MAUI_VERSION" >> $GITHUB_ENV 
-        
+          echo "VERSION=$MAUI_VERSION" >> $GITHUB_ENV
+
       - name: Build MAUI Project
         run: dotnet build PowerSync/PowerSync.Maui -c Release
 
