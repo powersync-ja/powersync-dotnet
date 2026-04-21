@@ -11,7 +11,7 @@ Changes made to the backend's source DB or to the self-hosted web UI will be syn
 In the repo root, run the following to download the PowerSync extension:
 
 ```bash
-dotnet run --project Tools/Setup    
+dotnet run --project Tools/Setup
 ```
 
 Then switch into the demo's directory:
@@ -31,6 +31,7 @@ dotnet build -t:Run -f:net8.0-ios
 ```
 
 Specifyng an iOS simulator
+
 ```sh
 dotnet build -t:Run -f:net8.0-ios -p:_DeviceName=:v2:udid=B1CA156A-56FC-4C3C-B35D-4BC349111FDF
 ```
@@ -42,19 +43,8 @@ dotnet build -t:Run -f:net8.0-android
 ```
 
 Specifying an Android emulator
+
 ```sh
 dotnet build -t:Run -f:net8.0-android -p:_DeviceName=emulator-5554
 ```
 
-### Windows
-
-```sh
-dotnet run -f net8.0-windows10.0.19041.0
-```
-
-## Android on Windows
-You may need to overwrite the [backend and PowerSync URLs](./Data/NodeConnector.cs) when running an Android emulator on Windows.
-```
-BackendUrl = "http://10.0.2.2:6060";
-PowerSyncUrl = "http://10.0.2.2:8080";
-```
