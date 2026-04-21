@@ -48,3 +48,8 @@ Specifying an Android emulator
 dotnet build -t:Run -f:net8.0-android -p:_DeviceName=emulator-5554
 ```
 
+### MacCatalyst
+
+```sh
+dotnet build -t:Run -f:net8.0-maccatalyst
+```
