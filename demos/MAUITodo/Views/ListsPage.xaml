@@ -5,7 +5,7 @@
              Title="Todo Lists">
     <ContentPage.ToolbarItems>
         <ToolbarItem x:Name="WifiStatusItem"
-                     Order="Primary" 
+                     Order="Primary"
                      Priority="0"/>
     </ContentPage.ToolbarItems>
 

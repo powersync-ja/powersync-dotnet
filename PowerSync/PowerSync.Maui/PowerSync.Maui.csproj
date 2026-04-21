@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.0;net6.0;net8.0;net9.0;net8.0-ios;net8.0-android;net9.0-ios;net9.0-android</TargetFrameworks>
+    <TargetFrameworks>netstandard2.0;net6.0;net8.0;net9.0;net8.0-ios;net8.0-android;net8.0-maccatalyst;net9.0-ios;net9.0-android;net9.0-maccatalyst</TargetFrameworks>
     <LangVersion>12</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -43,6 +43,15 @@
      <Kind>Framework</Kind>
       <SmartLink>False</SmartLink>
      </NativeReference>
+  </ItemGroup>
+
+  <ItemGroup Condition="$(TargetFramework.Contains('-maccatalyst'))">
+      <ObjcBindingApiDefinition Include="build\ApiDefinition.cs" />
+
+      <NativeReference Include="Platforms\MacCatalyst\NativeLibs\powersync-sqlite-core.xcframework">
+        <Kind>Framework</Kind>
+        <SmartLink>False</SmartLink>
+      </NativeReference>
   </ItemGroup>
 
   <!-- Prevent e_sqlite3.a from being frozen into the binding manifest. It is provided by

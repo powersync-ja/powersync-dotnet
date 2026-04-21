@@ -25,8 +25,14 @@ public class NodeConnector : IPowerSyncBackendConnector
         // Load or generate User ID
         UserId = LoadOrGenerateUserId();
 
+        // Android emulator uses 10.0.2.2 to access host-ran processes
+#if ANDROID
+        BackendUrl = "http://10.0.2.2:6060";
+        PowerSyncUrl = "http://10.0.2.2:8080";
+#else
         BackendUrl = "http://localhost:6060";
         PowerSyncUrl = "http://localhost:8080";
+#endif
 
         clientId = null;
     }

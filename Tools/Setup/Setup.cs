@@ -31,6 +31,7 @@ public class PowerSyncSetup
             await SetupDesktop();
             await SetupMauiIos();
             await SetupMauiAndroid();
+            await SetupMauiMacCatalyst();
         }
         finally
         {
@@ -125,6 +126,19 @@ public class PowerSyncSetup
         {
             Console.Error.WriteLine($"✗ Failed to setup Android: {ex.Message}");
         }
+    }
+
+    public async Task SetupMauiMacCatalyst()
+    {
+        Console.WriteLine("Setting up MAUI MacCatalyst libraries...");
+
+        var nativeDir = Path.Combine(_basePath, "PowerSync.Maui", "Platforms", "MacCatalyst", "NativeLibs");
+        var config = new ArchiveConfig(
+            "powersync-sqlite-core.xcframework.zip",
+            "powersync-sqlite-core.xcframework"
+        );
+
+        await ProcessArchiveDownload(nativeDir, config, GITHUB_BASE_URL);
     }
 
     private void ExtractAarNativeLibraries(string aarPath, string nativeDir)

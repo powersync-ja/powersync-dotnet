@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.0;net6.0;net8.0;net9.0;net8.0-ios;net8.0-android;net9.0-ios;net9.0-android</TargetFrameworks>
+    <TargetFrameworks>netstandard2.0;net6.0;net8.0;net9.0;net8.0-ios;net8.0-android;net8.0-maccatalyst;net9.0-ios;net9.0-android;net9.0-maccatalyst</TargetFrameworks>
     <LangVersion>12</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -45,14 +45,14 @@
   
   <!-- Check allows us to skip for all MAUI targets-->
   <!-- For monorepo-->
-  <ItemGroup Condition="!$(TargetFramework.EndsWith('-android')) AND !$(TargetFramework.EndsWith('-ios'))">
+  <ItemGroup Condition="!$(TargetFramework.EndsWith('-android')) AND !$(TargetFramework.EndsWith('-ios')) AND !$(TargetFramework.EndsWith('-maccatalyst'))">
     <Content Include="runtimes\**\*.*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
 
   <!-- For releasing runtimes  -->
-  <ItemGroup Condition="!$(TargetFramework.EndsWith('-android')) AND !$(TargetFramework.EndsWith('-ios'))">
+  <ItemGroup Condition="!$(TargetFramework.EndsWith('-android')) AND !$(TargetFramework.EndsWith('-ios')) AND !$(TargetFramework.EndsWith('-maccatalyst'))">
     <None Include="runtimes\**\*.*" Pack="true" PackagePath="runtimes\" />
   </ItemGroup>
   

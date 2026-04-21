@@ -4,8 +4,8 @@ using Microsoft.Data.Sqlite;
 
 using PowerSync.Common.MDSQLite;
 
-// iOS specific imports
-#if IOS
+// iOS/MacCatalyst specific imports
+#if IOS || MACCATALYST
 using Foundation;
 #endif
 
@@ -19,8 +19,8 @@ public class MAUISQLiteAdapter : MDSQLiteAdapter
     {
         db.EnableExtensions(true);
 
-#if IOS
-        LoadExtensionIOS(db);
+#if IOS || MACCATALYST
+        LoadExtensionApple(db);
 #elif ANDROID
         db.LoadExtension("libpowersync");
 #else
@@ -28,9 +28,9 @@ public class MAUISQLiteAdapter : MDSQLiteAdapter
 #endif
     }
 
-    private void LoadExtensionIOS(SqliteConnection db)
+    private void LoadExtensionApple(SqliteConnection db)
     {
-#if IOS
+#if IOS || MACCATALYST
         var bundlePath = Foundation.NSBundle.FromIdentifier("co.powersync.sqlitecore")?.BundlePath;
         if (bundlePath == null)
         {
@@ -48,3 +48,4 @@ public class MAUISQLiteAdapter : MDSQLiteAdapter
 #endif
     }
 }
+
