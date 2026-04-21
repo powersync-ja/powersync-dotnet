@@ -10,7 +10,7 @@ using System.IO.Compression;
 /// </summary>
 public class PowerSyncSetup
 {
-    private const string VERSION = "0.4.12";
+    private const string VERSION = "0.4.13";
 
     private const string GITHUB_BASE_URL = $"https://github.com/powersync-ja/powersync-sqlite-core/releases/download/v{VERSION}";
     private const string MAVEN_BASE_URL = $"https://repo1.maven.org/maven2/com/powersync/powersync-sqlite-core/{VERSION}";
@@ -199,7 +199,7 @@ public class PowerSyncSetup
             if (Directory.Exists(extractedPath))
                 Directory.Delete(extractedPath, recursive: true);
 
-            ZipFile.ExtractToDirectory(downloadPath, nativeDir);
+            ExtractZipPreservingSymlinks(downloadPath, nativeDir);
             File.Delete(downloadPath);
 
             Console.WriteLine($"✓ Extracted {config.ArchiveFileName} → {config.ExtractedName}");
@@ -207,6 +207,29 @@ public class PowerSyncSetup
         catch (Exception ex)
         {
             Console.Error.WriteLine($"✗ Failed to process archive: {ex.Message}");
+        }
+    }
+
+    private static void ExtractZipPreservingSymlinks(string zipPath, string destDir)
+    {
+        // ZipFile.ExtractToDirectory does not preserve symlinks, which breaks
+        // macOS/Catalyst .xcframework bundles. Use `unzip` on Unix instead.
+        if (!OperatingSystem.IsWindows())
+        {
+            var proc = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "unzip",
+                ArgumentList = { "-o", zipPath, "-d", destDir },
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            })!;
+            proc.WaitForExit();
+            if (proc.ExitCode != 0)
+                throw new Exception($"unzip exited with code {proc.ExitCode}: {proc.StandardError.ReadToEnd()}");
+        }
+        else
+        {
+            ZipFile.ExtractToDirectory(zipPath, destDir);
         }
     }
 

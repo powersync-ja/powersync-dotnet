@@ -1,8 +1,10 @@
 # PowerSync.Maui Changelog
 
-## 0.1.2-dev.1
+## 0.1.2
 
-- Fix `net9.0-android` and `net9.0-ios` not being in TargetFrameworks.
+- Add support for MacCatalyst.
+- Add support for .NET 9.0. Supported targets now also include `net9.0`, `net9.0-android`, `net9.0-ios`, and `net9.0-maccatalyst`.
+- Upstream PowerSync.Common version bump (See Powersync.Common changelog 0.1.2 for more information)
 
 ## 0.1.1
 
