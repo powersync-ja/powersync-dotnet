@@ -18,11 +18,12 @@ class AttributeParser
     {
         _type = type;
 
-        _tableAttr = _type.GetCustomAttribute<TableAttribute>();
-        if (_tableAttr == null)
+        var tableAttr = _type.GetCustomAttribute<TableAttribute>();
+        if (tableAttr == null)
         {
             throw new InvalidOperationException("Table classes must be marked with TableAttribute.");
         }
+        _tableAttr = tableAttr;
     }
 
     public Table ParseTable()
@@ -194,7 +195,7 @@ class AttributeParser
             (type, columnName) => type.GetProperties()
                 .FirstOrDefault(prop => prop.GetCustomAttributes()
                     .OfType<ColumnAttribute>()
-                    .Any(columnAttr => columnAttr.Name == columnName))
+                    .Any(columnAttr => columnAttr.Name == columnName))!
         );
     }
 

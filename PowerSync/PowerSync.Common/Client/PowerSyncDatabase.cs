@@ -606,7 +606,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
     ///
     /// Use this from the <see cref="IPowerSyncBackendConnector.UploadData"/> callback.
     /// <para />
-    /// Once the data have been successfully uploaded, call <see cref="CrudTransaction.Complete"/> before
+    /// Once the data have been successfully uploaded, call <see cref="CrudBatch.Complete"/> before
     /// requesting the next transaction.
     /// <para />
     /// Unlike <see cref="GetCrudBatch"/>, this only returns data from a single transaction at a time.
