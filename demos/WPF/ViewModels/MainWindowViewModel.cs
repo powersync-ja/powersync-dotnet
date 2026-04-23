@@ -34,12 +34,9 @@ namespace PowersyncDotnetTodoList.ViewModels
             // Set up the listener to track the status changes
             _ = Task.Run(async () =>
             {
-                await foreach (var update in _db.ListenAsync(new CancellationToken()))
+                await foreach (var update in _db.Events.OnStatusChanged.ListenAsync(new CancellationToken()))
                 {
-                    if (update.StatusChanged != null)
-                    {
-                        Connected = update.StatusChanged.Connected;
-                    }
+                    Connected = update.Status.Connected;
                 }
             });
         }
