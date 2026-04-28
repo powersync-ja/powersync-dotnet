@@ -13,7 +13,6 @@ public class PowerSyncSetup
     private const string VERSION = "0.4.13";
 
     private const string GITHUB_BASE_URL = $"https://github.com/powersync-ja/powersync-sqlite-core/releases/download/v{VERSION}";
-    private const string MAVEN_BASE_URL = $"https://repo1.maven.org/maven2/com/powersync/powersync-sqlite-core/{VERSION}";
 
     private readonly HttpClient _httpClient;
     private readonly string _basePath;
@@ -108,24 +107,32 @@ public class PowerSyncSetup
         Console.WriteLine("Setting up MAUI Android libraries...");
 
         var nativeDir = Path.Combine(_basePath, "PowerSync.Maui", "Platforms", "Android", "jniLibs");
-        var aarFileName = $"powersync-sqlite-core-{VERSION}.aar";
 
         try
         {
             Directory.CreateDirectory(nativeDir);
 
-            var aarPath = Path.Combine(nativeDir, aarFileName);
-            var downloadUrl = $"{MAVEN_BASE_URL}/{aarFileName}";
+            await Task.WhenAll(
+                DownloadAndroidLibrary("libpowersync_aarch64.android.so ", nativeDir,"arm64-v8a"),
+                DownloadAndroidLibrary("libpowersync_armv7.android.so ", nativeDir, "armeabi-v7a"),
+                DownloadAndroidLibrary("libpowersync_x86.android.so ", nativeDir, "x86"),
+                DownloadAndroidLibrary("libpowersync_x64.android.so ", nativeDir, "x86_64")
+            );
 
-            await DownloadFile(downloadUrl, aarPath);
-            ExtractAarNativeLibraries(aarPath, nativeDir);
-
-            Console.WriteLine($"✓ Android: Extracted native libraries from {aarFileName}");
+            Console.WriteLine($"✓ Android: Downloaded native libraries");
         }
         catch (Exception ex)
         {
             Console.Error.WriteLine($"✗ Failed to setup Android: {ex.Message}");
         }
+    }
+
+    private async Task DownloadAndroidLibrary(string filename, string jniLibsDir, string arch)
+    {
+        var targetDir = Path.Combine(jniLibsDir, arch);
+		Directory.CreateDirectory(targetDir);
+        var targetFile = Path.Combine(targetDir, "libpowersync.so");
+        await DownloadFile($"{GITHUB_BASE_URL}/{filename}", targetFile);
     }
 
     public async Task SetupMauiMacCatalyst()
@@ -139,48 +146,6 @@ public class PowerSyncSetup
         );
 
         await ProcessArchiveDownload(nativeDir, config, GITHUB_BASE_URL);
-    }
-
-    private void ExtractAarNativeLibraries(string aarPath, string nativeDir)
-    {
-        var extractedDir = Path.Combine(nativeDir, "temp_extracted");
-
-        try
-        {
-            // Clean up any existing extraction
-            if (Directory.Exists(extractedDir))
-                Directory.Delete(extractedDir, recursive: true);
-
-            // Extract AAR (which is a ZIP file)
-            ZipFile.ExtractToDirectory(aarPath, extractedDir);
-
-            // Copy native libraries organized by architecture
-            var jniLibsPath = Path.Combine(extractedDir, "jni");
-            if (Directory.Exists(jniLibsPath))
-            {
-                CopyNativeLibrariesByArchitecture(jniLibsPath, nativeDir);
-            }
-        }
-        finally
-        {
-            CleanupPaths(extractedDir, aarPath);
-        }
-    }
-
-    private static void CopyNativeLibrariesByArchitecture(string jniLibsPath, string nativeDir)
-    {
-        foreach (var archDir in Directory.GetDirectories(jniLibsPath))
-        {
-            var archName = Path.GetFileName(archDir);
-            var targetArchDir = Path.Combine(nativeDir, archName);
-            Directory.CreateDirectory(targetArchDir);
-
-            foreach (var libFile in Directory.GetFiles(archDir, "*.so"))
-            {
-                var targetPath = Path.Combine(targetArchDir, Path.GetFileName(libFile));
-                File.Copy(libFile, targetPath, overwrite: true);
-            }
-        }
     }
 
     private async Task ProcessArchiveDownload(string nativeDir, ArchiveConfig config, string baseUrl)
