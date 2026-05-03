@@ -300,7 +300,7 @@ public sealed class AttachmentQueue : IAsyncDisposable
     /// attachment record against the local filesystem and:
     /// <list type="bullet">
     /// <item><description>Updates <see cref="Attachment.LocalUri"/> if the file exists at a different path.</description></item>
-    /// <item><description>Archives attachments with missing local files that haven't been uploaded.</description></item>
+    /// <item><description>Archives non-Synced attachments whose local files are missing.</description></item>
     /// <item><description>Requeues synced attachments for download if their local files are missing.</description></item>
     /// </list>
     /// </summary>

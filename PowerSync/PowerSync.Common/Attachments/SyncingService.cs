@@ -156,7 +156,7 @@ internal sealed class SyncingService(
     /// On failure, defers to <see cref="IAttachmentErrorHandler"/> or archives.
     /// </summary>
     /// <param name="attachment">The attachment to upload.</param>
-    /// <returns>The updated attachment, or <c>null</c> if no DB write is needed.</returns>
+    /// <returns>The updated attachment, or <c>null</c> if the error handler asked to retry.</returns>
     public async Task<Attachment?> UploadAttachmentAsync(Attachment attachment)
     {
         logger.LogInformation("Uploading attachment {Filename}", attachment.Filename);
@@ -196,7 +196,7 @@ internal sealed class SyncingService(
     /// On failure, defers to <see cref="IAttachmentErrorHandler"/> or archives.
     /// </summary>
     /// <param name="attachment">The attachment to download.</param>
-    /// <returns>The updated attachment, or <c>null</c> if no DB write is needed.</returns>
+    /// <returns>The updated attachment, or <c>null</c> if the error handler asked to retry.</returns>
     public async Task<Attachment?> DownloadAttachmentAsync(Attachment attachment)
     {
         logger.LogInformation("Downloading attachment {Filename}", attachment.Filename);
@@ -233,7 +233,7 @@ internal sealed class SyncingService(
     /// </summary>
     /// <param name="attachment">The attachment to delete.</param>
     /// <param name="context">The attachment context for database operations.</param>
-    /// <returns>The updated attachment, or <c>null</c> on successful delete or transient failure to retry.</returns>
+    /// <returns>The archived attachment, or <c>null</c> on success or retry.</returns>
     public async Task<Attachment?> DeleteAttachmentAsync(Attachment attachment, AttachmentContext context)
     {
         try

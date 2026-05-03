@@ -16,7 +16,7 @@ public sealed class AttachmentQueueOptions
     /// <summary>Local storage adapter for file persistence.</summary>
     public ILocalStorageAdapter LocalStorage { get; init; } = default!;
 
-    /// <summary>Remote storage adapter for upload/download operations.</summary>
+    /// <summary>Remote storage adapter for upload/download/delete operations.</summary>
     public IRemoteStorageAdapter RemoteStorage { get; init; } = default!;
 
     /// <summary>Callback for monitoring attachment changes in your data model.</summary>
@@ -32,8 +32,8 @@ public sealed class AttachmentQueueOptions
     public TimeSpan SyncInterval { get; init; } = TimeSpan.FromSeconds(30);
 
     /// <summary>
-    /// Throttle duration in milliseconds for the reactive watch query that detects attachment changes.
-    /// Prevents rapid-fire syncs during bulk changes. Default: 30 milliseconds.
+    /// Minimum gap between consecutive sync passes. Coalesces bursts of triggers into one pass.
+    /// Default: 30 milliseconds.
     /// </summary>
     public TimeSpan SyncThrottle { get; init; } = TimeSpan.FromMilliseconds(30);
 

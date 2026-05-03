@@ -285,7 +285,7 @@ new AttachmentQueue(AttachmentQueueOptions options)
 | `TableName` | `string` | No | `"attachments"` | Name of the attachments table |
 | `Logger` | `ILogger?` | No | `NullLogger` | Logger instance for diagnostic output |
 | `SyncInterval` | `TimeSpan` | No | `30s` | Periodic polling interval for retrying failed uploads/downloads. A timer that calls `SyncStorageAsync()` on this cadence, ensuring operations are retried even if no database changes occur (e.g., after coming back online). |
-| `SyncThrottle` | `TimeSpan` | No | `30ms` | Throttle duration for the reactive watch query on the attachments table. When attachment records change (e.g., a new file is queued), a watch query detects the change and triggers a sync. This throttle prevents the sync from firing too rapidly when many changes happen in quick succession (e.g., bulk inserts). This is distinct from `SyncInterval` — it controls how quickly the queue *reacts* to changes, while `SyncInterval` controls how often it *polls* for retries. |
+| `SyncThrottle` | `TimeSpan` | No | `30ms` | Minimum gap between consecutive sync passes. Coalesces bursts of triggers into one pass. Distinct from `SyncInterval` (which polls for retries). |
 | `DownloadAttachments` | `bool` | No | `true` | Whether to automatically download remote attachments |
 | `ArchivedCacheLimit` | `int` | No | `100` | Maximum number of archived attachments before cleanup |
 | `ErrorHandler` | `IAttachmentErrorHandler?` | No | `null` | Custom error handler for upload/download/delete operations |
@@ -302,7 +302,7 @@ await queue.StartSyncAsync();
 
 This will:
 
-- Initialize local storage
+- Initialize local storage and run `VerifyAttachmentsAsync()` to repair inconsistencies
 - Set up periodic sync based on `SyncInterval`
 - Watch for changes in active attachments
 - Process queued uploads, downloads, and deletes
@@ -324,8 +324,8 @@ var attachment = await queue.SaveFileAsync(
     data: stream,
     fileExtension: "pdf",
     mediaType: "application/pdf",
-    id: "custom-id",                                // optional
     metaData: "{\"description\": \"Invoice\"}",     // optional
+    id: "custom-id",                                // optional
     updateHook: async (tx, attachment) =>
     {
         // Update your data model in the same transaction
@@ -342,8 +342,8 @@ var attachment = await queue.SaveFileAsync(
 | `data` | `Stream` | Yes | File data stream |
 | `fileExtension` | `string` | Yes | File extension (e.g., `"jpg"`, `"pdf"`) |
 | `mediaType` | `string?` | No | MIME type (e.g., `"image/jpeg"`) |
-| `id` | `string?` | No | Custom attachment ID (UUID generated if not provided) |
 | `metaData` | `string?` | No | Optional metadata JSON string |
+| `id` | `string?` | No | Custom attachment ID (UUID generated if not provided) |
 | `updateHook` | `Func<ITransaction, Attachment, Task>?` | No | Callback to update your data model atomically |
 
 **Returns:** `Task<Attachment>` - The created attachment record
@@ -352,7 +352,7 @@ The `updateHook` is executed in the same database transaction as the attachment 
 
 ##### `DeleteFileAsync(...)`
 
-Deletes an attachment from both local and remote storage.
+Marks an existing attachment for deletion. The remote and local files are removed asynchronously on the next sync pass.
 
 ```csharp
 await queue.DeleteFileAsync(
@@ -424,7 +424,7 @@ await queue.ClearQueueAsync();
 Verifies the integrity of all attachment records and repairs inconsistencies. Checks each attachment against local storage and:
 
 - Updates `LocalUri` if file exists at a different path
-- Archives attachments with missing local files that haven't been uploaded
+- Archives non-Synced attachments whose local files are missing
 - Requeues synced attachments for download if local files are missing
 
 ```csharp
@@ -700,12 +700,12 @@ var queue = new AttachmentQueue(new AttachmentQueueOptions
 {
     // ... other options
     SyncInterval = TimeSpan.FromSeconds(60), // Poll for retries every 60 seconds instead of 30
-    SyncThrottle = TimeSpan.FromMilliseconds(100), // React to attachment changes within 100ms (default: 30ms)
+    SyncThrottle = TimeSpan.FromMilliseconds(100), // Minimum 100ms between consecutive sync passes (default: 30ms)
 });
 ```
 
-- **`SyncInterval`** controls the periodic polling timer — how often the queue retries failed operations.
-- **`SyncThrottle`** controls how quickly the queue reacts to attachment table changes. The default (30ms) is fast enough for most use cases. Increase it if you see performance issues during bulk attachment operations.
+- **`SyncInterval`** controls the periodic polling timer — how often the queue retries failed operations when nothing has changed.
+- **`SyncThrottle`** caps how frequently sync passes can run. Bursts collapse into one pass. Increase if you see contention during bulk operations.
 
 ### Archive and Cache Management
 

@@ -9,7 +9,7 @@ public interface ILocalStorageAdapter
     /// <summary>
     /// Saves a stream to a local file.
     /// </summary>
-    /// <param name="filePath">Absolute path where the file will be stored.</param>
+    /// <param name="filePath">Path where the file will be stored.</param>
     /// <param name="data">Stream of bytes to write.</param>
     /// <returns>Number of bytes written to the file.</returns>
     /// <remarks>The caller owns and disposes the input stream.</remarks>
@@ -18,7 +18,7 @@ public interface ILocalStorageAdapter
     /// <summary>
     /// Opens a file for streaming reads.
     /// </summary>
-    /// <param name="filePath">Absolute path of the file.</param>
+    /// <param name="filePath">Path of the file.</param>
     /// <returns>A readable stream over the file's contents.</returns>
     /// <remarks>The caller disposes the returned stream.</remarks>
     Task<Stream> ReadFileAsync(string filePath);
@@ -26,14 +26,14 @@ public interface ILocalStorageAdapter
     /// <summary>
     /// Deletes the file at the given path. No-ops if the file doesn't exist.
     /// </summary>
-    /// <param name="filePath">Absolute path of the file to delete.</param>
+    /// <param name="filePath">Path of the file to delete.</param>
     /// <returns>A task that completes when the file has been deleted or if it didn't exist.</returns>
     Task DeleteFileAsync(string filePath);
 
     /// <summary>
     /// Checks if a file exists at the given path.
     /// </summary>
-    /// <param name="filePath">Absolute path of the file.</param>
+    /// <param name="filePath">Path of the file.</param>
     /// <returns>True if the file exists, false otherwise.</returns>
     Task<bool> FileExistsAsync(string filePath);
 
