@@ -46,8 +46,7 @@ internal sealed class SyncingService(
             _internalCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             var token = _internalCts.Token;
 
-            _syncSignals = Channel.CreateBounded<bool>(
-                new BoundedChannelOptions(1) { FullMode = BoundedChannelFullMode.DropWrite });
+            _syncSignals = Channel.CreateBounded<bool>(1);
 
             _consumerLoop = SyncSignalConsumerAsync(token);
             _watchProducerLoop = WatchSignalProducerAsync(token);
@@ -192,7 +191,7 @@ internal sealed class SyncingService(
 
     /// <summary>
     /// Downloads an attachment from remote storage to local storage.
-    /// On success, marks <see cref="AttachmentState.Synced"/> with <c>LocalUri</c> populated.
+    /// On success, marks <see cref="AttachmentState.Synced"/> with <c>LocalUri</c> populated and <c>HasSynced = true</c>.
     /// On failure, defers to <see cref="IAttachmentErrorHandler"/> or archives.
     /// </summary>
     /// <param name="attachment">The attachment to download.</param>
