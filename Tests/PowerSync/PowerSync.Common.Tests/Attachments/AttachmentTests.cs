@@ -7,6 +7,9 @@ using PowerSync.Common.Client;
 using PowerSync.Common.DB.Schema;
 using PowerSync.Common.Tests.Utils;
 
+/// <summary>
+/// dotnet test -v n --framework net8.0 --filter "AttachmentTests"
+/// </summary>
 [Collection("AttachmentTests")]
 public class AttachmentTests : IAsyncLifetime
 {
@@ -64,7 +67,7 @@ public class AttachmentTests : IAsyncLifetime
         public long state { get; set; }
         public string? local_uri { get; set; }
         public string filename { get; set; } = string.Empty;
-        public long has_synced { get; set; }
+        public bool has_synced { get; set; }
     }
 
     [Fact(Timeout = 10000)]
@@ -87,7 +90,7 @@ public class AttachmentTests : IAsyncLifetime
         await _db.Execute(
             "INSERT INTO users (id, name, email, photo_id) VALUES (uuid(), 'user', 'user@example.com', uuid())");
 
-        var attachment = await WaitForMatchAsync(
+        var attachment = await TestUtils.WaitForMatchAsync(
             ct => _db.Watch<AttachmentResult>(
                 "SELECT id, state, local_uri, filename, has_synced FROM attachments",
                 [],
@@ -163,7 +166,7 @@ public class AttachmentTests : IAsyncLifetime
                 "INSERT INTO users (id, name, email, photo_id) VALUES (uuid(), 'john', 'j@j.com', ?)",
                 [attachment.Id]));
 
-        await WaitForMatchAsync(
+        await TestUtils.WaitForMatchAsync(
             ct => _db.Watch<AttachmentResult>(
                 "SELECT id, state, local_uri, filename, has_synced FROM attachments",
                 [],
@@ -240,33 +243,6 @@ public class AttachmentTests : IAsyncLifetime
         {
             yield return [.. rows.Select(r => new WatchedAttachmentItem(r.photo_id, fileExtension: "jpg"))];
         }
-    }
-
-    private static async Task<T> WaitForMatchAsync<T>(
-        Func<CancellationToken, IAsyncEnumerable<T[]>> source,
-        Func<T, bool> predicate,
-        TimeSpan? timeout = null)
-    {
-        timeout ??= TimeSpan.FromSeconds(5);
-        using var cts = new CancellationTokenSource(timeout.Value);
-        try
-        {
-            await foreach (var batch in source(cts.Token).WithCancellation(cts.Token))
-            {
-                foreach (var item in batch)
-                {
-                    if (predicate(item))
-                    {
-                        return item;
-                    }
-                }
-            }
-        }
-        catch (OperationCanceledException) when (cts.IsCancellationRequested)
-        {
-        }
-
-        throw new TimeoutException($"No matching value within {timeout.Value.TotalSeconds:F1}s");
     }
 
     private sealed class MockRemoteStorage : IRemoteStorageAdapter

@@ -131,7 +131,7 @@ internal sealed class AttachmentContext(IPowerSyncDatabase db, string tableName,
                 attachment.MediaType,
                 attachment.Size,
                 (int)attachment.State,
-                attachment.HasSynced ? 1 : 0,
+                attachment.HasSynced,
                 attachment.MetaData,
             ]);
     }

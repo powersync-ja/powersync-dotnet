@@ -5,7 +5,7 @@ using PowerSync.Common.DB.Schema.Attributes;
 /// <summary>
 /// An attachment record persisted in the local database.
 /// </summary>
-[Table(TableName, LocalOnly = true, InsertOnly = false)]
+[Table(TableName, LocalOnly = true)]
 public sealed class Attachment
 {
     /// <summary>The attachment table name.</summary>

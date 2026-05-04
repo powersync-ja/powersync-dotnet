@@ -65,13 +65,6 @@ public sealed class AttachmentQueue : IAsyncDisposable
     }
 
     /// <summary>
-    /// Generates a new attachment ID using SQLite's <c>uuid()</c> function.
-    /// Used by <see cref="SaveFileAsync"/> when the caller doesn't supply an explicit id.
-    /// </summary>
-    /// <returns>A task that completes with the new attachment ID.</returns>
-    public Task<string> GenerateAttachmentIdAsync() => _options.Db.Get<string>("SELECT uuid()");
-
-    /// <summary>
     /// Starts the attachment synchronization process.
     /// </summary>
     /// <remarks>
@@ -200,7 +193,7 @@ public sealed class AttachmentQueue : IAsyncDisposable
         string? id = null,
         Func<ITransaction, Attachment, Task>? updateHook = null)
     {
-        var resolvedId = id ?? await GenerateAttachmentIdAsync();
+        var resolvedId = id ?? Guid.NewGuid().ToString();
         var filename = $"{resolvedId}.{fileExtension}";
         var localUri = _options.LocalStorage.GetLocalUri(filename);
         var size = await _options.LocalStorage.SaveFileAsync(localUri, data);
