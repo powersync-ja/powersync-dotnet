@@ -47,6 +47,33 @@ public static class TestUtils
         throw new TimeoutException("Condition not met within timeout");
     }
 
+    public static async Task<T> WaitForMatchAsync<T>(
+        Func<CancellationToken, IAsyncEnumerable<T[]>> source,
+        Func<T, bool> predicate,
+        TimeSpan? timeout = null)
+    {
+        timeout ??= TimeSpan.FromSeconds(5);
+        using var cts = new CancellationTokenSource(timeout.Value);
+        try
+        {
+            await foreach (var batch in source(cts.Token).WithCancellation(cts.Token))
+            {
+                foreach (var item in batch)
+                {
+                    if (predicate(item))
+                    {
+                        return item;
+                    }
+                }
+            }
+        }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
+        {
+        }
+
+        throw new TimeoutException($"No matching value within {timeout.Value.TotalSeconds:F1}s");
+    }
+
     public static async Task<string> InsertRandomAsset(PowerSyncDatabase db)
     {
         var id = Guid.NewGuid().ToString();
