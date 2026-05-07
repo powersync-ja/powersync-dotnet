@@ -28,8 +28,64 @@ public class BasePowerSyncDatabaseOptions()
     /// </summary>
     public Schema Schema { get; set; } = null!;
 
-    public ILogger? Logger { get; set; } = null!;
+    /// <summary>
+    /// Creates the logger for the PowerSyncDatabase.
+    /// </summary>
+    [Obsolete("Use Loggers.LoggerFactory instead.")]
+    public ILogger? Logger { get; set; }
 
+    /// <summary>
+    /// Sets the logger used on a per-system level.
+    /// </summary>
+    public PowerSyncLoggerOptions? Loggers { get; set; }
+}
+
+public class PowerSyncLoggerOptions
+{
+    /// <summary>
+    /// Factory used to create a named logger for each subcomponent that does not have an explicit logger set.
+    /// </summary>
+    public ILoggerFactory? LoggerFactory { get; set; }
+
+    // Per-component logger overrides
+    public ILogger? Database { get; set; }
+    public ILogger? SyncStream { get; set; }
+    public ILogger? ConnectionManager { get; set; }
+    public ILogger? BucketStorage { get; set; }
+}
+
+/// <summary>
+/// Resolved form of <see cref="PowerSyncLoggerOptions"/> with no nullable fields.
+/// Each subcomponent logger is either the explicit override or a named logger created from
+/// <see cref="PowerSyncLoggerOptions.LoggerFactory"/>, falling back to <see cref="NullLogger.Instance"/>.
+/// </summary>
+public class ResolvedPowerSyncLoggerOptions
+{
+    public ILogger Database { get; }
+    public ILogger SyncStream { get; }
+    public ILogger ConnectionManager { get; }
+    public ILogger BucketStorage { get; }
+
+    public ResolvedPowerSyncLoggerOptions(PowerSyncLoggerOptions? options)
+    {
+        ILogger Resolve(ILogger? logger, string category) =>
+            logger ?? options?.LoggerFactory?.CreateLogger(category) ?? NullLogger.Instance;
+
+        Database = Resolve(options?.Database, "PowerSync.Database");
+        SyncStream = Resolve(options?.SyncStream, "PowerSync.SyncStream");
+        ConnectionManager = Resolve(options?.ConnectionManager, "PowerSync.ConnectionManager");
+        BucketStorage = Resolve(options?.BucketStorage, "PowerSync.BucketStorage");
+    }
+
+    // Used by deprecated PowerSyncDatabaseOptions.Logger option
+    public ResolvedPowerSyncLoggerOptions(ILogger logger)
+    {
+        // Set all components to use the same instance.
+        Database = logger;
+        SyncStream = logger;
+        ConnectionManager = logger;
+        BucketStorage = logger;
+    }
 }
 
 public interface IDatabaseSource { }
@@ -156,7 +212,8 @@ public class PowerSyncDatabase : IPowerSyncDatabase
 
     protected CancellationTokenSource? syncStreamStatusCts;
 
-    public ILogger Logger { get; protected set; }
+    protected ResolvedPowerSyncLoggerOptions Loggers { get; }
+    public ILogger Logger => Loggers.Database;
 
     private readonly AsyncLock runExclusive = new();
     private readonly Func<IPowerSyncBackendConnector, Remote> remoteFactory;
@@ -192,7 +249,14 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         {
             throw new ArgumentException("The provided `Database` option is invalid.");
         }
-        Logger = options.Logger ?? NullLogger.Instance;
+
+        // Ignore deprecation warning
+#pragma warning disable CS0618
+        Loggers = options.Logger != null
+            ? new ResolvedPowerSyncLoggerOptions(options.Logger)
+            : new ResolvedPowerSyncLoggerOptions(options.Loggers);
+#pragma warning restore CS0618
+
         CurrentStatus = new SyncStatus(new SyncStatusOptions());
         BucketStorageAdapter = generateBucketStorageAdapter();
 
@@ -230,7 +294,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
                     RetryDelayMs = options.RetryDelayMs,
                     Subscriptions = options.Subscriptions,
                     CrudUploadThrottleMs = options.CrudUploadThrottleMs,
-                    Logger = Logger
+                    Logger = Loggers.SyncStream
                 });
 
                 var syncStreamStatusCts = CancellationTokenSource.CreateLinkedTokenSource(masterCts.Token);
@@ -250,14 +314,14 @@ public class PowerSyncDatabase : IPowerSyncDatabase
                 await syncStreamImplementation.WaitForReady();
                 return new ConnectionManagerSyncImplementationResult(syncStreamImplementation, () => syncStreamStatusCts.Cancel());
             }
-        }, logger: Logger);
+        }, logger: Loggers.ConnectionManager);
 
         IsReadyTask = Initialize(options);
     }
 
     protected IBucketStorageAdapter generateBucketStorageAdapter()
     {
-        return new SqliteBucketStorage(Database, Logger);
+        return new SqliteBucketStorage(Database, Loggers.BucketStorage);
     }
 
     /// <summary>

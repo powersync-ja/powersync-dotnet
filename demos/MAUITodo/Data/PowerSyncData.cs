@@ -19,9 +19,11 @@ public class PowerSyncData
         ILoggerFactory loggerFactory = LoggerFactory.Create(builder =>
         {
             builder.AddConsole();
-            builder.SetMinimumLevel(LogLevel.Error);
+            builder.AddFilter("PowerSync.Database", LogLevel.Information);
+            builder.AddFilter("PowerSync.SyncStream", LogLevel.Information);
+            builder.AddFilter("PowerSync.ConnectionManager", LogLevel.Information);
+            builder.AddFilter("PowerSync.BucketStorage", LogLevel.Warning);
         });
-        var logger = loggerFactory.CreateLogger("PowerSyncLogger");
 
         var dbPath = Path.Combine(FileSystem.AppDataDirectory, "example.db");
         var factory = new MAUISQLiteDBOpenFactory(new MDSQLiteOpenFactoryOptions()
@@ -32,7 +34,7 @@ public class PowerSyncData
         {
             Database = factory,
             Schema = AppSchema.PowerSyncSchema,
-            Logger = logger
+            Loggers = new PowerSyncLoggerOptions { LoggerFactory = loggerFactory }
         });
 
         var nodeConnector = new NodeConnector();

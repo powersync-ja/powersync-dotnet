@@ -876,10 +876,7 @@ public class StreamingSyncImplementation : ICloseable
 
     private async Task DelayRetry()
     {
-        if (Options.RetryDelayMs.HasValue)
-        {
-            await Task.Delay(Options.RetryDelayMs.Value);
-        }
+        await Task.Delay(Options.RetryDelayMs ?? DEFAULT_RETRY_DELAY_MS);
     }
 
 
