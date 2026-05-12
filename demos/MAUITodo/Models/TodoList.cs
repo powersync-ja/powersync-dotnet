@@ -1,19 +1,37 @@
 namespace MAUITodo.Models;
 
-using PowerSync.Common.DB.Schema.Attributes;
+using Newtonsoft.Json;
+using Supabase.Postgrest.Models;
 
-[Table("lists")]
-public class TodoList
+using PowerSync = PowerSync.Common.DB.Schema.Attributes;
+using Supabase = Supabase.Postgrest.Attributes;
+
+// TODO: We should probably be able to automatically infer the PowerSync
+// model from the Supabase model or vice-versa.
+[
+    PowerSync.Table("lists"),
+    Supabase.Table("lists")
+]
+public class TodoList : BaseModel
 {
-    [Column("id")]
+    [PowerSync.Column("id")]
+    [Supabase.Column("id")]
+    [JsonProperty("id")]
+    [Supabase.PrimaryKey("id")]
     public string ID { get; set; } = "";
 
-    [Column("created_at")]
+    [PowerSync.Column("created_at")]
+    [Supabase.Column("created_at")]
+    [JsonProperty("created_at")]
     public string CreatedAt { get; set; } = null!;
 
-    [Column("name")]
+    [PowerSync.Column("name")]
+    [Supabase.Column("name")]
+    [JsonProperty("name")]
     public string Name { get; set; } = null!;
 
-    [Column("owner_id")]
+    [PowerSync.Column("owner_id")]
+    [Supabase.Column("owner_id")]
+    [JsonProperty("owner_id")]
     public string OwnerId { get; set; } = null!;
 }

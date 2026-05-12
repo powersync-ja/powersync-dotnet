@@ -1,34 +1,58 @@
 ﻿namespace MAUITodo.Models;
 
-using PowerSync.Common.DB.Schema.Attributes;
+using Newtonsoft.Json;
+using Supabase.Postgrest.Models;
 
+using PowerSync = PowerSync.Common.DB.Schema.Attributes;
+using Supabase = Supabase.Postgrest.Attributes;
+
+// TODO: We should probably be able to automatically infer the PowerSync
+// model from the Supabase model or vice-versa.
 [
-    Table("todos"),
-    Index("list", ["list_id"])
+    PowerSync.Table("todos"),
+    PowerSync.Index("list", ["list_id"]),
+    Supabase.Table("todos")
 ]
-public class TodoItem
+public class TodoItem : BaseModel
 {
-    [Column("id")]
+    [PowerSync.Column("id")]
+    [Supabase.Column("id")]
+    [Supabase.PrimaryKey("id")]
+    [JsonProperty("id")]
     public string ID { get; set; } = "";
 
-    [Column("list_id")]
+    [PowerSync.Column("list_id")]
+    [Supabase.Column("list_id")]
+    [JsonProperty("list_id")]
     public string ListId { get; set; } = null!;
 
-    [Column("created_at")]
+    [PowerSync.Column("created_at")]
+    [Supabase.Column("created_at")]
+    [JsonProperty("created_at")]
     public string CreatedAt { get; set; } = null!;
 
-    [Column("completed_at")]
+    [PowerSync.Column("completed_at")]
+    [Supabase.Column("completed_at")]
+    [JsonProperty("completed_at")]
     public string? CompletedAt { get; set; }
 
-    [Column("description")]
+    [PowerSync.Column("description")]
+    [Supabase.Column("description")]
+    [JsonProperty("description")]
     public string Description { get; set; } = null!;
 
-    [Column("created_by")]
+    [PowerSync.Column("created_by")]
+    [Supabase.Column("created_by")]
+    [JsonProperty("created_by")]
     public string CreatedBy { get; set; } = null!;
 
-    [Column("completed_by")]
+    [PowerSync.Column("completed_by")]
+    [Supabase.Column("completed_by")]
+    [JsonProperty("completed_by")]
     public string CompletedBy { get; set; } = null!;
 
-    [Column("completed")]
+    [PowerSync.Column("completed")]
+    [Supabase.Column("completed")]
+    [JsonProperty("completed")]
     public bool Completed { get; set; }
 }
