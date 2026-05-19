@@ -1,6 +1,6 @@
 # PowerSync.Common Changelog
 
-## 0.1.3 (unreleased)
+## 0.1.3-dev.1
 
 - Add support for loading custom SQLite extensions via `MDSQLiteOptions.Extensions`.
 
