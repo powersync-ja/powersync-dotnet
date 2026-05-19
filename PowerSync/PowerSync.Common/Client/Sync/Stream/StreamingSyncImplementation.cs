@@ -369,6 +369,11 @@ public class StreamingSyncImplementation : ICloseable
                     break;
                 }
                 iterationResult = await StreamingSyncIteration(nestedCts.Token, options);
+
+                if (iterationResult.ImmediateRestart == true || iterationResult.LegacyRetry == true)
+                {
+                    shouldDelayRetry = false;
+                }
             }
             catch (Exception ex)
             {
@@ -413,20 +418,15 @@ public class StreamingSyncImplementation : ICloseable
                     nestedCts = new CancellationTokenSource();
                 }
 
-                if (iterationResult != null && (iterationResult.ImmediateRestart != true && iterationResult.LegacyRetry != true))
+                if (shouldDelayRetry)
                 {
-
                     UpdateSyncStatus(new SyncStatusOptions
                     {
                         Connected = false,
                         Connecting = true
                     });
 
-                    // On error, wait a little before retrying
-                    if (shouldDelayRetry)
-                    {
-                        await DelayRetry();
-                    }
+                    await DelayRetry();
                 }
             }
         }
