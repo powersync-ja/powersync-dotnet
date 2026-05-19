@@ -1,5 +1,9 @@
 # PowerSync.Maui Changelog
 
+## 0.1.3
+
+- Upstream PowerSync.Common version bump (See Powersync.Common changelog 0.1.2 for more information)
+
 ## 0.1.2
 
 - Add support for MacCatalyst.
