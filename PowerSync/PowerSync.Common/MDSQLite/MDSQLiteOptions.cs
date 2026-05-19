@@ -1,5 +1,7 @@
 namespace PowerSync.Common.MDSQLite;
 
+using PowerSync.Common.Utils;
+
 public sealed class TemporaryStorageOption
 {
     public static readonly TemporaryStorageOption MEMORY = new("memory");
@@ -55,9 +57,26 @@ public sealed class SqliteSynchronous
 
 public class SqliteExtension
 {
+    public static SqliteExtension DEFAULT_POWERSYNC_EXTENSION = new()
+    {
+        Path = TryResolveDefaultPowerSyncExtensionPath(),
+        EntryPoint = "sqlite3_powersync_init",
+    };
+    public static SqliteExtension[] DEFAULT_POWERSYNC_EXTENSIONS = [DEFAULT_POWERSYNC_EXTENSION];
+
     public string Path { get; set; } = string.Empty;
     public string? EntryPoint { get; set; }
+
+    // PowerSyncPathResolver only knows about desktop RIDs and throws on iOS/Android.
+    // Swallow that here so this static field can be referenced safely on mobile —
+    // platform-aware adapters (e.g. MAUI) intercept the sentinel before reading Path.
+    private static string TryResolveDefaultPowerSyncExtensionPath()
+    {
+        try { return PowerSyncPathResolver.GetNativeLibraryPath(AppContext.BaseDirectory); }
+        catch (PlatformNotSupportedException) { return string.Empty; }
+    }
 }
+
 
 public class MDSQLiteOptions
 {
@@ -99,7 +118,9 @@ public class MDSQLiteOptions
     public int? CacheSizeKb { get; set; }
 
     /// <summary>
-    /// Load extensions using the path and entryPoint.
+    /// Load SQLite extensions using the path and entryPoint. Defaults to
+    /// SqliteExtension.DEFAULT_POWERSYNC_EXTENSIONS. Remember to re-add
+    /// the DEFAULT_POWERSYNC_EXTENSION if modifying the list of extensions.
     /// </summary>
     public SqliteExtension[]? Extensions { get; set; }
 
@@ -120,7 +141,7 @@ public class RequiredMDSQLiteOptions : MDSQLiteOptions
         TemporaryStorage = TemporaryStorageOption.MEMORY,
         LockTimeoutMs = 30000,
         EncryptionKey = null,
-        Extensions = [],
+        Extensions = SqliteExtension.DEFAULT_POWERSYNC_EXTENSIONS,
         ReadPoolSize = 5,
     };
 

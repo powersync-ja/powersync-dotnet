@@ -15,20 +15,49 @@ public class MAUISQLiteAdapter : MDSQLiteAdapter
     {
     }
 
-    protected override void LoadExtension(SqliteConnection db)
+    protected override void LoadExtensions(SqliteConnection db)
     {
         db.EnableExtensions(true);
 
+        // The default PowerSync extension's path is resolved for desktop runtimes and
+        // does not apply on iOS/MacCatalyst/Android, where the native library lives
+        // in a platform-specific location. If the user didn't supply any extensions,
+        // load the platform-correct default. Otherwise honor their list — but still
+        // intercept the DEFAULT_POWERSYNC_EXTENSION sentinel so consumers can mix
+        // the bundled PowerSync extension with their own custom extensions.
+        var userExtensions = options.SqliteOptions?.Extensions;
+        if (userExtensions == null)
+        {
+            LoadDefaultPowerSyncExtension(db);
+            return;
+        }
+
+        foreach (var extension in userExtensions)
+        {
+            if (ReferenceEquals(extension, SqliteExtension.DEFAULT_POWERSYNC_EXTENSION))
+            {
+                LoadDefaultPowerSyncExtension(db);
+            }
+            else
+            {
+                db.LoadExtension(extension.Path, extension.EntryPoint);
+            }
+        }
+    }
+
+    private static void LoadDefaultPowerSyncExtension(SqliteConnection db)
+    {
 #if IOS || MACCATALYST
         LoadExtensionApple(db);
 #elif ANDROID
         db.LoadExtension("libpowersync");
 #else
-        base.LoadExtension(db);
+        var defaultExtension = SqliteExtension.DEFAULT_POWERSYNC_EXTENSION;
+        db.LoadExtension(defaultExtension.Path, defaultExtension.EntryPoint);
 #endif
     }
 
-    private void LoadExtensionApple(SqliteConnection db)
+    private static void LoadExtensionApple(SqliteConnection db)
     {
 #if IOS || MACCATALYST
         var bundlePath = Foundation.NSBundle.FromIdentifier("co.powersync.sqlitecore")?.BundlePath;

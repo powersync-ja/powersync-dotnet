@@ -125,7 +125,7 @@ public class MDSQLiteAdapter : IDBAdapter
     protected async Task<MDSQLiteConnection> OpenConnection(string dbFilename)
     {
         var db = OpenDatabase(dbFilename);
-        LoadExtension(db);
+        LoadExtensions(db);
 
         var connection = new MDSQLiteConnection(new MDSQLiteConnectionOptions(db));
         await connection.Execute("SELECT powersync_init()");
@@ -141,11 +141,13 @@ public class MDSQLiteAdapter : IDBAdapter
         return connection;
     }
 
-    protected virtual void LoadExtension(SqliteConnection db)
+    protected virtual void LoadExtensions(SqliteConnection db)
     {
-        string extensionPath = PowerSyncPathResolver.GetNativeLibraryPath(AppContext.BaseDirectory);
         db.EnableExtensions(true);
-        db.LoadExtension(extensionPath, "sqlite3_powersync_init");
+        foreach (var extension in resolvedOptions.Extensions)
+        {
+            db.LoadExtension(extension.Path, extension.EntryPoint);
+        }
     }
 
     public async Task Close()
@@ -367,7 +369,7 @@ class MDSQLiteConnectionPool
     private async Task<MDSQLiteConnection> OpenConnection(string dbFilename)
     {
         var db = OpenDatabase(dbFilename);
-        LoadExtension(db);
+        LoadExtensions(db);
 
         var connection = new MDSQLiteConnection(new MDSQLiteConnectionOptions(db));
         await connection.Execute("SELECT powersync_init()");
@@ -383,11 +385,13 @@ class MDSQLiteConnectionPool
         return connection;
     }
 
-    private void LoadExtension(SqliteConnection db)
+    private void LoadExtensions(SqliteConnection db)
     {
-        string extensionPath = PowerSyncPathResolver.GetNativeLibraryPath(AppContext.BaseDirectory);
         db.EnableExtensions(true);
-        db.LoadExtension(extensionPath, "sqlite3_powersync_init");
+        foreach (var extension in _options.Extensions)
+        {
+            db.LoadExtension(extension.Path, extension.EntryPoint);
+        }
     }
 
     public async Task Close()
