@@ -1,12 +1,15 @@
 # PowerSync.Common Changelog
 
+## 0.1.3 (unreleased)
+
+- Fix streaming sync retry loop reconnecting with no delay after an exception, ignoring `RetryDelayMs`.
+
 ## 0.1.2
 
 - Add support for MacCatalyst.
 - Add support for .NET 9.0. Supported targets now also include `net9.0`, `net9.0-android`, `net9.0-ios`, and `net9.0-maccatalyst`.
 - Update the PowerSync SQLite core extension to 0.4.13.
 - Add support for offline-first file attachments via `AttachmentQueue`. See `Attachments/README.md`.
-- Fix streaming sync retry loop reconnecting with no delay after an exception, ignoring `RetryDelayMs`.
 
 ## 0.1.1
 
