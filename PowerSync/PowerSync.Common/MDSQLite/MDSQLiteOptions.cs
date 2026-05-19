@@ -1,7 +1,5 @@
 namespace PowerSync.Common.MDSQLite;
 
-using PowerSync.Common.Utils;
-
 public sealed class TemporaryStorageOption
 {
     public static readonly TemporaryStorageOption MEMORY = new("memory");
@@ -57,26 +55,9 @@ public sealed class SqliteSynchronous
 
 public class SqliteExtension
 {
-    public static SqliteExtension DEFAULT_POWERSYNC_EXTENSION = new()
-    {
-        Path = TryResolveDefaultPowerSyncExtensionPath(),
-        EntryPoint = "sqlite3_powersync_init",
-    };
-    public static SqliteExtension[] DEFAULT_POWERSYNC_EXTENSIONS = [DEFAULT_POWERSYNC_EXTENSION];
-
     public string Path { get; set; } = string.Empty;
     public string? EntryPoint { get; set; }
-
-    // PowerSyncPathResolver only knows about desktop RIDs and throws on iOS/Android.
-    // Swallow that here so this static field can be referenced safely on mobile —
-    // platform-aware adapters (e.g. MAUI) intercept the sentinel before reading Path.
-    private static string TryResolveDefaultPowerSyncExtensionPath()
-    {
-        try { return PowerSyncPathResolver.GetNativeLibraryPath(AppContext.BaseDirectory); }
-        catch (PlatformNotSupportedException) { return string.Empty; }
-    }
 }
-
 
 public class MDSQLiteOptions
 {
@@ -118,11 +99,22 @@ public class MDSQLiteOptions
     public int? CacheSizeKb { get; set; }
 
     /// <summary>
-    /// Load SQLite extensions using the path and entryPoint. Defaults to
-    /// SqliteExtension.DEFAULT_POWERSYNC_EXTENSIONS. Remember to re-add
-    /// the DEFAULT_POWERSYNC_EXTENSION if modifying the list of extensions.
+    /// Additional SQLite extensions to load on every connection, in order. Defaults
+    /// to an empty list. The bundled PowerSync core extension is loaded separately
+    /// and controlled by <see cref="LoadPowerSyncExtension"/> — do not include it
+    /// here.
     /// </summary>
     public SqliteExtension[]? Extensions { get; set; }
+
+    /// <summary>
+    /// Whether to load the bundled PowerSync core SQLite extension on every
+    /// connection. Defaults to true and should remain true for normal use — the
+    /// rest of the library relies on the SQL functions and virtual tables it
+    /// registers (e.g. <c>powersync_init()</c>). Set to false only if you are
+    /// supplying an equivalent PowerSync-compatible extension via
+    /// <see cref="Extensions"/>.
+    /// </summary>
+    public bool? LoadPowerSyncExtension { get; set; }
 
     /// <summary>
     /// The number of MDSQLiteConnection objects to create for the read pool.
@@ -141,7 +133,8 @@ public class RequiredMDSQLiteOptions : MDSQLiteOptions
         TemporaryStorage = TemporaryStorageOption.MEMORY,
         LockTimeoutMs = 30000,
         EncryptionKey = null,
-        Extensions = SqliteExtension.DEFAULT_POWERSYNC_EXTENSIONS,
+        Extensions = [],
+        LoadPowerSyncExtension = true,
         ReadPoolSize = 5,
     };
 
@@ -160,6 +153,8 @@ public class RequiredMDSQLiteOptions : MDSQLiteOptions
     public new int CacheSizeKb { get; set; }
 
     public new SqliteExtension[] Extensions { get; set; } = null!;
+
+    public new bool LoadPowerSyncExtension { get; set; }
 
     public new int ReadPoolSize { get; set; }
 }

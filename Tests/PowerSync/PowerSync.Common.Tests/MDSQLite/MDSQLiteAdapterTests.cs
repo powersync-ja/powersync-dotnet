@@ -5,6 +5,7 @@ using Microsoft.Data.Sqlite;
 using PowerSync.Common.Client;
 using PowerSync.Common.MDSQLite;
 using PowerSync.Common.Tests.Utils;
+using PowerSync.Common.Utils;
 
 /// <summary>
 /// dotnet test -v n --framework net8.0 --filter "MDSQLiteAdapterTests"
@@ -19,35 +20,23 @@ public class MDSQLiteAdapterTests
         public string? make { get; set; }
     }
 
-    private static PowerSyncDatabase BuildDbWithExtensions(string dbFilename, SqliteExtension[] extensions)
+    [Fact]
+    public async Task DisablingCoreExtensionPreventsPowerSyncFromLoading()
     {
-        return new PowerSyncDatabase(new PowerSyncDatabaseOptions
+        var dbName = $"MDSQLiteAdapter-{Guid.NewGuid():N}.db";
+        var db = new PowerSyncDatabase(new PowerSyncDatabaseOptions
         {
             Database = new MDSQLiteDBOpenFactory(new MDSQLiteOpenFactoryOptions
             {
-                DbFilename = dbFilename,
-                SqliteOptions = new MDSQLiteOptions { Extensions = extensions },
+                DbFilename = dbName,
+                SqliteOptions = new MDSQLiteOptions
+                {
+                    LoadPowerSyncExtension = false,
+                    Extensions = [],
+                },
             }),
             Schema = TestSchema.AppSchema,
         });
-    }
-
-    private static string CopyDefaultExtensionToTempPath()
-    {
-        var sourcePath = SqliteExtension.DEFAULT_POWERSYNC_EXTENSION.Path;
-        var tempPath = Path.Combine(
-            Path.GetTempPath(),
-            $"powersync-ext-copy-{Guid.NewGuid():N}{Path.GetExtension(sourcePath)}"
-        );
-        File.Copy(sourcePath, tempPath, overwrite: true);
-        return tempPath;
-    }
-
-    [Fact]
-    public async Task EmptyExtensionsArrayDoesNotLoadPowerSync()
-    {
-        var name = $"MDSQLiteAdapter-ext-empty-{Guid.NewGuid():N}.db";
-        var db = BuildDbWithExtensions(name, []);
 
         try
         {
@@ -57,18 +46,36 @@ public class MDSQLiteAdapterTests
         finally
         {
             try { await db.Close(); } catch { /* expected — init failed */ }
-            DatabaseUtils.CleanDb(name);
+            DatabaseUtils.CleanDb(dbName);
         }
     }
 
     [Fact]
     public async Task LoadsCustomPowerSyncExtensionFromOverriddenPath()
     {
-        var name = $"MDSQLiteAdapter-ext-custom-{Guid.NewGuid():N}.db";
-        var customPath = CopyDefaultExtensionToTempPath();
-        var db = BuildDbWithExtensions(name, [
-            new SqliteExtension { Path = customPath, EntryPoint = "sqlite3_powersync_init" },
-        ]);
+        var dbName = $"MDSQLiteAdapter-{Guid.NewGuid():N}.db";
+        var sourcePath = PowerSyncPathResolver.GetNativeLibraryPath(AppContext.BaseDirectory);
+        var customPath = Path.Combine(
+            Path.GetTempPath(),
+            $"powersync-ext-copy-{Guid.NewGuid():N}{Path.GetExtension(sourcePath)}"
+        );
+        File.Copy(sourcePath, customPath, overwrite: true);
+
+        var db = new PowerSyncDatabase(new PowerSyncDatabaseOptions
+        {
+            Database = new MDSQLiteDBOpenFactory(new MDSQLiteOpenFactoryOptions
+            {
+                DbFilename = dbName,
+                SqliteOptions = new MDSQLiteOptions
+                {
+                    LoadPowerSyncExtension = false,
+                    Extensions = [
+                        new SqliteExtension { Path = customPath, EntryPoint = "sqlite3_powersync_init" },
+                    ],
+                },
+            }),
+            Schema = TestSchema.AppSchema,
+        });
 
         try
         {
@@ -82,7 +89,7 @@ public class MDSQLiteAdapterTests
         finally
         {
             await db.Close();
-            DatabaseUtils.CleanDb(name);
+            DatabaseUtils.CleanDb(dbName);
             try { File.Delete(customPath); } catch { /* best-effort cleanup */ }
         }
     }
