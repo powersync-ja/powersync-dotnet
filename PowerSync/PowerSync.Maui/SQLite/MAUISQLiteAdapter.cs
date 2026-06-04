@@ -15,20 +15,24 @@ public class MAUISQLiteAdapter : MDSQLiteAdapter
     {
     }
 
-    protected override void LoadExtension(SqliteConnection db)
+    // The bundled PowerSync extension lives in a platform-specific location on
+    // iOS/MacCatalyst/Android — the desktop runtime path used by the base class
+    // does not resolve to it. Override only the PowerSync-extension load hook;
+    // user-supplied custom extensions still flow through MDSQLiteAdapter.LoadExtensions
+    // unchanged, so consumers can freely combine the bundled extension (via the
+    // LoadPowerSyncExtension flag) with their own.
+    protected override void LoadDefaultPowerSyncExtension(SqliteConnection db)
     {
-        db.EnableExtensions(true);
-
 #if IOS || MACCATALYST
         LoadExtensionApple(db);
 #elif ANDROID
         db.LoadExtension("libpowersync");
 #else
-        base.LoadExtension(db);
+        base.LoadDefaultPowerSyncExtension(db);
 #endif
     }
 
-    private void LoadExtensionApple(SqliteConnection db)
+    private static void LoadExtensionApple(SqliteConnection db)
     {
 #if IOS || MACCATALYST
         var bundlePath = Foundation.NSBundle.FromIdentifier("co.powersync.sqlitecore")?.BundlePath;

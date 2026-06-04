@@ -217,24 +217,25 @@ public class EventStreamTests
 
         var cts = new CancellationTokenSource();
         var listener = stream.ListenAsync(cts.Token);
+        var tcs = new TaskCompletionSource<bool>();
         var sem = new SemaphoreSlim(0);
         int eventCount = 0;
 
         _ = Task.Run(async () =>
         {
-            sem.Release();
+            tcs.SetResult(true);
             await foreach (var evt in listener)
             {
                 eventCount++;
                 sem.Release();
             }
         }, cts.Token);
-        Assert.True(await sem.WaitAsync(100));
+        await tcs.Task;
 
         Assert.True(manager.Deregister<string>());
 
         Assert.False(manager.TryEmit("invalid"));
-        Assert.False(await sem.WaitAsync(100));
+        Assert.False(await sem.WaitAsync(500));
 
         // Cleanup
         cts.Cancel();

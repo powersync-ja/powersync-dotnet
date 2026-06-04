@@ -99,9 +99,22 @@ public class MDSQLiteOptions
     public int? CacheSizeKb { get; set; }
 
     /// <summary>
-    /// Load extensions using the path and entryPoint.
+    /// Additional SQLite extensions to load on every connection, in order. Defaults
+    /// to an empty list. The bundled PowerSync core extension is loaded separately
+    /// and controlled by <see cref="LoadPowerSyncExtension"/> — do not include it
+    /// here.
     /// </summary>
     public SqliteExtension[]? Extensions { get; set; }
+
+    /// <summary>
+    /// Whether to load the bundled PowerSync core SQLite extension on every
+    /// connection. Defaults to true and should remain true for normal use — the
+    /// rest of the library relies on the SQL functions and virtual tables it
+    /// registers (e.g. <c>powersync_init()</c>). Set to false only if you are
+    /// supplying an equivalent PowerSync-compatible extension via
+    /// <see cref="Extensions"/>.
+    /// </summary>
+    public bool? LoadPowerSyncExtension { get; set; }
 
     /// <summary>
     /// The number of MDSQLiteConnection objects to create for the read pool.
@@ -121,6 +134,7 @@ public class RequiredMDSQLiteOptions : MDSQLiteOptions
         LockTimeoutMs = 30000,
         EncryptionKey = null,
         Extensions = [],
+        LoadPowerSyncExtension = true,
         ReadPoolSize = 5,
     };
 
@@ -139,6 +153,8 @@ public class RequiredMDSQLiteOptions : MDSQLiteOptions
     public new int CacheSizeKb { get; set; }
 
     public new SqliteExtension[] Extensions { get; set; } = null!;
+
+    public new bool LoadPowerSyncExtension { get; set; }
 
     public new int ReadPoolSize { get; set; }
 }

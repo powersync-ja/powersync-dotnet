@@ -60,6 +60,7 @@ public class MDSQLiteAdapter : IDBAdapter
             LockTimeoutMs = options?.LockTimeoutMs ?? defaults.LockTimeoutMs,
             EncryptionKey = options?.EncryptionKey ?? defaults.EncryptionKey,
             Extensions = options?.Extensions ?? defaults.Extensions,
+            LoadPowerSyncExtension = options?.LoadPowerSyncExtension ?? defaults.LoadPowerSyncExtension,
             ReadPoolSize = options?.ReadPoolSize ?? defaults.ReadPoolSize,
         };
     }
@@ -105,7 +106,7 @@ public class MDSQLiteAdapter : IDBAdapter
             }
             return readConnection;
         };
-        readPool = new MDSQLiteConnectionPool(resolvedOptions, readConnectionFactory);
+        readPool = new MDSQLiteConnectionPool(resolvedOptions.ReadPoolSize, readConnectionFactory);
         await readPool.Init();
 
         // Register TablesUpdated listener
@@ -125,10 +126,25 @@ public class MDSQLiteAdapter : IDBAdapter
     protected async Task<MDSQLiteConnection> OpenConnection(string dbFilename)
     {
         var db = OpenDatabase(dbFilename);
-        LoadExtension(db);
+        LoadExtensions(db);
 
         var connection = new MDSQLiteConnection(new MDSQLiteConnectionOptions(db));
-        await connection.Execute("SELECT powersync_init()");
+        try
+        {
+            await connection.Execute("SELECT powersync_init()");
+        }
+        catch (SqliteException ex)
+        {
+            // SQLite will throw a very unhelpful "SQLite Error 1: 'The specified
+            // module could not be found.'" error if uncaught.
+            throw new SqliteException(
+                "Failed to initialize PowerSync: powersync_init() is not registered. " +
+                "Ensure the PowerSync core SQLite extension is loaded. Either set " +
+                "MDSQLiteOptions.LoadPowerSyncExtension to true (default), or supply " +
+                "a PowerSync-compatible extension via MDSQLiteOptions.Extensions.",
+                ex.SqliteErrorCode,
+                ex.SqliteExtendedErrorCode);
+        }
 
         return connection;
     }
@@ -141,11 +157,28 @@ public class MDSQLiteAdapter : IDBAdapter
         return connection;
     }
 
-    protected virtual void LoadExtension(SqliteConnection db)
+    protected virtual void LoadExtensions(SqliteConnection db)
     {
-        string extensionPath = PowerSyncPathResolver.GetNativeLibraryPath(AppContext.BaseDirectory);
         db.EnableExtensions(true);
-        db.LoadExtension(extensionPath, "sqlite3_powersync_init");
+        if (resolvedOptions.LoadPowerSyncExtension)
+        {
+            LoadDefaultPowerSyncExtension(db);
+        }
+        foreach (var extension in resolvedOptions.Extensions)
+        {
+            db.LoadExtension(extension.Path, extension.EntryPoint);
+        }
+    }
+
+    /// <summary>
+    /// Loads the bundled PowerSync core SQLite extension. Override on
+    /// platform-specific adapters (e.g. MAUI iOS/Android) where the native library
+    /// lives outside the desktop runtime path.
+    /// </summary>
+    protected virtual void LoadDefaultPowerSyncExtension(SqliteConnection db)
+    {
+        var path = PowerSyncPathResolver.GetNativeLibraryPath(AppContext.BaseDirectory);
+        db.LoadExtension(path, "sqlite3_powersync_init");
     }
 
     public async Task Close()
@@ -301,18 +334,16 @@ public class MDSQLiteAdapter : IDBAdapter
 
 class MDSQLiteConnectionPool
 {
-    private readonly RequiredMDSQLiteOptions _options;
     private readonly Channel<MDSQLiteConnection> _channel;
     private readonly int _poolSize;
     private readonly Func<Task<MDSQLiteConnection>> _connectionFactory;
 
     private readonly Task _initialized;
 
-    public MDSQLiteConnectionPool(RequiredMDSQLiteOptions options, Func<Task<MDSQLiteConnection>> connectionFactory)
+    public MDSQLiteConnectionPool(int poolSize, Func<Task<MDSQLiteConnection>> connectionFactory)
     {
-        _options = options;
-        _channel = Channel.CreateBounded<MDSQLiteConnection>(options.ReadPoolSize);
-        _poolSize = options.ReadPoolSize;
+        _channel = Channel.CreateBounded<MDSQLiteConnection>(poolSize);
+        _poolSize = poolSize;
         _connectionFactory = connectionFactory;
         _initialized = Initialize();
     }
@@ -362,32 +393,6 @@ class MDSQLiteConnectionPool
                 _channel.Writer.TryWrite(conn);
             }
         }
-    }
-
-    private async Task<MDSQLiteConnection> OpenConnection(string dbFilename)
-    {
-        var db = OpenDatabase(dbFilename);
-        LoadExtension(db);
-
-        var connection = new MDSQLiteConnection(new MDSQLiteConnectionOptions(db));
-        await connection.Execute("SELECT powersync_init()");
-
-        return connection;
-    }
-
-    private static SqliteConnection OpenDatabase(string dbFilename)
-    {
-        string connectionString = $"Data Source={dbFilename};Pooling=False;";
-        var connection = new SqliteConnection(connectionString);
-        connection.Open();
-        return connection;
-    }
-
-    private void LoadExtension(SqliteConnection db)
-    {
-        string extensionPath = PowerSyncPathResolver.GetNativeLibraryPath(AppContext.BaseDirectory);
-        db.EnableExtensions(true);
-        db.LoadExtension(extensionPath, "sqlite3_powersync_init");
     }
 
     public async Task Close()
