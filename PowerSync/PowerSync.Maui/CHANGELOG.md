@@ -1,6 +1,6 @@
 # PowerSync.Maui Changelog
 
-## 0.1.3-dev.1
+## 0.1.3
 
 - Upstream PowerSync.Common version bump (See Powersync.Common changelog 0.1.3 for more information)
 

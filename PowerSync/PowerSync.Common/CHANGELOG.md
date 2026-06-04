@@ -1,8 +1,9 @@
 # PowerSync.Common Changelog
 
-## 0.1.3-dev.1
+## 0.1.3
 
 - Add support for loading custom SQLite extensions via `MDSQLiteOptions.Extensions`.
+- Fix streaming sync retry loop reconnecting with no delay after an exception, ignoring `RetryDelayMs`.
 
 ## 0.1.2
 
