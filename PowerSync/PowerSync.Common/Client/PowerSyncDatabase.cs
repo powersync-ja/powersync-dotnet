@@ -130,7 +130,7 @@ public interface IPowerSyncDatabase : ICloseableAsync
 public class PowerSyncDatabase : IPowerSyncDatabase
 {
     public IDBAdapter Database { get; protected set; }
-    private CompiledSchema schema;
+    private Schema schema;
 
     private const int DEFAULT_WATCH_THROTTLE_MS = 30;
     private static readonly Regex POWERSYNC_TABLE_MATCH = new Regex(@"(^ps_data__|^ps_data_local__)", RegexOptions.Compiled);
@@ -199,7 +199,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         Closed = false;
         Ready = false;
 
-        schema = options.Schema.Compile();
+        schema = options.Schema;
         SdkVersion = "";
 
         remoteFactory = options.RemoteFactory ?? (connector => new Remote(connector));
@@ -402,7 +402,6 @@ public class PowerSyncDatabase : IPowerSyncDatabase
     /// </summary>
     public async Task UpdateSchema(Schema schema)
     {
-        CompiledSchema compiledSchema = schema.Compile();
         if (syncStreamImplementation != null)
         {
             throw new Exception("Cannot update schema while connected");
@@ -410,15 +409,15 @@ public class PowerSyncDatabase : IPowerSyncDatabase
 
         try
         {
-            compiledSchema.Validate();
+            schema.Validate();
         }
         catch (Exception ex)
         {
             Logger.LogWarning("Schema validation failed. Unexpected behavior could occur: {Exception}", ex);
         }
 
-        this.schema = compiledSchema;
-        await Database.Execute("SELECT powersync_replace_schema(?)", [compiledSchema.ToJSON()]);
+        this.schema = schema;
+        await Database.Execute("SELECT powersync_replace_schema(?)", [JsonConvert.SerializeObject(schema)]);
         await Database.RefreshSchema();
         Events.Emit(new PowerSyncDBEvents.SchemaChangedEvent(schema));
     }

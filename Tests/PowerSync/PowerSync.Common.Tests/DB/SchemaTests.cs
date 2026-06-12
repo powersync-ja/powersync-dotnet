@@ -11,10 +11,10 @@ using PowerSync.Common.Tests;
 /// </summary>
 public class SchemaTests
 {
-    private void TestParser(Type type, CompiledTable expected)
+    private void TestParser(Type type, Table expected)
     {
         var parser = new AttributeParser(type);
-        var table = parser.ParseTable().Compile();
+        var table = parser.ParseTable();
         Assert.Equivalent(expected, table, strict: true);
     }
 
@@ -48,7 +48,7 @@ public class SchemaTests
     [Fact]
     public void AttributeParser_Assets_Test()
     {
-        var expected = new CompiledTable(
+        var expected = new Table(
             "test_assets",
             new Dictionary<string, ColumnType>
             {
@@ -68,7 +68,7 @@ public class SchemaTests
                 LocalOnly = false,
                 InsertOnly = false,
                 ViewName = "test_assets_viewname",
-                TrackMetadata = true,
+                TrackMetadata = false,
                 TrackPreviousValues = null,
                 IgnoreEmptyUpdates = true,
             }
@@ -106,7 +106,7 @@ public class SchemaTests
     [Fact]
     public void AttributeParser_Products_Test()
     {
-        var expected = new CompiledTable(
+        var expected = new Table(
             "test_products",
             new Dictionary<string, ColumnType>
             {
@@ -176,7 +176,7 @@ public class SchemaTests
     [Fact]
     public void AttributeParser_Logs_Test()
     {
-        var expected = new CompiledTable(
+        var expected = new Table(
             "test_logs",
             new Dictionary<string, ColumnType>
             {
@@ -322,7 +322,7 @@ public class SchemaTests
     }
 
     [Fact]
-    public void CompiledSchema_ToJSON()
+    public void Schema_SerializesToJSON()
     {
         object expectedJson = new
         {
@@ -381,8 +381,6 @@ public class SchemaTests
                 },
             }
         };
-        var schema = TestSchemaTodoList.AppSchema.Compile();
-
-        Assert.Equal(JsonConvert.SerializeObject(expectedJson), schema.ToJSON());
+        Assert.Equal(JsonConvert.SerializeObject(expectedJson), JsonConvert.SerializeObject(TestSchemaTodoList.AppSchema));
     }
 }
