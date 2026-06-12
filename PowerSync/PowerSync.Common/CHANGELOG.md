@@ -2,8 +2,10 @@
 
 ## 0.1.3
 
+- **Breaking:** Made `Table.Name` non-nullable (default ""). This change may affect 0% of users, but it is technically a breaking change.
 - Add support for loading custom SQLite extensions via `MDSQLiteOptions.Extensions`.
 - Fix streaming sync retry loop reconnecting with no delay after an exception, ignoring `RetryDelayMs`.
+- (internal) Remove `Compiled*` classes in favor of working with `Table` and `Schema` objects directly.
 
 ## 0.1.2
 
