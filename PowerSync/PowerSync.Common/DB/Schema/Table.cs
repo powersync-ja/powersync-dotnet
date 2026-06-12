@@ -222,7 +222,10 @@ public class Table
 
             foreach (var column in indexColumns)
             {
-                if (!columnNames.Contains(column.TrimStart('-')))
+                // A leading "-" denotes a descending index on the column.
+                var columnName = column.StartsWith("-") ? column.Substring(1) : column;
+
+                if (!columnNames.Contains(columnName))
                 {
                     throw new Exception($"Column {column} not found for index {indexName}");
                 }
@@ -263,11 +266,12 @@ public class TableJsonConverter : JsonConverter<Table>
                 columns = index.Value.Select(column =>
                 {
                     // A leading "-" denotes a descending index on the column.
-                    var columnName = column.Replace("-", "");
+                    var descending = column.StartsWith("-");
+                    var columnName = descending ? column.Substring(1) : column;
                     return new
                     {
                         name = columnName,
-                        ascending = !column.StartsWith("-"),
+                        ascending = !descending,
                         type = (value.Columns.TryGetValue(columnName, out var columnType) ? columnType : default).ToString()
                     };
                 })

@@ -383,4 +383,61 @@ public class SchemaTests
         };
         Assert.Equal(JsonConvert.SerializeObject(expectedJson), JsonConvert.SerializeObject(TestSchemaTodoList.AppSchema));
     }
+
+    [Fact]
+    public void Schema_SerializesHyphenatedColumnNames()
+    {
+        object expectedJson = new
+        {
+            tables = new List<object>
+            {
+                new
+                {
+                    name = "events",
+                    view_name = "events",
+                    local_only = false,
+                    insert_only = false,
+                    columns = new List<object> {
+                        new { name = "created-at", type = "Text" },
+                    },
+                    indexes = new List<object> {
+                        new {
+                            name = "created",
+                            columns = new List<object> {
+                                new { name = "created-at", ascending = true, type = "Text" },
+                            }
+                        },
+                        new {
+                            name = "created_rev",
+                            columns = new List<object> {
+                                new { name = "created-at", ascending = false, type = "Text" },
+                            }
+                        }
+                    },
+                    include_metadata = false,
+                    ignore_empty_update = false,
+                    include_old = false,
+                    include_old_only_when_changed = false
+                },
+            }
+        };
+
+        var schema = new Schema(new Table
+        {
+            Name = "events",
+            Columns =
+            {
+                ["created-at"] = ColumnType.Text,
+            },
+            Indexes =
+            {
+                ["created"] = ["created-at"],
+                ["created_rev"] = ["-created-at"],
+            }
+        });
+
+        schema.Validate();
+
+        Assert.Equal(JsonConvert.SerializeObject(expectedJson), JsonConvert.SerializeObject(schema));
+    }
 }
