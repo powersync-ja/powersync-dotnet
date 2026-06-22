@@ -11,10 +11,10 @@ using PowerSync.Common.Tests;
 /// </summary>
 public class SchemaTests
 {
-    private void TestParser(Type type, CompiledTable expected)
+    private void TestParser(Type type, Table expected)
     {
         var parser = new AttributeParser(type);
-        var table = parser.ParseTable().Compile();
+        var table = parser.ParseTable();
         Assert.Equivalent(expected, table, strict: true);
     }
 
@@ -48,7 +48,7 @@ public class SchemaTests
     [Fact]
     public void AttributeParser_Assets_Test()
     {
-        var expected = new CompiledTable(
+        var expected = new Table(
             "test_assets",
             new Dictionary<string, ColumnType>
             {
@@ -68,7 +68,7 @@ public class SchemaTests
                 LocalOnly = false,
                 InsertOnly = false,
                 ViewName = "test_assets_viewname",
-                TrackMetadata = true,
+                TrackMetadata = false,
                 TrackPreviousValues = null,
                 IgnoreEmptyUpdates = true,
             }
@@ -106,7 +106,7 @@ public class SchemaTests
     [Fact]
     public void AttributeParser_Products_Test()
     {
-        var expected = new CompiledTable(
+        var expected = new Table(
             "test_products",
             new Dictionary<string, ColumnType>
             {
@@ -176,7 +176,7 @@ public class SchemaTests
     [Fact]
     public void AttributeParser_Logs_Test()
     {
-        var expected = new CompiledTable(
+        var expected = new Table(
             "test_logs",
             new Dictionary<string, ColumnType>
             {
@@ -322,7 +322,7 @@ public class SchemaTests
     }
 
     [Fact]
-    public void CompiledSchema_ToJSON()
+    public void Schema_SerializesToJSON()
     {
         object expectedJson = new
         {
@@ -381,8 +381,63 @@ public class SchemaTests
                 },
             }
         };
-        var schema = TestSchemaTodoList.AppSchema.Compile();
+        Assert.Equal(JsonConvert.SerializeObject(expectedJson), JsonConvert.SerializeObject(TestSchemaTodoList.AppSchema));
+    }
 
-        Assert.Equal(JsonConvert.SerializeObject(expectedJson), schema.ToJSON());
+    [Fact]
+    public void Schema_SerializesHyphenatedColumnNames()
+    {
+        object expectedJson = new
+        {
+            tables = new List<object>
+            {
+                new
+                {
+                    name = "events",
+                    view_name = "events",
+                    local_only = false,
+                    insert_only = false,
+                    columns = new List<object> {
+                        new { name = "created-at", type = "Text" },
+                    },
+                    indexes = new List<object> {
+                        new {
+                            name = "created",
+                            columns = new List<object> {
+                                new { name = "created-at", ascending = true, type = "Text" },
+                            }
+                        },
+                        new {
+                            name = "created_rev",
+                            columns = new List<object> {
+                                new { name = "created-at", ascending = false, type = "Text" },
+                            }
+                        }
+                    },
+                    include_metadata = false,
+                    ignore_empty_update = false,
+                    include_old = false,
+                    include_old_only_when_changed = false
+                },
+            }
+        };
+
+        var schema = new Schema(new Table
+        {
+            Name = "events",
+            Columns =
+            {
+                ["created-at"] = ColumnType.Text,
+            },
+            Indexes =
+            {
+                ["created"] = ["created-at"],
+                ["created_rev"] = ["-created-at"],
+            }
+        });
+
+        schema.Validate();
+
+        Assert.Equal(JsonConvert.SerializeObject(expectedJson), JsonConvert.SerializeObject(schema));
     }
 }
