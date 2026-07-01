@@ -8,6 +8,7 @@ namespace MAUITodo.Views;
 public partial class ListsPage
 {
     private readonly PowerSyncData database;
+    private CancellationTokenSource? _watchCts;
 
     public ListsPage(PowerSyncData powerSyncData)
     {
@@ -16,29 +17,39 @@ public partial class ListsPage
         WifiStatusItem.IconImageSource = "wifi_off.png";
     }
 
-    protected override async void OnAppearing()
+    protected override void OnAppearing()
     {
         base.OnAppearing();
 
+        _watchCts?.Cancel();
+        _watchCts = new CancellationTokenSource();
+        var ct = _watchCts.Token;
+
         _ = Task.Run(async () =>
         {
-            await foreach (var update in database.Db.Events.OnStatusChanged.ListenAsync(new CancellationToken()))
+            await foreach (var update in database.Db.Events.OnStatusChanged.ListenAsync(ct))
             {
                 MainThread.BeginInvokeOnMainThread(() =>
                 {
                     WifiStatusItem.IconImageSource = update.Status.Connected ? "wifi.png" : "wifi_off.png";
                 });
             }
-        });
+        }, ct);
 
-        var listener = database.Db.Watch<TodoList>("select * from lists", null, new() { TriggerImmediately = true });
+        var listener = database.Db.Watch<TodoList>("select * from lists", null, new() { TriggerImmediately = true, Signal = ct });
         _ = Task.Run(async () =>
         {
             await foreach (var results in listener)
             {
                 MainThread.BeginInvokeOnMainThread(() => { ListsCollection.ItemsSource = results.ToList(); });
             }
-        });
+        }, ct);
+    }
+
+    protected override void OnDisappearing()
+    {
+        base.OnDisappearing();
+        _watchCts?.Cancel();
     }
 
     private async void OnAddClicked(object sender, EventArgs e)

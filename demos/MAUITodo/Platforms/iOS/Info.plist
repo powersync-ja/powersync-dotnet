@@ -28,5 +28,9 @@
 	</array>
 	<key>XSAppIconAssets</key>
 	<string>Assets.xcassets/appicon.appiconset</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Used to attach photos to todo items.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Used to take photos to attach to todo items.</string>
 </dict>
 </plist>
