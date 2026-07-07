@@ -3,9 +3,10 @@
 	<PropertyGroup>
 	    <ApplicationId>com.companyname.todo</ApplicationId>
 
-		<TargetFrameworks>net8.0-android;net9.0-android</TargetFrameworks>
-		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net8.0-windows10.0.19041.0</TargetFrameworks>
-		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('osx'))">$(TargetFrameworks);net8.0-ios;net8.0-maccatalyst;net9.0-ios;net9.0-maccatalyst</TargetFrameworks>
+		<DefaultTargetFrameworks>net9.0-android;net10.0-android</DefaultTargetFrameworks>
+        <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('Linux'))">$(DefaultTargetFrameworks)</TargetFrameworks>
+		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('Windows'))">$(DefaultTargetFrameworks);net9.0-windows;net10.0-windows</TargetFrameworks>
+		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('OSX'))">$(DefaultTargetFrameworks);net9.0-ios;net9.0-maccatalyst;net10.0-ios;net10.0-maccatalyst</TargetFrameworks>
 		
 		<OutputType>Exe</OutputType>
 		<RootNamespace>MAUITodo</RootNamespace>
@@ -29,7 +30,7 @@
 		<WindowsAppSDKSelfContained Condition="'$(IsUnpackaged)' == 'true'">true</WindowsAppSDKSelfContained>
 		<SelfContained Condition="'$(IsUnpackaged)' == 'true'">true</SelfContained>
 	
-	    <MauiVersion>8.0.90</MauiVersion>
+        <MauiVersion>8.0.90</MauiVersion>
 
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">15.0</SupportedOSPlatformVersion>
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">15.0</SupportedOSPlatformVersion>
@@ -71,7 +72,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
-    	<ProjectReference Include="..\..\PowerSync\Powersync.Common\PowerSync.Common.csproj" />
-		<ProjectReference Include="..\..\PowerSync\Powersync.Maui\PowerSync.Maui.csproj" />
+    	<ProjectReference Include="..\..\PowerSync\PowerSync.Common\PowerSync.Common.csproj" />
+		<ProjectReference Include="..\..\PowerSync\PowerSync.Maui\PowerSync.Maui.csproj" />
   	</ItemGroup>
 </Project>

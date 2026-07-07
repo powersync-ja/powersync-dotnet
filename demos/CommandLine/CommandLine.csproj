@@ -3,7 +3,7 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <Version>0.0.1</Version>
-    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
     <LangVersion>12</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -12,13 +12,13 @@
   </PropertyGroup>
 
    <ItemGroup>
-    <PackageReference Include="Dotenv.Net" Version="3.2.1" />
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.1" />
-    <PackageReference Include="Spectre.Console" Version="0.49.1" />
+    <PackageReference Include="Dotenv.Net" Version="4.0.2" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.9" />
+    <PackageReference Include="Spectre.Console" Version="0.57.1" />
     <PackageReference Include="supabase" Version="1.1.1" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\PowerSync\Powersync.Common\PowerSync.Common.csproj" />
+    <ProjectReference Include="..\..\PowerSync\PowerSync.Common\PowerSync.Common.csproj" />
   </ItemGroup>
 </Project>

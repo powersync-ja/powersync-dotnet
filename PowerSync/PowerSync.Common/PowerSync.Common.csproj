@@ -1,7 +1,10 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.0;net6.0;net8.0;net9.0;net8.0-ios;net8.0-android;net8.0-maccatalyst;net9.0-ios;net9.0-android;net9.0-maccatalyst</TargetFrameworks>
+    <DefaultTargetFrameworks>net8.0;net9.0;net10.0;net9.0-android;net10.0-android</DefaultTargetFrameworks>
+    <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('OSX'))">$(DefaultTargetFrameworks);net9.0-ios;net10.0-ios;net9.0-maccatalyst;net10.0-maccatalyst</TargetFrameworks>
+    <TargetFrameworks Condition="!$([MSBuild]::IsOSPlatform('OSX'))">$(DefaultTargetFrameworks)</TargetFrameworks>
+
     <LangVersion>12</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -27,22 +30,26 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Dapper" Version="2.1.66" />
-    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="9.0.1" />
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.1" />
-    <PackageReference Include="Microsoft.Extensions.Logging" Version="6.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="6.0.0" />
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="Dapper" Version="2.1.79" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.9" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.9" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.9" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageReference Include="Nito.AsyncEx" Version="5.1.2" />
-    <PackageReference Include="System.Threading.Channels" Version="8.0.0" />
-    <PackageReference Include="ThrottleDebounce" Version="2.0.1" />
+    <PackageReference Include="System.Threading.Channels" Version="10.0.9" />
+    <PackageReference Include="ThrottleDebounce" Version="2.0.2" />
   </ItemGroup>
 
   <ItemGroup>
     <None Include="PowerSync.Common.targets" Pack="true" PackagePath="build\" />
     <None Include="PowerSync.Common.targets" Pack="true" PackagePath="buildTransitive\" />
   </ItemGroup>
-  
+
+  <ItemGroup>
+    <!-- Temporary workaround until vulnerability fixed: https://github.com/dotnet/efcore/issues/38257 -->
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" VersionOverride="3.0.3" />
+  </ItemGroup> 
+
   <!-- Check allows us to skip for all MAUI targets-->
   <!-- For monorepo-->
   <ItemGroup Condition="!$(TargetFramework.EndsWith('-android')) AND !$(TargetFramework.EndsWith('-ios')) AND !$(TargetFramework.EndsWith('-maccatalyst'))">
