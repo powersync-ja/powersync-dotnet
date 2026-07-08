@@ -31,7 +31,7 @@ jobs:
         run: dotnet restore
 
       - name: Install Android SDK for net8.0-android
-        run: dotnet build -t:InstallAndroidDependencies -f net8.0-android -p:AndroidSdkDirectory="$ANDROID_HOME" -p:AcceptAndroidSDKLicenses=true
+        run: dotnet build PowerSync/PowerSync.Common -t:InstallAndroidDependencies -f net8.0-android -p:AndroidSdkDirectory="$ANDROID_HOME" -p:AcceptAndroidSdkLicenses=True
 
       - name: Extract Common Package Version from CHANGELOG.md
         id: extract_version
