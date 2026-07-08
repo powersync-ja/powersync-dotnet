@@ -1,6 +1,6 @@
 # PowerSync.Common Changelog
 
-## 0.1.3
+## 0.1.3-dev.1
 
 - **Breaking:** Made `Table.Name` non-nullable (default ""). This change may affect 0% of users, but it is technically a breaking change.
 - Add support for loading custom SQLite extensions via `MDSQLiteOptions.Extensions`.
