@@ -9,7 +9,7 @@ using PowerSync.Common.Tests.Models;
 using PowerSync.Common.Tests.Utils;
 
 /// <summary>
-/// dotnet test -v n --framework net8.0 --filter "PowerSyncDatabaseTests"
+/// dotnet test -v n --framework net10.0 --filter "PowerSyncDatabaseTests"
 /// </summary>
 [Collection("PowerSyncDatabaseTests")]
 public class PowerSyncDatabaseTests : IAsyncLifetime

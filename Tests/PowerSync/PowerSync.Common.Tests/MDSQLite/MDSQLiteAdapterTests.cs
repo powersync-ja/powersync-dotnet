@@ -8,7 +8,7 @@ using PowerSync.Common.Tests.Utils;
 using PowerSync.Common.Utils;
 
 /// <summary>
-/// dotnet test -v n --framework net8.0 --filter "MDSQLiteAdapterTests"
+/// dotnet test -v n --framework net10.0 --filter "MDSQLiteAdapterTests"
 /// </summary>
 [Collection("MDSQLiteAdapterTests")]
 public class MDSQLiteAdapterTests

@@ -7,7 +7,7 @@ using PowerSync.Common.DB.Schema.Attributes;
 using PowerSync.Common.Tests;
 
 /// <summary>
-/// dotnet test -v n --framework net8.0 --filter "SchemaTests"
+/// dotnet test -v n --framework net10.0 --filter "SchemaTests"
 /// </summary>
 public class SchemaTests
 {
