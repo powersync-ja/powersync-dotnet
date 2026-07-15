@@ -678,6 +678,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
             },
             Schema = TestSchema.MakeOptionalSyncSchema(false)
         });
+        await db.Init();
 
         try
         {
