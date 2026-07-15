@@ -108,13 +108,13 @@ dotnet restore
 Run all tests
 
 ```bash
-dotnet test -v n --framework net8.0
+dotnet test -v n --framework net10.0
 ```
 
 Run a specific test
 
 ```bash
-dotnet test -v n --framework net8.0 --filter "test-file-pattern"  
+dotnet test -v n --framework net10.0 --filter "test-file-pattern"  
 ```
 
 ### Integration Tests
@@ -122,26 +122,26 @@ Integration tests in `PowerSync.Common.IntegrationTests` are intended to run aga
 The integration tests are disabled by default, define the following environment variable when running the tests.
 
 ```bash
-RUN_INTEGRATION_TESTS=true dotnet test -v n --framework net8.0
+RUN_INTEGRATION_TESTS=true dotnet test -v n --framework net10.0
 ```
 
 Only run integration tests, without any unit tests.
 
 ```bash
-RUN_INTEGRATION_TESTS=true dotnet test -v n --framework net8.0 --filter "Category=Integration"
+RUN_INTEGRATION_TESTS=true dotnet test -v n --framework net10.0 --filter "Category=Integration"
 ```
 
 ### Performance Tests
 Performance tests in `PowerSync.Common.PerformanceTests` are disabled by default, define the following environment variable when running the tests.
 
 ```bash
-RUN_PERFORMANCE_TESTS=true dotnet test -v n --framework net8.0
+RUN_PERFORMANCE_TESTS=true dotnet test -v n --framework net10.0
 ```
 
 Only run performance tests, without any unit tests.
 
 ```bash
-RUN_PERFORMANCE_TESTS=true dotnet test -v n --framework net8.0 --filter "Category=Performance"
+RUN_PERFORMANCE_TESTS=true dotnet test -v n --framework net10.0 --filter "Category=Performance"
 ```
 
 ## Using the PowerSync.Common package in your project

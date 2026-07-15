@@ -27,29 +27,29 @@ dotnet restore
 ### iOS
 
 ```sh
-dotnet build -t:Run -f:net8.0-ios
+dotnet build -t:Run -f:net10.0-ios
 ```
 
 Specifyng an iOS simulator
 
 ```sh
-dotnet build -t:Run -f:net8.0-ios -p:_DeviceName=:v2:udid=B1CA156A-56FC-4C3C-B35D-4BC349111FDF
+dotnet build -t:Run -f:net10.0-ios -p:_DeviceName=:v2:udid=B1CA156A-56FC-4C3C-B35D-4BC349111FDF
 ```
 
 ### Android
 
 ```sh
-dotnet build -t:Run -f:net8.0-android
+dotnet build -t:Run -f:net10.0-android
 ```
 
 Specifying an Android emulator
 
 ```sh
-dotnet build -t:Run -f:net8.0-android -p:_DeviceName=emulator-5554
+dotnet build -t:Run -f:net10.0-android -p:_DeviceName=emulator-5554
 ```
 
 ### MacCatalyst
 
 ```sh
-dotnet build -t:Run -f:net8.0-maccatalyst
+dotnet build -t:Run -f:net10.0-maccatalyst
 ```
