@@ -2,7 +2,7 @@ namespace MAUITodo.Models;
 
 using PowerSync.Common.DB.Schema.Attributes;
 
-[Table("lists")]
+[Table("lists", IgnoreEmptyUpdates = true)]
 public class TodoList
 {
     [Column("id")]

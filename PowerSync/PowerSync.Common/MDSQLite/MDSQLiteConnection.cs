@@ -21,11 +21,12 @@ public class MDSQLiteConnectionOptions(SqliteConnection database)
 public class MDSQLiteConnection : EventStream<DBAdapterEvents.TablesUpdatedEvent>, ILockContext
 {
     public SqliteConnection Db;
-    private readonly List<UpdateNotification> updateBuffer;
+    private readonly List<UpdateNotification> _updateBuffer;
+    private readonly object _updateBufferLock = new();
     public MDSQLiteConnection(MDSQLiteConnectionOptions options)
     {
         Db = options.Database;
-        updateBuffer = [];
+        _updateBuffer = [];
 
         raw.sqlite3_rollback_hook(Db.Handle, RollbackHook, IntPtr.Zero);
         raw.sqlite3_update_hook(Db.Handle, UpdateHook, IntPtr.Zero);
@@ -33,7 +34,10 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvents.TablesUpdatedEvent
 
     private void RollbackHook(object user_data)
     {
-        updateBuffer.Clear();
+        lock (_updateBufferLock)
+        {
+            _updateBuffer.Clear();
+        }
     }
 
     private void UpdateHook(object user_data, int type, utf8z database, utf8z table, long rowId)
@@ -45,17 +49,26 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvents.TablesUpdatedEvent
             23 => RowUpdateType.SQLITE_UPDATE,
             _ => throw new InvalidOperationException($"Unknown update type: {type}"),
         };
-        updateBuffer.Add(new UpdateNotification(table.utf8_to_string(), opType, rowId));
+        lock (_updateBufferLock)
+        {
+            _updateBuffer.Add(new UpdateNotification(table.utf8_to_string(), opType, rowId));
+        }
     }
 
     public void FlushUpdates()
     {
-        if (updateBuffer.Count == 0)
+        UpdateNotification[] updates;
+        lock (_updateBufferLock)
         {
-            return;
+            if (_updateBuffer.Count == 0)
+            {
+                return;
+            }
+            updates = _updateBuffer.ToArray();
+            _updateBuffer.Clear();
         }
 
-        var groupedUpdates = updateBuffer
+        var groupedUpdates = updates
             .GroupBy(update => update.Table)
             .ToDictionary(
                 group => group.Key,
@@ -65,11 +78,10 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvents.TablesUpdatedEvent
         var batchedUpdate = new BatchedUpdateNotification
         {
             GroupedUpdates = groupedUpdates,
-            RawUpdates = updateBuffer.ToArray(),
+            RawUpdates = updates.ToArray(),
             Tables = groupedUpdates.Keys.ToArray()
         };
 
-        updateBuffer.Clear();
         Emit(new DBAdapterEvents.TablesUpdatedEvent(batchedUpdate));
     }
 
