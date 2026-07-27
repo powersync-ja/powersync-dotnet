@@ -11,6 +11,14 @@ namespace PowerSync.Common.Client.Sync.Stream;
 /// </summary>
 public abstract class Instruction
 {
+    /// <summary>
+    /// Whether this instruction starts or stops a sync iteration
+    /// (<see cref="EstablishSyncStream"/> or <see cref="CloseSyncStream"/>).
+    /// Interrupting instructions are handled by the iteration control loop; all
+    /// other (non-interrupting) instructions are handled by
+    /// <c>HandleInstruction</c>.
+    /// </summary>
+    public virtual bool IsInterrupting => false;
 
     public static Instruction[] ParseInstructions(string rawResponse)
     {
@@ -62,6 +70,8 @@ public class LogLine : Instruction
 
 public class EstablishSyncStream : Instruction
 {
+    public override bool IsInterrupting => true;
+
     [JsonProperty("request")]
     public StreamingSyncRequest Request { get; set; } = null!;
 }
@@ -175,6 +185,8 @@ public class FetchCredentials : Instruction
 
 public class CloseSyncStream : Instruction
 {
+    public override bool IsInterrupting => true;
+
     [JsonProperty("hide_disconnect")]
     public bool HideDisconnect { get; set; }
 }

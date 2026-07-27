@@ -18,6 +18,17 @@ public static class PowerSyncControlCommand
     public const string NOTIFY_TOKEN_REFRESHED = "refreshed_token";
     public const string NOTIFY_CRUD_UPLOAD_COMPLETED = "completed_upload";
     public const string UPDATE_SUBSCRIPTIONS = "update_subscriptions";
+
+    /// <summary>
+    /// An `established` or `end` event for response streams.
+    /// </summary>
+    public const string CONNECTION_STATE = "connection";
+}
+
+public static class PowerSyncControlConnectionState
+{
+    public const string ESTABLISHED = "established";
+    public const string END = "end";
 }
 
 public class Checkpoint

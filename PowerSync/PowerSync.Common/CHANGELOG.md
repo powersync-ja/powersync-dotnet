@@ -1,5 +1,8 @@
 # PowerSync.Common Changelog
 
+## 0.1.4 (Unreleased)
+- Fix "No iteration is active" errors when a sync iteration ends
+
 ## 0.1.3
 
 - **Breaking:** Made `Table.Name` non-nullable (default ""). This change may affect 0% of users, but it is technically a breaking change.
