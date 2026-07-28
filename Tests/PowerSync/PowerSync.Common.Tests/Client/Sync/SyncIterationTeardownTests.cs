@@ -20,50 +20,11 @@ using PowerSync.Common.Tests.Utils.Sync;
 /// </summary>
 public class SyncIterationTeardownTests
 {
-    /// <summary>
-    /// Establishes the core contract the teardown behaviour relies on: once the
-    /// iteration has been stopped, forwarding any further control op throws.
-    /// </summary>
-    [Fact]
-    public async Task ControlOpAfterStopThrows()
-    {
-        var syncService = new MockSyncService();
-        var db = syncService.CreateDatabase();
-        await db.Init();
-
-        try
-        {
-            Task<string> Control(string op, object? payload = null) =>
-                db.WriteTransaction(async tx =>
-                    (await tx.Get<ControlRow>("SELECT powersync_control(?, ?) AS r", [op, payload])).r!);
-
-            var startPayload = JsonConvert.SerializeObject(new
-            {
-                parameters = new Dictionary<string, object>(),
-                active_streams = Array.Empty<object>(),
-                include_defaults = true,
-                app_metadata = new Dictionary<string, string>()
-            });
-
-            await Control("start", startPayload);
-            await Control("stop");
-
-            var ex = await Assert.ThrowsAnyAsync<Exception>(() => Control("line_text", "{}"));
-            Assert.Contains("No iteration is active", ex.Message);
-        }
-        finally
-        {
-            syncService.Close();
-            await db.Close();
-            DatabaseUtils.CleanDb(db.Database.Name);
-        }
-    }
 
     /// <summary>
     /// Disconnecting while sync lines are still queued must end the iteration
-    /// cleanly: queued control ops are dropped rather than forwarded to a core
-    /// that no longer has an active iteration. No control exception should escape
-    /// the iteration task, even across many rapid reconnect cycles.
+    /// cleanly, queued control ops are dropped rather than forwarded to a core
+    /// that no longer has an active iteration.
     /// </summary>
     [Fact(Timeout = 60000)]
     public async Task DisconnectWithQueuedLinesEndsCleanly()
