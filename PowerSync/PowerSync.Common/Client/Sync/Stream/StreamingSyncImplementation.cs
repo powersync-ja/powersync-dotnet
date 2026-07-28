@@ -573,11 +573,10 @@ public class StreamingSyncImplementation : ICloseable
             foreach (var instruction in await InvokePowerSyncControl(PowerSyncControlCommand.STOP))
             {
                 // Unconditionally ending the iteration, so interrupting instructions don't apply.
-                if (instruction.IsInterrupting)
+                if (instruction is NonInterruptingInstruction nonInterrupting)
                 {
-                    continue;
+                    await HandleInstruction(nonInterrupting);
                 }
-                await HandleInstruction(instruction);
             }
         }
 
@@ -588,7 +587,7 @@ public class StreamingSyncImplementation : ICloseable
             return Instruction.ParseInstructions(rawResponse);
         }
 
-        async Task HandleInstruction(Instruction instruction)
+        async Task HandleInstruction(NonInterruptingInstruction instruction)
         {
             switch (instruction)
             {
@@ -667,9 +666,9 @@ public class StreamingSyncImplementation : ICloseable
                 {
                     return new StreamingSyncIterationResult { ImmediateRestart = false };
                 }
-                else
+                else if (startInstruction is NonInterruptingInstruction nonInterrupting)
                 {
-                    await HandleInstruction(startInstruction);
+                    await HandleInstruction(nonInterrupting);
                 }
             }
 
@@ -736,7 +735,10 @@ public class StreamingSyncImplementation : ICloseable
                             close = true;
                             break;
                         }
-                        await HandleInstruction(instruction);
+                        if (instruction is NonInterruptingInstruction nonInterrupting)
+                        {
+                            await HandleInstruction(nonInterrupting);
+                        }
                     }
 
                     if (!hadSyncLine &&

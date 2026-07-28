@@ -11,15 +11,6 @@ namespace PowerSync.Common.Client.Sync.Stream;
 /// </summary>
 public abstract class Instruction
 {
-    /// <summary>
-    /// Whether this instruction starts or stops a sync iteration
-    /// (<see cref="EstablishSyncStream"/> or <see cref="CloseSyncStream"/>).
-    /// Interrupting instructions are handled by the iteration control loop; all
-    /// other (non-interrupting) instructions are handled by
-    /// <c>HandleInstruction</c>.
-    /// </summary>
-    public virtual bool IsInterrupting => false;
-
     public static Instruction[] ParseInstructions(string rawResponse)
     {
         var jsonArray = JArray.Parse(rawResponse);
@@ -59,7 +50,12 @@ public abstract class Instruction
     }
 }
 
-public class LogLine : Instruction
+/// <summary>
+/// An <see cref="Instruction"/> that doesn't start or stop a sync iteration.
+/// </summary>
+public abstract class NonInterruptingInstruction : Instruction { }
+
+public class LogLine : NonInterruptingInstruction
 {
     [JsonProperty("severity")]
     public string Severity { get; set; } = null!;  // "DEBUG", "INFO", "WARNING"
@@ -70,13 +66,11 @@ public class LogLine : Instruction
 
 public class EstablishSyncStream : Instruction
 {
-    public override bool IsInterrupting => true;
-
     [JsonProperty("request")]
     public StreamingSyncRequest Request { get; set; } = null!;
 }
 
-public class UpdateSyncStatus : Instruction
+public class UpdateSyncStatus : NonInterruptingInstruction
 {
     [JsonProperty("status")]
     public CoreSyncStatus Status { get; set; } = null!;
@@ -177,7 +171,7 @@ public class BucketProgress
     public int TargetCount { get; set; }
 }
 
-public class FetchCredentials : Instruction
+public class FetchCredentials : NonInterruptingInstruction
 {
     [JsonProperty("did_expire")]
     public bool DidExpire { get; set; }
@@ -185,14 +179,12 @@ public class FetchCredentials : Instruction
 
 public class CloseSyncStream : Instruction
 {
-    public override bool IsInterrupting => true;
-
     [JsonProperty("hide_disconnect")]
     public bool HideDisconnect { get; set; }
 }
 
-public class FlushFileSystem : Instruction { }
-public class DidCompleteSync : Instruction { }
+public class FlushFileSystem : NonInterruptingInstruction { }
+public class DidCompleteSync : NonInterruptingInstruction { }
 
 public class CoreInstructionHelpers
 {
