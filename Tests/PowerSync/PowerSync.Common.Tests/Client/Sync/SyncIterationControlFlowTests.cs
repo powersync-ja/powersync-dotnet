@@ -82,9 +82,7 @@ public class SyncIterationControlFlowTests
 
     /// <summary>
     /// When START asks for credentials, the refreshed token must still be
-    /// reported back to the core. `notifyTokenRefreshed` is only assigned after
-    /// the START instruction batch has been handled, so an awaited refresh
-    /// inside that batch drops the notification.
+    /// reported back to the core.
     /// Surfaces when the cached token is stale at connect time, e.g. resume from background.
     /// </summary>
     [Fact(Timeout = 15000)]

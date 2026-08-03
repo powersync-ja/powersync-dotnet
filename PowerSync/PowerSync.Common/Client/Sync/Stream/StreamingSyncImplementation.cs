@@ -659,12 +659,53 @@ public class StreamingSyncImplementation : ICloseable
             };
 
             StreamingSyncRequest? establishRequest = null;
+            IAsyncEnumerable<EnqueuedCommand>? commands = null;
+
             foreach (var startInstruction in await InvokePowerSyncControl(PowerSyncControlCommand.START, JsonConvert.SerializeObject(options)))
             {
                 if (startInstruction is EstablishSyncStream establish)
                 {
-                    controlInvocations = new EventStream<EnqueuedCommand>();
+                    var invocations = new EventStream<EnqueuedCommand>();
+                    controlInvocations = invocations;
                     establishRequest = establish.Request;
+
+                    // Subscribe before anything can emit, else the (possibly synchronous)
+                    // "established" event is lost.
+                    commands = invocations.ListenAsync(nestedCts.Token);
+
+                    // Wired up here rather than after this loop: a later instruction in this
+                    // same batch (FetchCredentials) already needs to enqueue a command.
+                    notifyCompletedUploads = () =>
+                    {
+                        if (!invocations.Closed)
+                        {
+                            invocations.Emit(new EnqueuedCommand
+                            {
+                                Command = PowerSyncControlCommand.NOTIFY_CRUD_UPLOAD_COMPLETED
+                            });
+                        }
+                    };
+                    handleActiveStreamsChange = () =>
+                    {
+                        if (!invocations.Closed)
+                        {
+                            invocations.Emit(new EnqueuedCommand
+                            {
+                                Command = PowerSyncControlCommand.UPDATE_SUBSCRIPTIONS,
+                                Payload = JsonConvert.SerializeObject(activeStreams)
+                            });
+                        }
+                    };
+                    notifyTokenRefreshed = () =>
+                    {
+                        if (!invocations.Closed)
+                        {
+                            invocations.Emit(new EnqueuedCommand
+                            {
+                                Command = PowerSyncControlCommand.NOTIFY_TOKEN_REFRESHED
+                            });
+                        }
+                    };
                 }
                 else if (startInstruction is CloseSyncStream)
                 {
@@ -681,49 +722,12 @@ public class StreamingSyncImplementation : ICloseable
                 return new StreamingSyncIterationResult { ImmediateRestart = false };
             }
 
-            var invocations = controlInvocations;
-
-            // Subscribe before reading starts, else the (possibly synchronous) "established"
-            // event is lost.
-            var commands = invocations.ListenAsync(nestedCts.Token);
-            receivingLines = ReceiveSyncLines(establishRequest!, invocations, nestedCts.Token);
-
-            notifyCompletedUploads = () =>
-            {
-                if (!invocations.Closed)
-                {
-                    invocations.Emit(new EnqueuedCommand
-                    {
-                        Command = PowerSyncControlCommand.NOTIFY_CRUD_UPLOAD_COMPLETED
-                    });
-                }
-            };
-            handleActiveStreamsChange = () =>
-            {
-                if (!invocations.Closed)
-                {
-                    invocations.Emit(new EnqueuedCommand
-                    {
-                        Command = PowerSyncControlCommand.UPDATE_SUBSCRIPTIONS,
-                        Payload = JsonConvert.SerializeObject(activeStreams)
-                    });
-                }
-            };
-            notifyTokenRefreshed = () =>
-            {
-                if (!invocations.Closed)
-                {
-                    invocations.Emit(new EnqueuedCommand
-                    {
-                        Command = PowerSyncControlCommand.NOTIFY_TOKEN_REFRESHED
-                    });
-                }
-            };
+            receivingLines = ReceiveSyncLines(establishRequest!, controlInvocations, nestedCts.Token);
 
             var hadSyncLine = false;
             try
             {
-                await foreach (var command in commands)
+                await foreach (var command in commands!)
                 {
                     var close = false;
                     foreach (var instruction in await InvokePowerSyncControl(command.Command, command.Payload))
