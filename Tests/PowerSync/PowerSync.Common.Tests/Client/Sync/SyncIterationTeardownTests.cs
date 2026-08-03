@@ -2,8 +2,6 @@ namespace PowerSync.Common.Tests.Client.Sync;
 
 using System.Collections.Concurrent;
 
-using Newtonsoft.Json;
-
 using PowerSync.Common.Client;
 using PowerSync.Common.Tests.Utils;
 using PowerSync.Common.Tests.Utils.Sync;
@@ -11,13 +9,17 @@ using PowerSync.Common.Tests.Utils.Sync;
 /// <summary>
 /// Verifies how a sync iteration tears down: once an iteration has ended, no
 /// further control op is forwarded to the core. The core rejects control ops
-/// after its iteration stops (see <see cref="ControlOpAfterStopThrows"/>), so
-/// forwarding a queued op after teardown would surface an unhandled exception.
-/// The control loop must therefore stop forwarding as soon as the iteration
-/// closes.
+/// after its iteration stops ("No iteration is active"), so forwarding a queued
+/// op after teardown would surface an unhandled exception. The control loop must
+/// therefore stop forwarding as soon as the iteration closes.
+///
+/// This hooks the process-wide <see cref="TaskScheduler.UnobservedTaskException"/>,
+/// so it filters on the core's error message rather than asserting the bag is
+/// empty - other collections run in parallel and would otherwise bleed in.
 ///
 /// dotnet test -v n --framework net8.0 --filter "SyncIterationTeardownTests"
 /// </summary>
+[Collection("SyncIterationTeardownTests")]
 public class SyncIterationTeardownTests
 {
 
@@ -82,6 +84,4 @@ public class SyncIterationTeardownTests
         Assert.True(leaked.Count == 0,
             $"Expected no control ops forwarded after teardown, but {leaked.Count} 'No iteration is active' exceptions escaped.");
     }
-
-    private record ControlRow(string? r);
 }
