@@ -528,7 +528,11 @@ public class StreamingSyncImplementation : ICloseable
 
                     if (completedTask == cancellationTcs.Task)
                     {
-                        // Cancellation was requested, exit the loop
+                        // Cancellation was requested, exit the loop. The read is still in
+                        // flight and faults once the stream is closed during teardown, so
+                        // observe it to keep that failure out of
+                        // TaskScheduler.UnobservedTaskException.
+                        _ = readTask.ContinueWith(t => { _ = t.Exception; }, TaskContinuationOptions.OnlyOnFaulted);
                         break;
                     }
 
