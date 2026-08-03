@@ -1,6 +1,7 @@
 # PowerSync.Common Changelog
 
 ## 0.1.4 (Unreleased)
+
 - Fix "No iteration is active" errors when a sync iteration ends
 
 ## 0.1.3

@@ -20,6 +20,7 @@ public class SyncIterationControlFlowTests
 {
     private const string EstablishOnly = @"[{""EstablishSyncStream"":{""request"":{}}}]";
     private const string NoInstructions = "[]";
+    private const string CloseWithoutHidingDisconnect = @"[{""CloseSyncStream"":{""hide_disconnect"":false}}]";
 
     /// <summary>
     /// A read failure while the stream is open must reach the outer retry loop,
@@ -149,7 +150,7 @@ public class SyncIterationControlFlowTests
                 PowerSyncControlCommand.START => EstablishOnly,
                 // The core closes the stream on the first line, leaving the next
                 // ReadLineAsync in flight.
-                PowerSyncControlCommand.PROCESS_TEXT_LINE => @"[{""CloseSyncStream"":{""hide_disconnect"":false}}]",
+                PowerSyncControlCommand.PROCESS_TEXT_LINE => CloseWithoutHidingDisconnect,
                 _ => NoInstructions
             });
 

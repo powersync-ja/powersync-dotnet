@@ -14,14 +14,17 @@ using PowerSync.Common.Tests.Utils.Sync;
 /// therefore stop forwarding as soon as the iteration closes.
 ///
 /// This hooks the process-wide <see cref="TaskScheduler.UnobservedTaskException"/>,
-/// so it filters on the core's error message rather than asserting the bag is
-/// empty - other collections run in parallel and would otherwise bleed in.
+/// so it only collects (and only observes) exceptions carrying the core's error
+/// message - other collections run in parallel, and claiming their exceptions
+/// would both bleed into this assertion and hide their own failures.
 ///
 /// dotnet test -v n --framework net8.0 --filter "SyncIterationTeardownTests"
 /// </summary>
 [Collection("SyncIterationTeardownTests")]
 public class SyncIterationTeardownTests
 {
+    /// <summary>What the core reports when a control op arrives after its iteration stopped.</summary>
+    private const string CoreIterationError = "No iteration is active";
 
     /// <summary>
     /// Disconnecting while sync lines are still queued must end the iteration
@@ -31,14 +34,17 @@ public class SyncIterationTeardownTests
     [Fact(Timeout = 60000)]
     public async Task DisconnectWithQueuedLinesEndsCleanly()
     {
-        var unobserved = new ConcurrentBag<string>();
+        var leaked = new ConcurrentBag<string>();
         void Handler(object? sender, UnobservedTaskExceptionEventArgs e)
         {
             foreach (var ex in e.Exception.Flatten().InnerExceptions)
             {
-                unobserved.Add(ex.Message);
+                if (ex.Message.Contains(CoreIterationError))
+                {
+                    leaked.Add(ex.Message);
+                    e.SetObserved();
+                }
             }
-            e.SetObserved();
         }
 
         TaskScheduler.UnobservedTaskException += Handler;
@@ -80,8 +86,7 @@ public class SyncIterationTeardownTests
             TaskScheduler.UnobservedTaskException -= Handler;
         }
 
-        var leaked = unobserved.Where(m => m.Contains("No iteration is active")).ToList();
-        Assert.True(leaked.Count == 0,
-            $"Expected no control ops forwarded after teardown, but {leaked.Count} 'No iteration is active' exceptions escaped.");
+        Assert.True(leaked.IsEmpty,
+            $"Expected no control ops forwarded after teardown, but {leaked.Count} '{CoreIterationError}' exceptions escaped.");
     }
 }

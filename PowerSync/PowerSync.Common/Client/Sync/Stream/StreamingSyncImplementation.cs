@@ -734,7 +734,7 @@ public class StreamingSyncImplementation : ICloseable
                     {
                         if (instruction is EstablishSyncStream)
                         {
-                            throw new Exception("Received EstablishSyncStream while already connected.");
+                            throw new InvalidOperationException("Received EstablishSyncStream while already connected.");
                         }
                         if (instruction is CloseSyncStream closeSyncStream)
                         {
