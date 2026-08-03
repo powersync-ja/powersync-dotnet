@@ -40,7 +40,7 @@ public abstract class Instruction
         if (json.ContainsKey("FetchCredentials"))
             return json["FetchCredentials"]!.ToObject<FetchCredentials>();
         if (json.ContainsKey("CloseSyncStream"))
-            return new CloseSyncStream();
+            return json["CloseSyncStream"]!.ToObject<CloseSyncStream>();
         if (json.ContainsKey("FlushFileSystem"))
             return new FlushFileSystem();
         if (json.ContainsKey("DidCompleteSync"))
