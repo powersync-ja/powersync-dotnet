@@ -15,7 +15,7 @@ public partial class App : Application
     }
 
     protected Window? MainWindow { get; private set; }
-    protected IHost? Host { get; private set; }
+    public IHost? Host { get; private set; }
 
     [SuppressMessage("Trimming", "IL2026:Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access otherwise can break functionality when trimming application code", Justification = "Uno.Extensions APIs are used in a way that is safe for trimming in this template context.")]
     protected async override void OnLaunched(LaunchActivatedEventArgs args)
@@ -67,8 +67,7 @@ public partial class App : Application
                 .UseLocalization()
                 .ConfigureServices((context, services) =>
                 {
-                    // TODO: Register your services
-                    //services.AddSingleton<IMyService, MyService>();
+                    services.AddSingleton<PowerSyncData>();
                 })
                 .UseNavigation(ReactiveViewModelMappings.ViewModelMappings, RegisterRoutes)
             );
@@ -87,15 +86,23 @@ public partial class App : Application
         views.Register(
             new ViewMap(ViewModel: typeof(ShellModel)),
             new ViewMap<MainPage, MainModel>(),
-            new DataViewMap<SecondPage, SecondModel, Entity>()
+            new ViewMap<ListsPage, ListsModel>(),
+            new ViewMap<SqlConsolePage, SqlConsoleModel>(),
+            new DataViewMap<TodoPage, TodoModel, TodoList>()
         );
 
         routes.Register(
             new RouteMap("", View: views.FindByViewModel<ShellModel>(),
                 Nested:
                 [
-                    new ("Main", View: views.FindByViewModel<MainModel>(), IsDefault:true),
-                    new ("Second", View: views.FindByViewModel<SecondModel>()),
+                    new ("Main", View: views.FindByViewModel<MainModel>(), IsDefault:true,
+                        Nested:
+                        [
+                            new ("Lists", View: views.FindByViewModel<ListsModel>(), IsDefault:true),
+                            new ("SqlConsole", View: views.FindByViewModel<SqlConsoleModel>()),
+                        ]
+                    ),
+                    new ("Todo", View: views.FindByViewModel<TodoModel>()),
                 ]
             )
         );
