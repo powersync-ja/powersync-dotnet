@@ -11,7 +11,6 @@ namespace PowerSync.Common.Client.Sync.Stream;
 /// </summary>
 public abstract class Instruction
 {
-
     public static Instruction[] ParseInstructions(string rawResponse)
     {
         var jsonArray = JArray.Parse(rawResponse);
@@ -41,7 +40,7 @@ public abstract class Instruction
         if (json.ContainsKey("FetchCredentials"))
             return json["FetchCredentials"]!.ToObject<FetchCredentials>();
         if (json.ContainsKey("CloseSyncStream"))
-            return new CloseSyncStream();
+            return json["CloseSyncStream"]!.ToObject<CloseSyncStream>();
         if (json.ContainsKey("FlushFileSystem"))
             return new FlushFileSystem();
         if (json.ContainsKey("DidCompleteSync"))
@@ -51,7 +50,12 @@ public abstract class Instruction
     }
 }
 
-public class LogLine : Instruction
+/// <summary>
+/// An <see cref="Instruction"/> that doesn't start or stop a sync iteration.
+/// </summary>
+public abstract class NonInterruptingInstruction : Instruction { }
+
+public class LogLine : NonInterruptingInstruction
 {
     [JsonProperty("severity")]
     public string Severity { get; set; } = null!;  // "DEBUG", "INFO", "WARNING"
@@ -66,7 +70,7 @@ public class EstablishSyncStream : Instruction
     public StreamingSyncRequest Request { get; set; } = null!;
 }
 
-public class UpdateSyncStatus : Instruction
+public class UpdateSyncStatus : NonInterruptingInstruction
 {
     [JsonProperty("status")]
     public CoreSyncStatus Status { get; set; } = null!;
@@ -167,7 +171,7 @@ public class BucketProgress
     public int TargetCount { get; set; }
 }
 
-public class FetchCredentials : Instruction
+public class FetchCredentials : NonInterruptingInstruction
 {
     [JsonProperty("did_expire")]
     public bool DidExpire { get; set; }
@@ -179,8 +183,8 @@ public class CloseSyncStream : Instruction
     public bool HideDisconnect { get; set; }
 }
 
-public class FlushFileSystem : Instruction { }
-public class DidCompleteSync : Instruction { }
+public class FlushFileSystem : NonInterruptingInstruction { }
+public class DidCompleteSync : NonInterruptingInstruction { }
 
 public class CoreInstructionHelpers
 {
