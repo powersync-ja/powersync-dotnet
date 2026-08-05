@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 using Newtonsoft.Json;
 
+using PowerSync.Common.Client.Sync.Stream;
 using PowerSync.Common.DB;
 using PowerSync.Common.DB.Crud;
 
@@ -20,8 +21,7 @@ public class SqliteBucketStorage : IBucketStorageAdapter
     public BucketStorageEvents Events { get; } = new();
 
     private readonly IDBAdapter db;
-    private bool hasCompletedSync;
-    private readonly HashSet<string> tableNames;
+
     private string? clientId;
 
     private readonly ILogger logger;
@@ -29,14 +29,10 @@ public class SqliteBucketStorage : IBucketStorageAdapter
     private readonly CancellationTokenSource updateCts;
     private readonly Task updateTask;
 
-    private record ExistingTableRowsResult(string name);
-
     public SqliteBucketStorage(IDBAdapter db, ILogger? logger = null)
     {
         this.db = db;
         this.logger = logger ?? NullLogger.Instance;
-        hasCompletedSync = false;
-        tableNames = [];
 
         updateCts = new CancellationTokenSource();
 
@@ -51,18 +47,6 @@ public class SqliteBucketStorage : IBucketStorageAdapter
                 }
             }
         });
-    }
-
-    public async Task Init()
-    {
-
-        hasCompletedSync = false;
-        var existingTableRows = await db.GetAll<ExistingTableRowsResult>("SELECT name FROM sqlite_master WHERE type='table' AND name GLOB 'ps_data_*'");
-
-        foreach (var row in existingTableRows)
-        {
-            tableNames.Add(row.name);
-        }
     }
 
     public void Close()
@@ -84,22 +68,16 @@ public class SqliteBucketStorage : IBucketStorageAdapter
         return clientId;
     }
 
-    public string GetMaxOpId()
+    /// <summary>
+    /// Reads the stored target checkpoint request id, or updates it when the update parameter is set.
+    /// </summary>
+    /// <returns>The previous checkpoint request.</returns>
+    private static Task<string?> TargetCheckpointRequestId(ILockContext tx, string? update = null)
     {
-        return MAX_OP_ID;
+        return tx.Get<string?>(
+            "SELECT CAST(powersync_control(?, ?) AS TEXT) AS r",
+            [PowerSyncControlCommand.TARGET_CHECKPOINT_REQUEST_ID, update]);
     }
-
-    private record LastSyncedResult(string? synced_at);
-    public async Task<bool> HasCompletedSync()
-    {
-        if (hasCompletedSync) return true;
-
-        var result = await db.Get<LastSyncedResult>("SELECT powersync_last_synced_at() as synced_at");
-
-        hasCompletedSync = result.synced_at != null;
-        return hasCompletedSync;
-    }
-
 
     private record ResultResult(object result);
 
@@ -116,28 +94,28 @@ public class SqliteBucketStorage : IBucketStorageAdapter
 
     public async Task<bool> UpdateLocalTarget(Func<Task<string>> callback)
     {
-        var rs1 = await db.GetAll(
-            "SELECT target_op FROM ps_buckets WHERE name = '$local' AND target_op = CAST(? as INTEGER)",
-            [GetMaxOpId()]
-        );
+        var seqBeforeResult = await db.ReadTransaction(async tx =>
+        {
+            var currentTarget = await TargetCheckpointRequestId(tx);
+            if (currentTarget != MAX_OP_ID)
+            {
+                // Nothing to update
+                return (long?)null;
+            }
 
-        if (rs1.Length == 0)
+            var rs = await tx.GetAll<SequenceResult>(
+                "SELECT seq FROM main.sqlite_sequence WHERE name = 'ps_crud'"
+            );
+
+            return rs.Length == 0 ? null : rs[0].seq;
+        });
+
+        if (seqBeforeResult is not { } seqBefore)
         {
             // Nothing to update
             return false;
         }
 
-        var rs = await db.GetAll<SequenceResult>(
-            "SELECT seq FROM main.sqlite_sequence WHERE name = 'ps_crud'"
-        );
-
-        if (rs.Length == 0)
-        {
-            // Nothing to update
-            return false;
-        }
-
-        long seqBefore = rs[0].seq;
         string opId = await callback();
 
         logger.LogDebug("[updateLocalTarget] Updating target to checkpoint {message}", opId);
@@ -170,14 +148,22 @@ public class SqliteBucketStorage : IBucketStorageAdapter
                 return false;
             }
 
-            var response = await tx.Execute(
-                "UPDATE ps_buckets SET target_op = CAST(? as INTEGER) WHERE name='$local'",
-                [opId]
-            );
-
-            logger.LogDebug("[updateLocalTarget] Response from updating target_op: {response}",
-                JsonConvert.SerializeObject(response));
+            await TargetCheckpointRequestId(tx, opId);
             return true;
+        });
+    }
+    public Task HandleCrudCheckpoint(long lastClientId, string? writeCheckpoint = null)
+    {
+        return db.WriteTransaction(async tx =>
+        {
+            await tx.Execute($"DELETE FROM {PSInternalTable.CRUD} WHERE id <= ?", [lastClientId]);
+
+            var crudRemaining = await tx.GetOptional<object>(
+                $"SELECT 1 as ignore FROM {PSInternalTable.CRUD} LIMIT 1") != null;
+
+            await TargetCheckpointRequestId(
+                tx,
+                !string.IsNullOrEmpty(writeCheckpoint) && !crudRemaining ? writeCheckpoint : MAX_OP_ID);
         });
     }
 
@@ -206,30 +192,7 @@ public class SqliteBucketStorage : IBucketStorageAdapter
         return new CrudBatch(
             Crud: all,
             HaveMore: true,
-            CompleteCallback: async (string? writeCheckpoint) =>
-            {
-                await db.WriteTransaction(async tx =>
-                {
-                    await tx.Execute("DELETE FROM ps_crud WHERE id <= ?", [last.ClientId]);
-
-                    if (!string.IsNullOrEmpty(writeCheckpoint))
-                    {
-                        var crudResult = await tx.GetAll<object>("SELECT 1 FROM ps_crud LIMIT 1");
-                        if (crudResult?.Length > 0)
-                        {
-                            await tx.Execute(
-                                "UPDATE ps_buckets SET target_op = CAST(? as INTEGER) WHERE name='$local'",
-                                [writeCheckpoint]);
-                        }
-                    }
-                    else
-                    {
-                        await tx.Execute(
-                            "UPDATE ps_buckets SET target_op = CAST(? as INTEGER) WHERE name='$local'",
-                            [GetMaxOpId()]);
-                    }
-                });
-            }
+            CompleteCallback: writeCheckpoint => HandleCrudCheckpoint(last.ClientId, writeCheckpoint)
         );
     }
 
@@ -245,7 +208,7 @@ public class SqliteBucketStorage : IBucketStorageAdapter
         return await db.GetOptional<object>("SELECT 1 as ignore FROM ps_crud LIMIT 1") != null;
     }
 
-    record ControlResult(string? r);
+    private record ControlResult(string? r);
 
     public async Task<string> Control(string op, object? payload = null)
     {

@@ -68,3 +68,15 @@ TestResults/
 
 # Ignore user id file
 user_id.txt
+
+# Agent working state: specs and tickets (see docs/agents/issue-tracker.md)
+.scratch/
+
+# Personal agent tooling — not part of the published repo
+.claude/
+.agents/
+plans/
+skills-lock.json
+CLAUDE.md
+CONTEXT.md
+docs/agents/

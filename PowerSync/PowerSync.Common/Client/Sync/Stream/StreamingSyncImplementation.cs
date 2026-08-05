@@ -634,8 +634,8 @@ public class StreamingSyncImplementation : ICloseable
 
                     }
                     break;
-                case FlushFileSystem:
-                    // ignore
+                case UnknownSyncInstruction unknown:
+                    logger.LogWarning("Unknown instruction from the core extension: {source}", unknown.Source);
                     break;
                 case DidCompleteSync:
                     UpdateSyncStatus(
@@ -898,11 +898,6 @@ public class StreamingSyncImplementation : ICloseable
                 return Task.CompletedTask;
             }
         });
-    }
-
-    public async Task<bool> HasCompletedSync()
-    {
-        return await Options.Adapter.HasCompletedSync();
     }
 
     public async Task WaitForReady()

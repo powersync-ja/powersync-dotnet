@@ -10,7 +10,7 @@ using System.IO.Compression;
 /// </summary>
 public class PowerSyncSetup
 {
-    private const string VERSION = "0.4.13";
+    private const string VERSION = "0.5.2";
 
     private const string GITHUB_BASE_URL = $"https://github.com/powersync-ja/powersync-sqlite-core/releases/download/v{VERSION}";
 

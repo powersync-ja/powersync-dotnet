@@ -278,9 +278,9 @@ public class SyncStreamStatusView : SyncStreamStatus
             Active = core.Active,
             IsDefault = core.IsDefault,
             HasExplicitSubscription = core.HasExplicitSubscription,
-            ExpiresAt = core.ExpiresAt != null ? DateTimeOffset.FromUnixTimeSeconds((long)core.ExpiresAt).DateTime : null,
+            ExpiresAt = CoreInstructionHelpers.FromCoreTimestamp(core.ExpiresAt),
             HasSynced = core.LastSyncedAt != null,
-            LastSyncedAt = core.LastSyncedAt != null ? DateTimeOffset.FromUnixTimeSeconds((long)core.LastSyncedAt).DateTime : null
+            LastSyncedAt = CoreInstructionHelpers.FromCoreTimestamp(core.LastSyncedAt)
         };
     }
 

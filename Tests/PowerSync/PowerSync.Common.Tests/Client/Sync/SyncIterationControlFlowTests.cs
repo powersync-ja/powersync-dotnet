@@ -252,13 +252,11 @@ public class SyncIterationControlFlowTests
             return Task.FromResult(respond(op, payload));
         }
 
-        public Task Init() => Task.CompletedTask;
         public Task<CrudEntry?> NextCrudItem() => Task.FromResult<CrudEntry?>(null);
         public Task<bool> HasCrud() => Task.FromResult(false);
         public Task<CrudBatch?> GetCrudBatch(int limit = 100) => Task.FromResult<CrudBatch?>(null);
-        public Task<bool> HasCompletedSync() => Task.FromResult(false);
         public Task<bool> UpdateLocalTarget(Func<Task<string>> callback) => Task.FromResult(false);
-        public string GetMaxOpId() => "9223372036854775807";
+        public Task HandleCrudCheckpoint(long lastClientId, string? writeCheckpoint = null) => Task.CompletedTask;
         public Task<string> GetClientId() => Task.FromResult("test-client");
         public void Close() { }
     }

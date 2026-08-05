@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -342,8 +343,9 @@ public class PowerSyncDatabase : IPowerSyncDatabase
 
     protected async Task Initialize(PowerSyncDatabaseOptions options)
     {
-        await BucketStorageAdapter.Init();
         await LoadVersion();
+        await Database.WriteTransaction(tx => tx.Execute("SELECT powersync_init()"));
+
         await UpdateSchema(options.Schema);
         await ResolveOfflineSyncStatus();
         await Database.Execute("PRAGMA RECURSIVE_TRIGGERS=TRUE");
@@ -355,7 +357,19 @@ public class PowerSyncDatabase : IPowerSyncDatabase
 
     private async Task LoadVersion()
     {
-        string sdkVersion = (await Database.Get<VersionResult>("SELECT powersync_rs_version() as version")).version;
+        string sdkVersion;
+        try
+        {
+            sdkVersion = (await Database.Get<VersionResult>("SELECT powersync_rs_version() as version")).version;
+        }
+        catch (SqliteException ex)
+        {
+            throw new SqliteException(
+                "Ensure the PowerSync core SQLite extension is loaded.",
+                ex.SqliteErrorCode,
+                ex.SqliteExtendedErrorCode);
+        }
+
         SdkVersion = sdkVersion;
 
         int[] versionInts;
@@ -369,14 +383,14 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         catch (Exception e)
         {
             throw new Exception(
-                $"Unsupported PowerSync extension version. Need >=0.4.5 <1.0.0, got: {sdkVersion}. Details: {e.Message}"
+                $"Unsupported PowerSync extension version. Need >=0.5.2 <0.6.0, got: {sdkVersion}. Details: {e.Message}"
             );
         }
 
-        // Validate version is >= 0.4.5 and < 1.0.0
-        if (versionInts[0] != 0 || versionInts[1] < 4 || (versionInts[1] == 4 && versionInts[2] < 5))
+        // Validate version is >= 0.5.2 and < 0.6.0
+        if (versionInts[0] != 0 || versionInts[1] != 5 || versionInts[2] < 2)
         {
-            throw new Exception($"Unsupported PowerSync extension version. Need >=0.4.5 <1.0.0, got: {sdkVersion}");
+            throw new Exception($"Unsupported PowerSync extension version. Need >=0.5.2 <0.6.0, got: {sdkVersion}");
         }
     }
 
@@ -417,7 +431,8 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         }
 
         this.schema = schema;
-        await Database.Execute("SELECT powersync_replace_schema(?)", [JsonConvert.SerializeObject(schema)]);
+        await Database.WriteTransaction(tx =>
+            tx.Execute("SELECT powersync_replace_schema(?)", [JsonConvert.SerializeObject(schema)]));
         await Database.RefreshSchema();
         Events.Emit(new PowerSyncDBEvents.SchemaChangedEvent(schema));
     }
@@ -649,29 +664,9 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         });
     }
 
-    public async Task HandleCrudCheckpoint(long lastClientId, string? writeCheckpoint = null)
+    public Task HandleCrudCheckpoint(long lastClientId, string? writeCheckpoint = null)
     {
-        await Database.WriteTransaction(async (tx) =>
-        {
-            await tx.Execute($"DELETE FROM {PSInternalTable.CRUD} WHERE id <= ?", [lastClientId]);
-            if (!string.IsNullOrEmpty(writeCheckpoint))
-            {
-                var check = await tx.GetAll<object>($"SELECT 1 FROM {PSInternalTable.CRUD} LIMIT 1");
-                if (check.Length == 0)
-                {
-
-                    await tx.Execute($"UPDATE {PSInternalTable.BUCKETS} SET target_op = CAST(? as INTEGER) WHERE name='$local'", [
-                      writeCheckpoint
-                    ]);
-                }
-            }
-            else
-            {
-                await tx.Execute(
-                    $"UPDATE {PSInternalTable.BUCKETS} SET target_op = CAST(? as INTEGER) WHERE name = '$local'",
-                    [BucketStorageAdapter.GetMaxOpId()]);
-            }
-        });
+        return BucketStorageAdapter.HandleCrudCheckpoint(lastClientId, writeCheckpoint);
     }
 
     /// <summary>
