@@ -51,7 +51,8 @@ internal class WatchManager
             initialTables: options.Tables != null ? ExpandTableNames(options.Tables) : null,
             // Don't flush updates mid-cancellation, since that may involve expensive
             // database operations.
-            flushOnCancel: false
+            flushOnCancel: false,
+            refreshOnSchemaChange: true
         );
 
         return Stream(subscription, _ => db.GetAll<T>(sql, parameters));
@@ -68,9 +69,12 @@ internal class WatchManager
             initialTables: tables,
             // Deliver changes accumulated during the throttle window even if cancellation
             // lands before the window expires.
-            flushOnCancel: true
+            flushOnCancel: true,
+            refreshOnSchemaChange: false
         );
 
+        // TODO: powersync-js onChange returns table names in `ps_data__{table}` format.
+        //       We should make a decision on whether or not to mirror that before v1.
         return Stream(subscription, changed => Task.FromResult(new WatchOnChangeEvent
         {
             ChangedTables = [.. changed.Select(InternalToFriendlyTableName)]
@@ -81,7 +85,8 @@ internal class WatchManager
         SQLWatchOptions options,
         Func<Task<HashSet<string>>> resolveTables,
         HashSet<string>? initialTables,
-        bool flushOnCancel
+        bool flushOnCancel,
+        bool refreshOnSchemaChange
     )
     {
         var cts = options.Signal != null
@@ -94,6 +99,7 @@ internal class WatchManager
             options.ThrottleMs ?? DEFAULT_THROTTLE_MS,
             options.TriggerImmediately,
             flushOnCancel,
+            refreshOnSchemaChange,
             cts
         );
 
@@ -225,6 +231,7 @@ internal class WatchSubscription
     private readonly Func<Task<HashSet<string>>> resolveTables;
     private readonly int throttleMs;
     private readonly bool flushOnCancel;
+    private readonly bool refreshOnSchemaChange;
     // Static table sets (explicit SQLWatchOptions.Tables) survive schema refreshes: only the
     // underlying data changes, never the expansion, so a refresh re-runs the query without
     // discarding the set.
@@ -248,12 +255,14 @@ internal class WatchSubscription
         int throttleMs,
         bool triggerImmediately,
         bool flushOnCancel,
+        bool refreshOnSchemaChange,
         CancellationTokenSource cts
     )
     {
         this.resolveTables = resolveTables;
         this.throttleMs = throttleMs;
         this.flushOnCancel = flushOnCancel;
+        this.refreshOnSchemaChange = refreshOnSchemaChange;
         staticTables = initialTables != null;
         tables = initialTables;
         Cts = cts;
@@ -294,6 +303,8 @@ internal class WatchSubscription
     {
         lock (mutex)
         {
+            if (!refreshOnSchemaChange) return;
+
             refreshRequested = true;
             if (!staticTables) tables = null;
         }
