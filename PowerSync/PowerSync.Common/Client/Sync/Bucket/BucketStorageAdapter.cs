@@ -19,6 +19,8 @@ public static class PowerSyncControlCommand
     public const string NOTIFY_CRUD_UPLOAD_COMPLETED = "completed_upload";
     public const string UPDATE_SUBSCRIPTIONS = "update_subscriptions";
 
+    public const string TARGET_CHECKPOINT_REQUEST_ID = "target_checkpoint_request_id";
+
     /// <summary>
     /// An `established` or `end` event for response streams.
     /// </summary>
@@ -128,16 +130,14 @@ public class BucketStorageEvents : EventManager
 public interface IBucketStorageAdapter : ICloseable
 {
     BucketStorageEvents Events { get; }
-    Task Init();
 
     Task<CrudEntry?> NextCrudItem();
     Task<bool> HasCrud();
     Task<CrudBatch?> GetCrudBatch(int limit = 100);
 
-    Task<bool> HasCompletedSync();
     Task<bool> UpdateLocalTarget(Func<Task<string>> callback);
 
-    string GetMaxOpId();
+    Task HandleCrudCheckpoint(long lastClientId, string? writeCheckpoint = null);
 
     /// <summary>
     /// Get a unique client ID.

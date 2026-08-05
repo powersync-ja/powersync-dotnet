@@ -18,35 +18,28 @@ public abstract class Instruction
 
         foreach (JObject item in jsonArray)
         {
-            var instruction = ParseInstruction(item);
-            if (instruction == null)
-            {
-                throw new JsonSerializationException("Failed to parse instruction from JSON.");
-            }
-            instructions.Add(instruction);
+            instructions.Add(ParseInstruction(item));
         }
 
         return instructions.ToArray();
     }
 
-    public static Instruction? ParseInstruction(JObject json)
+    public static Instruction ParseInstruction(JObject json)
     {
         if (json.ContainsKey("LogLine"))
-            return json["LogLine"]!.ToObject<LogLine>();
+            return json["LogLine"]!.ToObject<LogLine>()!;
         if (json.ContainsKey("UpdateSyncStatus"))
-            return json["UpdateSyncStatus"]!.ToObject<UpdateSyncStatus>();
+            return json["UpdateSyncStatus"]!.ToObject<UpdateSyncStatus>()!;
         if (json.ContainsKey("EstablishSyncStream"))
-            return json["EstablishSyncStream"]!.ToObject<EstablishSyncStream>();
+            return json["EstablishSyncStream"]!.ToObject<EstablishSyncStream>()!;
         if (json.ContainsKey("FetchCredentials"))
-            return json["FetchCredentials"]!.ToObject<FetchCredentials>();
+            return json["FetchCredentials"]!.ToObject<FetchCredentials>()!;
         if (json.ContainsKey("CloseSyncStream"))
-            return json["CloseSyncStream"]!.ToObject<CloseSyncStream>();
-        if (json.ContainsKey("FlushFileSystem"))
-            return new FlushFileSystem();
+            return json["CloseSyncStream"]!.ToObject<CloseSyncStream>()!;
         if (json.ContainsKey("DidCompleteSync"))
             return new DidCompleteSync();
 
-        throw new JsonSerializationException("Unknown Instruction type.");
+        return new UnknownSyncInstruction(json);
     }
 }
 
@@ -183,18 +176,35 @@ public class CloseSyncStream : Instruction
     public bool HideDisconnect { get; set; }
 }
 
-public class FlushFileSystem : NonInterruptingInstruction { }
 public class DidCompleteSync : NonInterruptingInstruction { }
+
+public class UnknownSyncInstruction(JObject source) : NonInterruptingInstruction
+{
+    public JObject Source { get; } = source;
+}
 
 public class CoreInstructionHelpers
 {
+    /// <summary>
+    /// Decodes a core extension timestamp.
+    /// </summary>
+    public static DateTime? FromCoreTimestamp(long? microseconds)
+    {
+        // 1 microsecond = 10 ticks.
+        return microseconds.HasValue
+            ? UnixEpochUtc.AddTicks(microseconds.Value * 10)
+            : null;
+    }
+
+    private static readonly DateTime UnixEpochUtc = new(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
     public static DB.Crud.SyncPriorityStatus PriorityToStatus(SyncPriorityStatus status)
     {
         return new DB.Crud.SyncPriorityStatus
         {
             Priority = status.Priority,
             HasSynced = status.HasSynced,
-            LastSyncedAt = status?.LastSyncedAt != null ? DateTimeOffset.FromUnixTimeSeconds(status!.LastSyncedAt).DateTime : null
+            LastSyncedAt = FromCoreTimestamp(status.LastSyncedAt)
         };
     }
 
