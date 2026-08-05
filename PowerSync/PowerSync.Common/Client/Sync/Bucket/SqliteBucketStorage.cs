@@ -74,6 +74,8 @@ public class SqliteBucketStorage : IBucketStorageAdapter
     /// <returns>The previous checkpoint request.</returns>
     private static Task<string?> TargetCheckpointRequestId(ILockContext tx, string? update = null)
     {
+        // TODO Note that we are only casting in Dart/JS because this returns a 64-bit integer we can't natively represent there.
+        // Turning MAX_OP_ID into a 64-bit integer here and comparing ints would be better.
         return tx.Get<string?>(
             "SELECT CAST(powersync_control(?, ?) AS TEXT) AS r",
             [PowerSyncControlCommand.TARGET_CHECKPOINT_REQUEST_ID, update]);
