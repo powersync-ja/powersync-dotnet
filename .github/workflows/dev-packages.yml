@@ -150,13 +150,13 @@ jobs:
           user: ${{ vars.NUGET_USERNAME }}
 
       - name: Run Push For Common
-        run: |
-          dotnet nuget push ${{ github.workspace }}/SignedArtifacts/PowerSync.Common*.nupkg \
-          --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" \
+        run: >
+          dotnet nuget push "${{ github.workspace }}/SignedArtifacts/PowerSync.Common*.nupkg"
+          --api-key "${{ steps.login.outputs.NUGET_API_KEY }}"
           --source https://api.nuget.org/v3/index.json
 
       - name: Run Push For Maui
-        run: |
-          dotnet nuget push ${{ github.workspace }}/SignedArtifacts/PowerSync.Maui*.nupkg \
-          --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" \
+        run: >
+          dotnet nuget push "${{ github.workspace }}/SignedArtifacts/PowerSync.Maui*.nupkg"
+          --api-key "${{ steps.login.outputs.NUGET_API_KEY }}"
           --source https://api.nuget.org/v3/index.json
