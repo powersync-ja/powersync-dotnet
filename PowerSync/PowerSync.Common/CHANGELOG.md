@@ -1,6 +1,6 @@
 # PowerSync.Common Changelog
 
-## 0.1.4
+## 0.1.4-dev.2
 
 - Update the PowerSync SQLite core extension to 0.5.2.
 - Fix "No iteration is active" errors when a sync iteration ends
