@@ -60,12 +60,6 @@ jobs:
       - name: Run Pack For MAUI
         run: dotnet pack PowerSync/PowerSync.Maui -c Release -o ${{ github.workspace }}/output
 
-      - name: Upload Signing File List
-        uses: actions/upload-artifact@v4
-        with:
-          name: config
-          path: config
-
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -81,13 +75,6 @@ jobs:
       id-token: write
       contents: read
 
-    steps:
-    - name: Download signing config
-      uses: actions/download-artifact@v4
-      with:
-        name: config
-        path: config
-        
     - name: Download build artifacts
       uses: actions/download-artifact@v4
       with:
