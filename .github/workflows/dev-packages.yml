@@ -115,7 +115,6 @@ jobs:
         ./sign code azure-key-vault
         **/*.nupkg
         --base-directory "${{ github.workspace }}/BuildArtifacts"
-        --file-list "${{ github.workspace }}/config/filelist.txt"
         --publisher-name "PowerSync"
         --description "PowerSync .NET SDK"
         --description-url "https://github.com/powersync-ja/powersync-dotnet"
