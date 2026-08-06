@@ -10,6 +10,9 @@ jobs:
     environment: production
     if: github.ref == 'refs/heads/main'
 
+    permissions:
+      contents: read
+
     outputs:
       common_version: ${{ steps.extract_version.outputs.common_version }}
       maui_version: ${{ steps.extract_maui_version.outputs.maui_version }}
