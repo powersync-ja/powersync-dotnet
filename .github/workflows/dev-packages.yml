@@ -147,7 +147,7 @@ jobs:
         id: login
         uses: NuGet/login@v1
         with:
-          user: PowerSync
+          user: ${{ vars.NUGET_USERNAME }}
 
       - name: Run Push For Common
         run: |
