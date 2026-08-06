@@ -116,6 +116,7 @@ jobs:
           --publisher-name "PowerSync"
           --description "PowerSync .NET SDK"
           --description-url "https://github.com/powersync-ja/powersync-dotnet"
+          --timestamp-url "http://timestamp.digicert.com"
           --azure-credential-type "azure-cli"
           --azure-key-vault-url "${{ vars.KEY_VAULT_URL }}"
           --azure-key-vault-certificate "${{ vars.KEY_VAULT_CERTIFICATE_ID }}"
