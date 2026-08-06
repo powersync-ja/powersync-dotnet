@@ -132,6 +132,7 @@ jobs:
   publish:
     needs: [build, sign]
     name: Publish NuGet Packages
+    runs-on: windows-latest
 
     permissions:
       id-token: write
