@@ -2,7 +2,13 @@
 # Add a `-dev.xxx` suffix to the version. Example: `0.0.1-dev.1`
 name: Create Dev Release
 
-on: workflow_dispatch
+on:
+  workflow_dispatch:
+  # TODO ALERT ALERT ALERT VERY TEMPORARY TRIGGER ALERT ALERT ALERT DO NOT MERGE THIS ALERT ALERT ALERT
+  # GitHub won't allow manual workflow dispatch on a new workflow, so use push as a workaround while testing
+  push:
+    branches:
+      - tmp/code-signing-dev
 
 jobs:
   build:
