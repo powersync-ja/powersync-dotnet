@@ -1,9 +1,10 @@
 # PowerSync.Common Changelog
 
-## 0.1.4 (Unreleased)
+## 0.1.4
 
 - Update the PowerSync SQLite core extension to 0.5.2.
 - Fix "No iteration is active" errors when a sync iteration ends
+- (internal) Move watched query handling out of `PowerSyncDatabase` into a dedicated `WatchManager`. `Watch` and `OnChange` are now thin wrappers over it.
 
 ## 0.1.3
 
