@@ -1,10 +1,12 @@
 namespace PowerSync.Common.Tests.Client;
 
+using System.Collections.Concurrent;
 using System.Diagnostics;
 
 using Microsoft.Data.Sqlite;
 
 using PowerSync.Common.Client;
+using PowerSync.Common.DB.Schema;
 using PowerSync.Common.Tests.Models;
 using PowerSync.Common.Tests.Utils;
 
@@ -678,6 +680,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
             },
             Schema = TestSchema.MakeOptionalSyncSchema(false)
         });
+        await db.Init();
 
         try
         {
@@ -1045,6 +1048,55 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.True(await tcs.Task);
         // The flush-on-cancel should still deliver the accumulated event
         Assert.Equal(1, eventCount);
+    }
+
+    [Fact(Timeout = 5000)]
+    public async Task OnChange_SchemaChangeDoesNotEmitEvent()
+    {
+        var events = new ConcurrentQueue<WatchOnChangeEvent>();
+        using var sem = new SemaphoreSlim(0);
+
+        var listener = db.OnChange(new SQLWatchOptions
+        {
+            Tables = ["assets"],
+            Signal = testCts.Token,
+        });
+
+        _ = Task.Run(async () =>
+        {
+            await foreach (var change in listener)
+            {
+                events.Enqueue(change);
+                sem.Release();
+            }
+        }, testCts.Token);
+
+        // Replace the schema without modifying the watched table.
+        await db.UpdateSchema(new Schema(
+            TestSchema.Assets,
+            new Table
+            {
+                Name = "customers",
+                Columns =
+                {
+                    ["name"] = ColumnType.Text,
+                    ["email"] = ColumnType.Text,
+                    ["phone"] = ColumnType.Text,
+                }
+            }));
+
+        // A schema change by itself shouldn't fire an OnChange event, since that would lead to empty events
+        // in the case of no underlying data update.
+        Assert.False(await sem.WaitAsync(300));
+        Assert.Empty(events);
+
+        // Real changes must still be reported after the schema change.
+        await TestUtils.InsertRandomAsset(db);
+
+        Assert.True(await sem.WaitAsync(500));
+        Assert.Single(events);
+        Assert.True(events.TryDequeue(out var change));
+        Assert.Equal(["assets"], change.ChangedTables);
     }
 
     [Fact]

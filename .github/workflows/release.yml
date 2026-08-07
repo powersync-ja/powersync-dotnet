@@ -4,10 +4,18 @@ name: Release
 on: workflow_dispatch
 
 jobs:
-  release:
-    name: Release
+  build:
+    name: Build Packages
     runs-on: macos-latest
+    environment: production
     if: github.ref == 'refs/heads/main'
+
+    permissions:
+      contents: read
+
+    outputs:
+      common_version: ${{ steps.extract_version.outputs.common_version }}
+      maui_version: ${{ steps.extract_maui_version.outputs.maui_version }}
 
     steps:
       - name: Checkout Repository
@@ -43,14 +51,10 @@ jobs:
           fi
           echo "Detected Version: $COMMON_VERSION"
           echo "VERSION=$COMMON_VERSION" >> $GITHUB_ENV
-          echo "COMMON_VERSION=$COMMON_VERSION" >> $GITHUB_ENV
+          echo "common_version=$COMMON_VERSION" >> $GITHUB_OUTPUT
 
-      - name: Run Pack for Common
+      - name: Run Pack For Common
         run: dotnet pack PowerSync/PowerSync.Common -c Release -o ${{ github.workspace }}/output
-
-      - name: Run Push for Common
-        continue-on-error: true
-        run: dotnet nuget push ${{ github.workspace }}/output/PowerSync.Common*.nupkg --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }}
 
       - name: Extract MAUI Package Version from CHANGELOG.md
         id: extract_maui_version
@@ -63,31 +67,138 @@ jobs:
           fi
           echo "Detected Version: $MAUI_VERSION"
           echo "VERSION=$MAUI_VERSION" >> $GITHUB_ENV
-          echo "MAUI_VERSION=$MAUI_VERSION" >> $GITHUB_ENV
-
-      - name: Build MAUI Project
-        run: dotnet build PowerSync/PowerSync.Maui -c Release
+          echo "maui_version=$MAUI_VERSION" >> $GITHUB_OUTPUT
 
       - name: Run Pack For MAUI
         run: dotnet pack PowerSync/PowerSync.Maui -c Release -o ${{ github.workspace }}/output
 
-      - name: Run Push For MAUI
-        continue-on-error: true
-        run: dotnet nuget push ${{ github.workspace }}/output/PowerSync.Maui*.nupkg --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }}
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: BuildArtifacts
+          path: ${{ github.workspace }}/output/**/*.nupkg
 
-      - name: Create GitHub Releases
+  sign:
+    needs: build
+    name: Sign NuGet Artifacts
+    runs-on: windows-latest
+    environment: production
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: BuildArtifacts
+          path: BuildArtifacts
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Install Sign CLI tool
+        run: dotnet tool install --tool-path . --prerelease sign
+
+      - name: Azure CLI login
+        uses: azure/login@v1
+        with:
+          allow-no-subscriptions: true
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+
+      - name: Sign artifacts
+        shell: pwsh
+        run: >
+          ./sign code azure-key-vault
+          **/*.nupkg
+          --base-directory "${{ github.workspace }}/BuildArtifacts"
+          --publisher-name "PowerSync"
+          --description "PowerSync .NET SDK"
+          --description-url "https://github.com/powersync-ja/powersync-dotnet"
+          --timestamp-url "http://timestamp.digicert.com"
+          --azure-credential-type "azure-cli"
+          --azure-key-vault-url "${{ vars.KEY_VAULT_URL }}"
+          --azure-key-vault-certificate "${{ vars.KEY_VAULT_CERTIFICATE_ID }}"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: SignedArtifacts
+          path: BuildArtifacts
+
+  publish:
+    needs: [build, sign]
+    name: Publish NuGet Packages
+    runs-on: windows-latest
+    environment: production
+
+    permissions:
+      id-token: write
+      contents: write # GitHub releases
+
+    steps:
+      - name: Download signed artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: SignedArtifacts
+          path: SignedArtifacts
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Validate artifact signatures
+        run: dotnet nuget verify ${{ github.workspace }}/SignedArtifacts/**/*.nupkg
+
+      - name: NuGet Login
+        id: login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ vars.NUGET_USERNAME }}
+
+      - name: Run Push For Common
+        run: >
+          dotnet nuget push "${{ github.workspace }}\SignedArtifacts\PowerSync.Common*.nupkg"
+          --api-key "${{ steps.login.outputs.NUGET_API_KEY }}"
+          --source https://api.nuget.org/v3/index.json
+
+      - name: Create GitHub Release For Common
+        continue-on-error: true
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          COMMON_VERSION: ${{ needs.build.outputs.common_version }}
         run: |
-          gh release create "PowerSync.Common@${{ env.COMMON_VERSION }}" \
+          gh release create "PowerSync.Common@${COMMON_VERSION}" \
             --draft \
-            --title "PowerSync.Common@${{ env.COMMON_VERSION }}" \
+            --title "PowerSync.Common@${COMMON_VERSION}" \
             --target main \
             --generate-notes \
-            ${{ github.workspace }}/output/PowerSync.Common*.nupkg
-          gh release create "PowerSync.Maui@${{ env.MAUI_VERSION }}" \
+            SignedArtifacts/PowerSync.Common*.nupkg
+
+      - name: Run Push For Maui
+        run: >
+          dotnet nuget push "${{ github.workspace }}\SignedArtifacts\PowerSync.Maui*.nupkg"
+          --api-key "${{ steps.login.outputs.NUGET_API_KEY }}"
+          --source https://api.nuget.org/v3/index.json
+
+      - name: Create GitHub Release For Maui
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          MAUI_VERSION: ${{ needs.build.outputs.maui_version }}
+        run: |
+          gh release create "PowerSync.Maui@${MAUI_VERSION}" \
             --draft \
-            --title "PowerSync.Maui@${{ env.MAUI_VERSION }}" \
+            --title "PowerSync.Maui@${MAUI_VERSION}" \
             --target main \
             --generate-notes \
-            ${{ github.workspace }}/output/PowerSync.Maui*.nupkg
+            SignedArtifacts/PowerSync.Maui*.nupkg

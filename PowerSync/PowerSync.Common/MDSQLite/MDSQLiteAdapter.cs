@@ -123,30 +123,12 @@ public class MDSQLiteAdapter : IDBAdapter
         });
     }
 
-    protected async Task<MDSQLiteConnection> OpenConnection(string dbFilename)
+    protected Task<MDSQLiteConnection> OpenConnection(string dbFilename)
     {
         var db = OpenDatabase(dbFilename);
         LoadExtensions(db);
 
-        var connection = new MDSQLiteConnection(new MDSQLiteConnectionOptions(db));
-        try
-        {
-            await connection.Execute("SELECT powersync_init()");
-        }
-        catch (SqliteException ex)
-        {
-            // SQLite will throw a very unhelpful "SQLite Error 1: 'The specified
-            // module could not be found.'" error if uncaught.
-            throw new SqliteException(
-                "Failed to initialize PowerSync: powersync_init() is not registered. " +
-                "Ensure the PowerSync core SQLite extension is loaded. Either set " +
-                "MDSQLiteOptions.LoadPowerSyncExtension to true (default), or supply " +
-                "a PowerSync-compatible extension via MDSQLiteOptions.Extensions.",
-                ex.SqliteErrorCode,
-                ex.SqliteExtendedErrorCode);
-        }
-
-        return connection;
+        return Task.FromResult(new MDSQLiteConnection(new MDSQLiteConnectionOptions(db)));
     }
 
     private static SqliteConnection OpenDatabase(string dbFilename)

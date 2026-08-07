@@ -476,72 +476,63 @@ public class StreamingSyncImplementation : ICloseable
 
     protected async Task<StreamingSyncIterationResult> RustStreamingSyncIteration(CancellationToken? signal, RequiredPowerSyncConnectionOptions resolvedOptions)
     {
-        Task? receivingLines = null;
-        bool hadSyncLine = false;
         bool hideDisconnectOnRestart = false;
+        Action? notifyTokenRefreshed = null;
 
-        var controlInvocations = (EventStream<EnqueuedCommand>)null!;
+        // A failure opening or reading the stream, surfaced from the control loop so it retries.
+        Exception? streamError = null;
 
         var nestedCts = new CancellationTokenSource();
         signal?.Register(() => { nestedCts.Cancel(); });
 
-        async Task Connect(EstablishSyncStream instruction)
+        async Task ReceiveSyncLines(StreamingSyncRequest request, EventStream<EnqueuedCommand> sink, CancellationToken token)
         {
             var syncOptions = new SyncStreamOptions
             {
                 Path = "/sync/stream",
-                CancellationToken = nestedCts.Token,
-                Data = instruction.Request
+                CancellationToken = token,
+                Data = request
             };
 
-            controlInvocations = new EventStream<EnqueuedCommand>();
+            var established = false;
             try
             {
-                _ = Task.Run(async () =>
-                {
-                    await foreach (var line in controlInvocations.ListenAsync(new CancellationToken()))
-                    {
-                        await Control(line.Command, line.Payload);
-
-                        // Triggers a local CRUD upload when the first sync line has been received.
-                        // This allows uploading local changes that have been made while offline or disconnected.
-                        if (!hadSyncLine)
-                        {
-                            TriggerCrudUpload();
-                            hadSyncLine = true;
-                        }
-                    }
-                });
-
                 var stream = await Options.Remote.PostStreamRaw(syncOptions);
                 using var reader = new StreamReader(stream, Encoding.UTF8);
 
-                syncOptions.CancellationToken.Register(() =>
+                token.Register(() =>
                 {
                     try { stream?.Close(); } catch { }
                 });
 
-                UpdateSyncStatus(new SyncStatusOptions
+                // We're connected here, tell core extension
+                sink.Emit(new EnqueuedCommand
                 {
-                    Connected = true
+                    Command = PowerSyncControlCommand.CONNECTION_STATE,
+                    Payload = PowerSyncControlConnectionState.ESTABLISHED
                 });
+                established = true;
 
                 // Read lines in a cancellation-aware manner.
                 // ReadLineAsync() doesn't support CancellationToken on all .NET versions,
                 // so we use WhenAny to check for cancellation between reads.
-                while (!syncOptions.CancellationToken.IsCancellationRequested)
+                while (!token.IsCancellationRequested)
                 {
                     var readTask = reader.ReadLineAsync();
 
                     // Create a task that completes when cancellation is requested
                     var cancellationTcs = new TaskCompletionSource<bool>();
-                    using var registration = syncOptions.CancellationToken.Register(() => cancellationTcs.TrySetResult(true));
+                    using var registration = token.Register(() => cancellationTcs.TrySetResult(true));
 
                     var completedTask = await Task.WhenAny(readTask, cancellationTcs.Task);
 
                     if (completedTask == cancellationTcs.Task)
                     {
-                        // Cancellation was requested, exit the loop
+                        // Cancellation was requested, exit the loop. The read is still in
+                        // flight and faults once the stream is closed during teardown, so
+                        // observe it to keep that failure out of
+                        // TaskScheduler.UnobservedTaskException.
+                        _ = readTask.ContinueWith(t => { _ = t.Exception; }, TaskContinuationOptions.OnlyOnFaulted);
                         break;
                     }
 
@@ -552,42 +543,55 @@ public class StreamingSyncImplementation : ICloseable
                         break;
                     }
 
-                    controlInvocations?.Emit(new EnqueuedCommand
+                    sink.Emit(new EnqueuedCommand
                     {
                         Command = PowerSyncControlCommand.PROCESS_TEXT_LINE,
                         Payload = line
                     });
                 }
             }
+            catch (Exception ex)
+            {
+                if (!token.IsCancellationRequested)
+                {
+                    streamError = ex;
+                }
+            }
             finally
             {
-                var activeInstructions = controlInvocations;
-                controlInvocations = null;
-                activeInstructions?.Close();
+                if (established && !sink.Closed)
+                {
+                    sink.Emit(new EnqueuedCommand
+                    {
+                        Command = PowerSyncControlCommand.CONNECTION_STATE,
+                        Payload = PowerSyncControlConnectionState.END
+                    });
+                }
+
+                sink.Close();
             }
         }
 
         async Task Stop()
         {
-            await Control(PowerSyncControlCommand.STOP);
-        }
-
-        async Task Control(string op, object? payload = null)
-        {
-            var rawResponse = await Options.Adapter.Control(op, payload);
-            logger.LogTrace("powersync_control {op}, {payload}, {rawResponse}", op, payload, rawResponse);
-            HandleInstructions(Instruction.ParseInstructions(rawResponse));
-        }
-
-        async void HandleInstructions(Instruction[] instructions)
-        {
-            foreach (var instruction in instructions)
+            foreach (var instruction in await InvokePowerSyncControl(PowerSyncControlCommand.STOP))
             {
-                await HandleInstruction(instruction);
+                // Unconditionally ending the iteration, so interrupting instructions don't apply.
+                if (instruction is NonInterruptingInstruction nonInterrupting)
+                {
+                    await HandleInstruction(nonInterrupting);
+                }
             }
         }
 
-        async Task HandleInstruction(Instruction instruction)
+        async Task<Instruction[]> InvokePowerSyncControl(string op, object? payload = null)
+        {
+            var rawResponse = await Options.Adapter.Control(op, payload);
+            logger.LogTrace("powersync_control {op}, {payload}, {rawResponse}", op, payload, rawResponse);
+            return Instruction.ParseInstructions(rawResponse);
+        }
+
+        async Task HandleInstruction(NonInterruptingInstruction instruction)
         {
             switch (instruction)
             {
@@ -608,14 +612,6 @@ public class StreamingSyncImplementation : ICloseable
                 case UpdateSyncStatus syncStatus:
                     UpdateSyncStatus(CoreInstructionHelpers.CoreStatusToSyncStatusOptions(syncStatus.Status));
                     break;
-                case EstablishSyncStream establishSyncStream:
-                    if (receivingLines != null)
-                    {
-                        throw new Exception("Unexpected request to establish sync stream, already connected");
-                    }
-
-                    receivingLines = Connect(establishSyncStream);
-                    break;
                 case FetchCredentials fetchCredentials:
                     if (fetchCredentials.DidExpire)
                     {
@@ -629,10 +625,7 @@ public class StreamingSyncImplementation : ICloseable
                         try
                         {
                             await Options.Remote.FetchCredentials();
-                            controlInvocations?.Emit(new EnqueuedCommand
-                            {
-                                Command = PowerSyncControlCommand.NOTIFY_TOKEN_REFRESHED
-                            });
+                            notifyTokenRefreshed?.Invoke();
                         }
                         catch (Exception err)
                         {
@@ -641,13 +634,8 @@ public class StreamingSyncImplementation : ICloseable
 
                     }
                     break;
-                case CloseSyncStream closeSyncStream:
-                    nestedCts.Cancel();
-                    hideDisconnectOnRestart = closeSyncStream.HideDisconnect;
-                    logger.LogWarning("Closing stream");
-                    break;
-                case FlushFileSystem:
-                    // ignore
+                case UnknownSyncInstruction unknown:
+                    logger.LogWarning("Unknown instruction from the core extension: {source}", unknown.Source);
                     break;
                 case DidCompleteSync:
                     UpdateSyncStatus(
@@ -656,6 +644,9 @@ public class StreamingSyncImplementation : ICloseable
                     break;
             }
         }
+
+        EventStream<EnqueuedCommand>? controlInvocations = null;
+        Task? receivingLines = null;
 
         try
         {
@@ -666,43 +657,138 @@ public class StreamingSyncImplementation : ICloseable
                 include_defaults = resolvedOptions.IncludeDefaultStreams,
                 app_metadata = resolvedOptions.AppMetadata
             };
-            await Control(PowerSyncControlCommand.START, JsonConvert.SerializeObject(options));
 
-            notifyCompletedUploads = () =>
+            StreamingSyncRequest? establishRequest = null;
+            IAsyncEnumerable<EnqueuedCommand>? commands = null;
+
+            foreach (var startInstruction in await InvokePowerSyncControl(PowerSyncControlCommand.START, JsonConvert.SerializeObject(options)))
             {
-                Task.Run(() =>
+                if (startInstruction is EstablishSyncStream establish)
                 {
-                    if (controlInvocations != null && !controlInvocations.Closed)
+                    var invocations = new EventStream<EnqueuedCommand>();
+                    controlInvocations = invocations;
+                    establishRequest = establish.Request;
+
+                    // Subscribe before anything can emit, else the (possibly synchronous)
+                    // "established" event is lost.
+                    commands = invocations.ListenAsync(nestedCts.Token);
+
+                    // Wired up here rather than after this loop: a later instruction in this
+                    // same batch (FetchCredentials) already needs to enqueue a command.
+                    notifyCompletedUploads = () =>
                     {
-                        controlInvocations?.Emit(new EnqueuedCommand
+                        if (!invocations.Closed)
                         {
-                            Command = PowerSyncControlCommand.NOTIFY_CRUD_UPLOAD_COMPLETED
-                        });
-                    }
-                });
-            };
-
-            handleActiveStreamsChange = () =>
-            {
-                if (controlInvocations != null && !controlInvocations.Closed)
-                {
-                    controlInvocations?.Emit(new EnqueuedCommand
+                            invocations.Emit(new EnqueuedCommand
+                            {
+                                Command = PowerSyncControlCommand.NOTIFY_CRUD_UPLOAD_COMPLETED
+                            });
+                        }
+                    };
+                    handleActiveStreamsChange = () =>
                     {
-                        Command = PowerSyncControlCommand.UPDATE_SUBSCRIPTIONS,
-                        Payload = JsonConvert.SerializeObject(activeStreams)
-                    });
+                        if (!invocations.Closed)
+                        {
+                            invocations.Emit(new EnqueuedCommand
+                            {
+                                Command = PowerSyncControlCommand.UPDATE_SUBSCRIPTIONS,
+                                Payload = JsonConvert.SerializeObject(activeStreams)
+                            });
+                        }
+                    };
+                    notifyTokenRefreshed = () =>
+                    {
+                        if (!invocations.Closed)
+                        {
+                            invocations.Emit(new EnqueuedCommand
+                            {
+                                Command = PowerSyncControlCommand.NOTIFY_TOKEN_REFRESHED
+                            });
+                        }
+                    };
                 }
-            };
+                else if (startInstruction is CloseSyncStream)
+                {
+                    return new StreamingSyncIterationResult { ImmediateRestart = false };
+                }
+                else if (startInstruction is NonInterruptingInstruction nonInterrupting)
+                {
+                    await HandleInstruction(nonInterrupting);
+                }
+            }
 
-            if (receivingLines != null)
+            if (controlInvocations == null)
             {
-                await receivingLines;
+                return new StreamingSyncIterationResult { ImmediateRestart = false };
+            }
+
+            receivingLines = ReceiveSyncLines(establishRequest!, controlInvocations, nestedCts.Token);
+
+            var hadSyncLine = false;
+            try
+            {
+                await foreach (var command in commands!)
+                {
+                    var close = false;
+                    foreach (var instruction in await InvokePowerSyncControl(command.Command, command.Payload))
+                    {
+                        if (instruction is EstablishSyncStream)
+                        {
+                            throw new InvalidOperationException("Received EstablishSyncStream while already connected.");
+                        }
+                        if (instruction is CloseSyncStream closeSyncStream)
+                        {
+                            hideDisconnectOnRestart = closeSyncStream.HideDisconnect;
+                            logger.LogWarning("Closing stream");
+                            close = true;
+                            break;
+                        }
+                        if (instruction is NonInterruptingInstruction nonInterrupting)
+                        {
+                            await HandleInstruction(nonInterrupting);
+                        }
+                    }
+
+                    if (!hadSyncLine &&
+                        (command.Command == PowerSyncControlCommand.PROCESS_TEXT_LINE ||
+                         command.Command == PowerSyncControlCommand.PROCESS_BSON_LINE))
+                    {
+                        // Triggers a local CRUD upload when the first sync line has been received.
+                        // This allows uploading local changes that have been made while offline or disconnected.
+                        hadSyncLine = true;
+                        TriggerCrudUpload();
+                    }
+
+                    if (close)
+                    {
+                        break;
+                    }
+                }
+            }
+            catch (OperationCanceledException) when (nestedCts.IsCancellationRequested)
+            {
+                // Disconnect/abort, stop consuming
+            }
+
+            if (streamError != null)
+            {
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(streamError).Throw();
             }
         }
         finally
         {
             notifyCompletedUploads = null;
             handleActiveStreamsChange = null;
+            notifyTokenRefreshed = null;
+
+            nestedCts.Cancel();
+            controlInvocations?.Close();
+
+            if (receivingLines != null)
+            {
+                try { await receivingLines; } catch { /* surfaced via streamError */ }
+            }
+
             await Stop();
         }
 
@@ -812,11 +898,6 @@ public class StreamingSyncImplementation : ICloseable
                 return Task.CompletedTask;
             }
         });
-    }
-
-    public async Task<bool> HasCompletedSync()
-    {
-        return await Options.Adapter.HasCompletedSync();
     }
 
     public async Task WaitForReady()
