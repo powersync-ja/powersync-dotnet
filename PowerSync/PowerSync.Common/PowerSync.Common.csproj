@@ -20,6 +20,10 @@
     <NoWarn>NU5100</NoWarn>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <DefaultItemExcludes>$(DefaultItemExcludes);runtimes/**/*.*;</DefaultItemExcludes>
+    <!-- Apple TFMs carry the powersync-sqlite-core xcframework as a NativeReference,
+         which requires binding-project semantics so the framework travels in the NuGet package. -->
+    <IsBindingProject Condition="$(TargetFramework.Contains('-ios')) OR $(TargetFramework.Contains('-maccatalyst'))">true</IsBindingProject>
+    <IncludeBuildOutput>true</IncludeBuildOutput>
   </PropertyGroup>
   
   <ItemGroup>
@@ -42,21 +46,45 @@
     <None Include="PowerSync.Common.targets" Pack="true" PackagePath="buildTransitive\" />
   </ItemGroup>
   
-  <!-- Check allows us to skip for all MAUI targets-->
-  <!-- For monorepo-->
+  <!-- The desktop native libraries. CopyToOutputDirectory serves projects that reference
+       this one directly (the demos in this repo); PackagePath ships them to NuGet consumers
+       under runtimes/, from where PowerSync.Common.targets copies them into the consuming
+       project's output.
+
+       PackagePath is what keeps these out of contentFiles. Without it, NuGet gathers content
+       during the cross-targeting outer build, where $(TargetFramework) is empty, so the
+       condition below cannot distinguish target frameworks and every one of them — iOS,
+       Android and MacCatalyst included — receives a copy of every desktop binary. -->
   <ItemGroup Condition="!$(TargetFramework.EndsWith('-android')) AND !$(TargetFramework.EndsWith('-ios')) AND !$(TargetFramework.EndsWith('-maccatalyst'))">
-    <Content Include="runtimes\**\*.*">
+    <Content Include="runtimes\**\*.*" Pack="true" PackagePath="runtimes\">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-  </ItemGroup>
-
-  <!-- For releasing runtimes  -->
-  <ItemGroup Condition="!$(TargetFramework.EndsWith('-android')) AND !$(TargetFramework.EndsWith('-ios')) AND !$(TargetFramework.EndsWith('-maccatalyst'))">
-    <None Include="runtimes\**\*.*" Pack="true" PackagePath="runtimes\" />
   </ItemGroup>
   
   <ItemGroup>
     <None Include="..\..\icon.png" Pack="true" PackagePath="" />
     <None Include="README.md" Pack="true" PackagePath="" />
   </ItemGroup>
+
+  <!-- Bundled PowerSync core extension for Apple targets. The xcframework is
+       self-describing, so the same one serves both iOS and MacCatalyst. -->
+  <ItemGroup Condition="$(TargetFramework.Contains('-ios')) OR $(TargetFramework.Contains('-maccatalyst'))">
+    <ObjcBindingApiDefinition Include="Platforms\ApiDefinition.cs" />
+
+    <NativeReference Include="Platforms\Apple\NativeLibs\powersync-sqlite-core.xcframework">
+      <Kind>Framework</Kind>
+      <SmartLink>False</SmartLink>
+    </NativeReference>
+  </ItemGroup>
+
+  <!-- Prevent e_sqlite3.a from being frozen into the binding manifest. It is provided by
+       SQLitePCLRaw.lib.e_sqlite3.ios with separate device/simulator variants, selected at
+       consuming-project build time via buildTransitive targets. Capturing it here would bake
+       in the device-only variant and break simulator builds in consuming projects. -->
+  <Target Name="_RemoveE_Sqlite3FromBindingManifest" BeforeTargets="_SanitizeNativeReferences" Condition="'$(IsBindingProject)' == 'true'">
+    <ItemGroup>
+      <NativeReference Remove="@(NativeReference)" Condition="'%(Filename)' == 'e_sqlite3'" />
+    </ItemGroup>
+  </Target>
+
 </Project>

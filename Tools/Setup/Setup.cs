@@ -1,9 +1,13 @@
 ﻿using System;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.IO.Compression;
+using System.Text;
+using System.Xml;
+using System.Xml.Linq;
 
 /// <summary>
 /// Execute with `dotnet run --project Tools/Setup`
@@ -13,6 +17,17 @@ public class PowerSyncSetup
     private const string VERSION = "0.5.2";
 
     private const string GITHUB_BASE_URL = $"https://github.com/powersync-ja/powersync-sqlite-core/releases/download/v{VERSION}";
+
+    /// <summary>
+    /// xcframework slices reachable from our target frameworks. Everything else is removed
+    /// by <see cref="TrimXcframework"/>.
+    /// </summary>
+    private static readonly string[] REQUIRED_APPLE_SLICES =
+    [
+        "ios-arm64",                      // device
+        "ios-arm64_x86_64-simulator",     // simulator
+        "ios-arm64_x86_64-maccatalyst"    // MacCatalyst
+    ];
 
     private readonly HttpClient _httpClient;
     private readonly string _basePath;
@@ -28,9 +43,8 @@ public class PowerSyncSetup
         try
         {
             await SetupDesktop();
-            await SetupMauiIos();
-            await SetupMauiAndroid();
-            await SetupMauiMacCatalyst();
+            await SetupApple();
+            await SetupAndroid();
         }
         finally
         {
@@ -89,24 +103,130 @@ public class PowerSyncSetup
         }
     }
 
-    public async Task SetupMauiIos()
+    /// <summary>
+    /// Downloads the xcframework used by the iOS and MacCatalyst targets. The archive is
+    /// self-describing and contains slices for both, so a single copy serves both targets.
+    /// </summary>
+    public async Task SetupApple()
     {
-        Console.WriteLine("Setting up MAUI iOS libraries...");
+        Console.WriteLine("Setting up Apple libraries...");
 
-        var nativeDir = Path.Combine(_basePath, "PowerSync.Maui", "Platforms", "iOS", "NativeLibs");
+        var nativeDir = Path.Combine(_basePath, "PowerSync.Common", "Platforms", "Apple", "NativeLibs");
         var config = new ArchiveConfig(
             "powersync-sqlite-core.xcframework.zip",
             "powersync-sqlite-core.xcframework"
         );
 
         await ProcessArchiveDownload(nativeDir, config, GITHUB_BASE_URL);
+
+        var xcframeworkPath = Path.Combine(nativeDir, config.ExtractedName);
+        if (Directory.Exists(xcframeworkPath))
+        {
+            TrimXcframework(xcframeworkPath);
+        }
     }
 
-    public async Task SetupMauiAndroid()
+    /// <summary>
+    /// Removes xcframework slices and debug symbols that none of our target frameworks can
+    /// use. The upstream archive also ships tvOS, watchOS and native macOS slices plus dSYMs
+    /// for every slice; together these are ~97% of its size, and they would otherwise be
+    /// embedded into the NuGet package four times over (net8/net9 x ios/maccatalyst).
+    /// </summary>
+    private static void TrimXcframework(string xcframeworkPath)
     {
-        Console.WriteLine("Setting up MAUI Android libraries...");
+        var infoPlistPath = Path.Combine(xcframeworkPath, "Info.plist");
 
-        var nativeDir = Path.Combine(_basePath, "PowerSync.Maui", "Platforms", "Android", "jniLibs");
+        // Parse the DOCTYPE (so Save writes it back) without fetching the external DTD.
+        var settings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Parse, XmlResolver = null };
+        XDocument plist;
+        using (var reader = XmlReader.Create(infoPlistPath, settings))
+        {
+            plist = XDocument.Load(reader);
+        }
+
+        var availableLibraries = plist.Descendants("key")
+            .First(key => key.Value == "AvailableLibraries")
+            .ElementsAfterSelf("array")
+            .First();
+
+        var keptSlices = new List<string>();
+
+        foreach (var slice in availableLibraries.Elements("dict").ToList())
+        {
+            var identifier = PlistValue(slice, "LibraryIdentifier")
+                ?? throw new Exception("xcframework slice has no LibraryIdentifier");
+            var sliceDir = Path.Combine(xcframeworkPath, identifier);
+
+            if (!REQUIRED_APPLE_SLICES.Contains(identifier))
+            {
+                DeleteDirectoryIfExists(sliceDir);
+                slice.Remove();
+                continue;
+            }
+
+            var debugSymbolsPath = PlistValue(slice, "DebugSymbolsPath");
+            if (debugSymbolsPath != null)
+            {
+                DeleteDirectoryIfExists(Path.Combine(sliceDir, debugSymbolsPath));
+                RemovePlistEntry(slice, "DebugSymbolsPath");
+            }
+
+            keptSlices.Add(identifier);
+        }
+
+        // Fail loudly rather than shipping a package that silently lost a platform, in case
+        // upstream renames a slice.
+        var missing = REQUIRED_APPLE_SLICES.Except(keptSlices).ToList();
+        if (missing.Count > 0)
+        {
+            throw new Exception($"xcframework is missing required slice(s): {string.Join(", ", missing)}");
+        }
+
+        // XDocument otherwise round-trips the empty internal DTD subset as "[]", and prepends
+        // a BOM. plutil rejects both.
+        if (plist.DocumentType != null)
+        {
+            plist.DocumentType.InternalSubset = null;
+        }
+
+        var writerSettings = new XmlWriterSettings
+        {
+            Indent = true,
+            Encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+        };
+        using (var writer = XmlWriter.Create(infoPlistPath, writerSettings))
+        {
+            plist.Save(writer);
+        }
+
+        Console.WriteLine($"✓ Trimmed xcframework to: {string.Join(", ", keptSlices)}");
+    }
+
+    private static string? PlistValue(XElement dict, string key) =>
+        dict.Elements("key")
+            .FirstOrDefault(element => element.Value == key)
+            ?.ElementsAfterSelf().FirstOrDefault()?.Value;
+
+    private static void RemovePlistEntry(XElement dict, string key)
+    {
+        var keyElement = dict.Elements("key").First(element => element.Value == key);
+        keyElement.ElementsAfterSelf().First().Remove();
+        keyElement.Remove();
+    }
+
+    private static void DeleteDirectoryIfExists(string path)
+    {
+        if (Directory.Exists(path))
+        {
+            Directory.Delete(path, recursive: true);
+        }
+    }
+
+    public async Task SetupAndroid()
+    {
+        Console.WriteLine("Setting up Android libraries...");
+
+        var nativeDir = Path.Combine(_basePath, "PowerSync.Common", "Platforms", "Android", "jniLibs");
 
         try
         {
@@ -133,19 +253,6 @@ public class PowerSyncSetup
 		Directory.CreateDirectory(targetDir);
         var targetFile = Path.Combine(targetDir, "libpowersync.so");
         await DownloadFile($"{GITHUB_BASE_URL}/{filename}", targetFile);
-    }
-
-    public async Task SetupMauiMacCatalyst()
-    {
-        Console.WriteLine("Setting up MAUI MacCatalyst libraries...");
-
-        var nativeDir = Path.Combine(_basePath, "PowerSync.Maui", "Platforms", "MacCatalyst", "NativeLibs");
-        var config = new ArchiveConfig(
-            "powersync-sqlite-core.xcframework.zip",
-            "powersync-sqlite-core.xcframework"
-        );
-
-        await ProcessArchiveDownload(nativeDir, config, GITHUB_BASE_URL);
     }
 
     private async Task ProcessArchiveDownload(string nativeDir, ArchiveConfig config, string baseUrl)

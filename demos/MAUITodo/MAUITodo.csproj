@@ -72,6 +72,5 @@
 
 	<ItemGroup>
     	<ProjectReference Include="..\..\PowerSync\Powersync.Common\PowerSync.Common.csproj" />
-		<ProjectReference Include="..\..\PowerSync\Powersync.Maui\PowerSync.Maui.csproj" />
   	</ItemGroup>
 </Project>
