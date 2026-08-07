@@ -1,12 +1,11 @@
 using System.Runtime.CompilerServices;
 
-using UnoTodo.Attachments;
-
 using PowerSync.Common.Attachments;
 using PowerSync.Common.Client;
-
 using PowerSync.Common.MDSQLite;
 using PowerSync.Maui.SQLite;
+
+using UnoTodo.Attachments;
 
 namespace UnoTodo.Data;
 
