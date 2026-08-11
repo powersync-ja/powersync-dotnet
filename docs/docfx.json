@@ -1,0 +1,63 @@
+{
+  "$schema": "https://raw.githubusercontent.com/dotnet/docfx/main/schemas/docfx.schema.json",
+  "metadata": [
+    {
+      "src": [
+        {
+          "src": "../PowerSync",
+          "files": [
+            "PowerSync.Common/PowerSync.Common.csproj",
+            "PowerSync.Maui/PowerSync.Maui.csproj"
+          ]
+        }
+      ],
+      "dest": "api",
+      "filter": "filter.yml",
+      "properties": {
+        "TargetFramework": "net8.0",
+        "TargetFrameworks": "net8.0"
+      },
+      "namespaceLayout": "nested",
+      "memberLayout": "separatePages",
+      "enumSortOrder": "declaringOrder",
+      "outputFormat": "mref"
+    }
+  ],
+  "build": {
+    "content": [
+      {
+        "files": ["**/*.{md,yml}"],
+        "exclude": [
+          "_site/**",
+          "obj/**",
+          "template/**",
+          "README.md",
+          "filter.yml"
+        ]
+      }
+    ],
+    "resource": [
+      {
+        "files": ["index.html", "images/**"]
+      }
+    ],
+    "output": "_site",
+    "template": ["default", "modern", "template"],
+    "globalMetadata": {
+      "_appName": "PowerSync .NET",
+      "_appTitle": "PowerSync .NET SDK",
+      "_appFaviconPath": "images/powersync.png",
+      "_appLogoPath": "images/powersync.png",
+      "_appFooter": "PowerSync .NET SDK &middot; <a href=\"https://docs.powersync.com\">PowerSync Docs</a>",
+      "_enableSearch": true,
+      "_disableContribution": false,
+      "_gitContribute": {
+        "repo": "https://github.com/powersync-ja/powersync-dotnet",
+        "branch": "main",
+        "apiSpecFolder": "docs"
+      },
+      "pdf": false
+    },
+    "postProcessors": ["ExtractSearchIndex"]
+  }
+}

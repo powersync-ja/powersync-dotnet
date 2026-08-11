@@ -1,0 +1,25 @@
+name: Build Docs
+
+on: push
+
+jobs:
+  build:
+    name: Build Docs
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "8.0"
+
+      - name: Restore docfx
+        working-directory: docs
+        run: dotnet tool restore
+
+      - name: Build Docs
+        working-directory: docs
+        run: dotnet docfx docfx.json --warningsAsErrors
