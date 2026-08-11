@@ -16,6 +16,10 @@ jobs:
         with:
           dotnet-version: "8.0"
 
+      - name: Restore WASM workload
+        working-directory: docs
+        run: dotnet workload restore
+
       - name: Restore docfx
         working-directory: docs
         run: dotnet tool restore
