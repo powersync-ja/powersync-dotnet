@@ -14,16 +14,21 @@ jobs:
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: "8.0"
-
-      - name: Restore WASM workload
-        working-directory: docs
-        run: dotnet workload restore
+          global-json-file: global.json
 
       - name: Restore docfx
         working-directory: docs
         run: dotnet tool restore
 
+      - name: Restore Projects
+        run: |
+          dotnet restore PowerSync/PowerSync.Common/PowerSync.Common.csproj -p:TargetFrameworks=net8.0
+          dotnet restore PowerSync/PowerSync.Maui/PowerSync.Maui.csproj -p:TargetFrameworks=net8.0
+
+      - name: Generate API Metadata
+        working-directory: docs
+        run: dotnet docfx metadata docfx.json --warningsAsErrors --noRestore
+
       - name: Build Docs
         working-directory: docs
-        run: dotnet docfx docfx.json --warningsAsErrors
+        run: dotnet docfx build docfx.json --warningsAsErrors
