@@ -3,6 +3,7 @@
 ## 1.0.1
 
 - Full release.
+- Use `long` for opIds instead of `string`.
 
 ## 1.0.0 (unlisted)
 
