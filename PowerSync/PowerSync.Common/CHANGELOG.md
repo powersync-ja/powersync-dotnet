@@ -3,6 +3,8 @@
 ## 1.0.1
 
 - Full release.
+- `PowerSyncDatabase.OnChange` now returns the underlying raw table name instead of the view name to mirror PowerSync JS.
+- Use `long` for op IDs instead of `string`. This affects the types returned by some methods used in `PowerSyncBackendConnector.UploadData`, namely `PowerSyncDatabase.GetNextCrudTransaction()` and `PowerSyncDatabase.GetCrudBatch()`.
 
 ## 1.0.0 (unlisted)
 
