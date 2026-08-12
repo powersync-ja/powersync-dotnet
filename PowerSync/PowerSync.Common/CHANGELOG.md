@@ -3,6 +3,7 @@
 ## 1.0.1
 
 - Full release.
+- `PowerSyncDatabase.OnChange` now returns the underlying raw table name instead of the view name to mirror PowerSync JS.
 - Use `long` for opIds instead of `string`.
 
 ## 1.0.0 (unlisted)
