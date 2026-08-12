@@ -40,7 +40,6 @@ public class MDSQLiteAdapterTests
 
         try
         {
-            // Without the PowerSync extension, `powersync_init()` is not a registered function.
             await Assert.ThrowsAsync<SqliteException>(async () => await db.Init());
         }
         finally
