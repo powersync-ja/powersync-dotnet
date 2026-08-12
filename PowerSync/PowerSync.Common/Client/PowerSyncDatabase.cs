@@ -669,7 +669,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         });
     }
 
-    public Task HandleCrudCheckpoint(long lastClientId, string? writeCheckpoint = null)
+    public Task HandleCrudCheckpoint(long lastClientId, long? writeCheckpoint = null)
     {
         return BucketStorageAdapter.HandleCrudCheckpoint(lastClientId, writeCheckpoint);
     }
