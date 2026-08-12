@@ -30,47 +30,49 @@ Demo applications are located in the [`demos/`](./demos/) directory. Also see ou
 ## Target Frameworks
 
 This PowerSync SDK supports the following target frameworks:
+
 - **.NET 9** - [Latest version](https://dotnet.microsoft.com/en-us/download/dotnet/9.0)
--	**.NET 8** - [Current LTS Version, used for development of this project](https://dotnet.microsoft.com/en-us/download/dotnet/8.0)
+- **.NET 8** - [Current LTS Version, used for development of this project](https://dotnet.microsoft.com/en-us/download/dotnet/8.0)
 - **.NET 6** - supported for compatibility with older projects
--	**.NET Standard 2.0** - for compatibility with older libraries and frameworks, tested/verified older versions will be listed below.
+- **.NET Standard 2.0** - for compatibility with older libraries and frameworks, tested/verified older versions will be listed below.
 
 - .NET Framework 4.8:
-    
-    To get a .NET Framework 4.8 working with this SDK add the following to your `.csproj` file:
 
-    ```xml
-    <PropertyGroup>
-      ...
-      <!-- Ensures the correct SQLite DLL is available -->
-      <RuntimeIdentifiers>win-x86;win-x64</RuntimeIdentifiers>
-      <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-    </PropertyGroup>
+  To get a .NET Framework 4.8 working with this SDK add the following to your `.csproj` file:
 
-    <ItemGroup>
-      ...
-      <!-- Ensures the HTTP client resolves in the SDK -->
-      <PackageReference Include="System.Net.Http" Version="4.3.4" /> 
-    </ItemGroup>
-    ```
+  ```xml
+  <PropertyGroup>
+    ...
+    <!-- Ensures the correct SQLite DLL is available -->
+    <RuntimeIdentifiers>win-x86;win-x64</RuntimeIdentifiers>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+  </PropertyGroup>
 
-    and create a `IsExternalInit.cs` file in your project with the following contents:
-    
-    ```cs
-    using System.ComponentModel;
+  <ItemGroup>
+    ...
+    <!-- Ensures the HTTP client resolves in the SDK -->
+    <PackageReference Include="System.Net.Http" Version="4.3.4" />
+  </ItemGroup>
+  ```
 
-    namespace System.Runtime.CompilerServices
-    {
-        [EditorBrowsable(EditorBrowsableState.Never)]
-        internal class IsExternalInit { }
-    }
-    ``` 
-    
-------- 
+  and create a `IsExternalInit.cs` file in your project with the following contents:
+
+  ```cs
+  using System.ComponentModel;
+
+  namespace System.Runtime.CompilerServices
+  {
+      [EditorBrowsable(EditorBrowsableState.Never)]
+      internal class IsExternalInit { }
+  }
+  ```
+
+---
 
 When running commands such as `dotnet run` or `dotnet test`, you may need to specify the target framework explicitly using the `--framework` flag.
 
 ## Application Frameworks
+
 - MAUI - Cross-platform native apps for mobile and desktop
   - Platforms: iOS, Android, Windows
 - WPF - Windows desktop applications
@@ -94,7 +96,7 @@ This project uses [EditorConfig](https://editorconfig.org/) for formatting, whic
 Download PowerSync extension
 
 ```bash
-dotnet run --project Tools/Setup    
+dotnet run --project Tools/Setup
 ```
 
 Install dependencies
@@ -114,11 +116,12 @@ dotnet test -v n --framework net8.0
 Run a specific test
 
 ```bash
-dotnet test -v n --framework net8.0 --filter "test-file-pattern"  
+dotnet test -v n --framework net8.0 --filter "test-file-pattern"
 ```
 
 ### Integration Tests
-Integration tests in `PowerSync.Common.IntegrationTests` are intended to run against the [self-host nodejs demo](https://github.com/powersync-ja/self-host-demo/tree/main/demos/nodejs). 
+
+Integration tests in `PowerSync.Common.IntegrationTests` are intended to run against the [self-host nodejs demo](https://github.com/powersync-ja/self-host-demo/tree/main/demos/nodejs).
 The integration tests are disabled by default, define the following environment variable when running the tests.
 
 ```bash
@@ -132,6 +135,7 @@ RUN_INTEGRATION_TESTS=true dotnet test -v n --framework net8.0 --filter "Categor
 ```
 
 ### Performance Tests
+
 Performance tests in `PowerSync.Common.PerformanceTests` are disabled by default, define the following environment variable when running the tests.
 
 ```bash
@@ -145,6 +149,13 @@ RUN_PERFORMANCE_TESTS=true dotnet test -v n --framework net8.0 --filter "Categor
 ```
 
 ## Using the PowerSync.Common package in your project
+
 ```bash
 dotnet add package PowerSync.Common
 ```
+
+# Documentation and Further Reading
+
+- PowerSync website: https://powersync.com
+- PowerSync .NET SDK Docs: https://docs.powersync.com/client-sdks/reference/dotnet
+- PowerSync .NET SDK API Reference: https://powersync-ja.github.io/powersync-dotnet/api/PowerSync.html
