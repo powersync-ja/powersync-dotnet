@@ -1,5 +1,13 @@
 # PowerSync.Common Changelog
 
+## 1.0.1
+
+- Full release.
+
+## 1.0.0 (unlisted)
+
+- Accidental release (mirror of 0.1.2). Use 1.0.1 instead.
+
 ## 0.1.4
 
 - Update the PowerSync SQLite core extension to 0.5.2.
