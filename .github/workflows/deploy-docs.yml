@@ -1,0 +1,61 @@
+name: Deploy Docs to GitHub Pages
+
+on: workflow_dispatch
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build Docs
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Restore docfx
+        working-directory: docs
+        run: dotnet tool restore
+
+      - name: Restore Projects
+        run: |
+          dotnet restore PowerSync/PowerSync.Common/PowerSync.Common.csproj -p:TargetFrameworks=net8.0
+          dotnet restore PowerSync/PowerSync.Maui/PowerSync.Maui.csproj -p:TargetFrameworks=net8.0
+
+      - name: Generate API Metadata
+        working-directory: docs
+        run: dotnet docfx metadata docfx.json --warningsAsErrors --noRestore
+
+      - name: Build Docs
+        working-directory: docs
+        run: dotnet docfx build docfx.json --warningsAsErrors
+
+      - name: Upload Pages Artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./docs/_site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    runs-on: ubuntu-latest
+    needs: build
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

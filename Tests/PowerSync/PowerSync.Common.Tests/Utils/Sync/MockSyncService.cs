@@ -187,7 +187,7 @@ public class MockRemote : Remote
     public override Task<T> Get<T>(string path, Dictionary<string, string>? headers = null)
     {
         var response = new StreamingSyncImplementation.ApiResponse(
-            new StreamingSyncImplementation.ResponseData("1")
+            new StreamingSyncImplementation.ResponseData(1)
         );
 
         return Task.FromResult((T)(object)response);

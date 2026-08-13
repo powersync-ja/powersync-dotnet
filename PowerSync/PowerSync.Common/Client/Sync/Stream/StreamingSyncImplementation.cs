@@ -804,13 +804,13 @@ public class StreamingSyncImplementation : ICloseable
     }
 
     public record ResponseData(
-        [property: JsonProperty("write_checkpoint")] string WriteCheckpoint
+        [property: JsonProperty("write_checkpoint")] long WriteCheckpoint
     );
 
     public record ApiResponse(
         [property: JsonProperty("data")] ResponseData Data
     );
-    public async Task<string> GetWriteCheckpoint()
+    public async Task<long> GetWriteCheckpoint()
     {
         var clientId = await Options.Adapter.GetClientId();
         var path = $"/write-checkpoint2.json?client_id={clientId}";

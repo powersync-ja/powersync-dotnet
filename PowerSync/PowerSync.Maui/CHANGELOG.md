@@ -1,5 +1,14 @@
 # PowerSync.Maui Changelog
 
+## 1.0.1
+
+- Full release.
+- Upstream PowerSync.Common version bump (See Powersync.Common changelog 1.0.1 for more information)
+
+## 1.0.0 (unlisted)
+
+- Accidental release (mirror of 0.1.2). Use 1.0.1 instead.
+
 ## 0.1.4
 
 - Upstream PowerSync.Common version bump (See Powersync.Common changelog 0.1.4 for more information)
