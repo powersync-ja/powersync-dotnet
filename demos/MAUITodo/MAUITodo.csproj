@@ -3,10 +3,9 @@
 	<PropertyGroup>
 	    <ApplicationId>com.companyname.todo</ApplicationId>
 
-		<DefaultTargetFrameworks>net9.0-android;net10.0-android</DefaultTargetFrameworks>
-        <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('Linux'))">$(DefaultTargetFrameworks)</TargetFrameworks>
-		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('Windows'))">$(DefaultTargetFrameworks);net9.0-windows;net10.0-windows</TargetFrameworks>
-		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('OSX'))">$(DefaultTargetFrameworks);net9.0-ios;net9.0-maccatalyst;net10.0-ios;net10.0-maccatalyst</TargetFrameworks>
+		<TargetFrameworks>net9.0-android;net10.0-android</TargetFrameworks>
+		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('Windows'))">$(TargetFrameworks);net9.0-windows;net10.0-windows</TargetFrameworks>
+		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('OSX'))">$(TargetFrameworks);net9.0-ios;net9.0-maccatalyst;net10.0-ios;net10.0-maccatalyst</TargetFrameworks>
 		
 		<OutputType>Exe</OutputType>
 		<RootNamespace>MAUITodo</RootNamespace>

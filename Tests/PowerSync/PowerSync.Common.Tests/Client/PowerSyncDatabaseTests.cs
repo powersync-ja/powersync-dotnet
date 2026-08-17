@@ -1096,7 +1096,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.True(await sem.WaitAsync(500));
         Assert.Single(events);
         Assert.True(events.TryDequeue(out var change));
-        Assert.Equal(["assets"], change.ChangedTables);
+        Assert.Equal(["ps_data__assets"], change.ChangedTables);
     }
 
     [Fact]
