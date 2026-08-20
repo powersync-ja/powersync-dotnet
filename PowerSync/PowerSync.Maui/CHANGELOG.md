@@ -2,7 +2,7 @@
 
 ## 1.0.1
 
-- This package is no longer needed or maintained. Use `PowerSync.Common` and `MDSQLiteAdapter` / `MDSQLiteDBOpenFactory` instead.
+- ⚠️ Deprecate `PowerSync.Maui`. Use `PowerSync.Common` and `MDSQLiteAdapter` / `MDSQLiteDBOpenFactory` instead.
 
 ## 1.0.0 (unlisted)
 

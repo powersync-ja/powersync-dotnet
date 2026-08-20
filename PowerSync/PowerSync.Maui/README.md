@@ -1,3 +1,3 @@
 # PowerSync SDK .NET MAUI
 
-This package is no longer needed or maintained. Use `PowerSync.Common` and `MDSQLiteAdapter` / `MDSQLiteDBOpenFactory` instead.
+- ⚠️ This package is deprecated. Use `PowerSync.Common` and `MDSQLiteAdapter` / `MDSQLiteDBOpenFactory` instead.
