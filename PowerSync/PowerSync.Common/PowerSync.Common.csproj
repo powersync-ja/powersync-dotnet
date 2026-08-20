@@ -38,26 +38,40 @@
     <PackageReference Include="Nito.AsyncEx" Version="5.1.2" />
   </ItemGroup>
 
+  <!-- For ProjectReference: copy the whole /runtimes/ directory. -->
   <ItemGroup>
-    <None Include="PowerSync.Common.targets" Pack="true" PackagePath="build\" />
-    <None Include="PowerSync.Common.targets" Pack="true" PackagePath="buildTransitive\" />
+    <None Include="runtimes/**/*.*" Pack="true" PackagePath="runtimes/" />
   </ItemGroup>
 
-  <!-- Check allows us to skip for all MAUI targets-->
-  <!-- For monorepo-->
-  <ItemGroup Condition="!$(TargetFramework.EndsWith('-android')) AND !$(TargetFramework.EndsWith('-ios')) AND !$(TargetFramework.EndsWith('-maccatalyst'))">
-    <Content Include="runtimes\**\*.*">
+  <!-- For NuGet-published package: only include the runtime directories for the current target. -->
+  <!-- Desktop -->
+  <ItemGroup Condition="'$(TargetPlatformIdentifier)' == ''">
+    <Content Include="runtimes/win-*/**/*.*;runtimes/linux-*/**/*.*;runtimes/osx-*/**/*.*" Pack="false">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
-
-  <!-- For releasing runtimes  -->
-  <ItemGroup Condition="!$(TargetFramework.EndsWith('-android')) AND !$(TargetFramework.EndsWith('-ios')) AND !$(TargetFramework.EndsWith('-maccatalyst'))">
-    <None Include="runtimes\**\*.*" Pack="true" PackagePath="runtimes\" />
+  <!-- Apple -->
+  <!-- The .xcframework files under `/runtimes/ios` and `/runtimes/maccatalyst` are not interchangeable. -->
+  <ItemGroup Condition="'$(TargetPlatformIdentifier)' == 'ios'">
+    <Content Include="runtimes/ios/native/*.xcframework.zip" Pack="false">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetPlatformIdentifier)' == 'maccatalyst'">
+    <Content Include="runtimes/maccatalyst/native/*.xcframework.zip" Pack="false">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+  <!-- Android -->
+  <ItemGroup Condition="'$(TargetPlatformIdentifier)' == 'android'">
+    <AndroidNativeLibrary Include="runtimes/android-arm64/native/libpowersync.so" Abi="arm64-v8a" />
+    <AndroidNativeLibrary Include="runtimes/android-x64/native/libpowersync.so" Abi="x86_64" />
+    <AndroidNativeLibrary Include="runtimes/android-arm/native/libpowersync.so" Abi="armeabi-v7a" />
+    <AndroidNativeLibrary Include="runtimes/android-x86/native/libpowersync.so" Abi="x86" />
   </ItemGroup>
   
   <ItemGroup>
-    <None Include="..\..\icon.png" Pack="true" PackagePath="" />
+    <None Include="../../icon.png" Pack="true" PackagePath="" />
     <None Include="README.md" Pack="true" PackagePath="" />
   </ItemGroup>
 </Project>

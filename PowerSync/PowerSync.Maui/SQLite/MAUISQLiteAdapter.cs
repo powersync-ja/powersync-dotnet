@@ -1,7 +1,5 @@
 namespace PowerSync.Maui.SQLite;
 
-using Microsoft.Data.Sqlite;
-
 using PowerSync.Common.MDSQLite;
 
 // iOS/MacCatalyst specific imports

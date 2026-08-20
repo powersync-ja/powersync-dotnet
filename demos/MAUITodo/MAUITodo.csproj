@@ -1,5 +1,4 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-
 	<PropertyGroup>
 	    <ApplicationId>com.companyname.todo</ApplicationId>
 
@@ -64,6 +63,5 @@
 
 	<ItemGroup>
     	<ProjectReference Include="..\..\PowerSync\PowerSync.Common\PowerSync.Common.csproj" />
-		<ProjectReference Include="..\..\PowerSync\PowerSync.Maui\PowerSync.Maui.csproj" />
   	</ItemGroup>
 </Project>

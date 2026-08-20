@@ -58,13 +58,8 @@ TestResults/
 *.db-shm
 *.db-wal
 
-#Core binaries - add rules after ps extension downloading is supported
-*.dylib
-*.dll
-*.so
-*.xcframework
-.env
-*NativeLibs
+# PowerSync runtimes installed by Tools/Setup
+**/runtimes/
 
 # Ignore user id file
 user_id.txt

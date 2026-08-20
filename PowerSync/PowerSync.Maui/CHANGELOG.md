@@ -2,8 +2,7 @@
 
 ## 1.0.1
 
-- Full release.
-- Upstream PowerSync.Common version bump (See Powersync.Common changelog 1.0.1 for more information)
+- This package is no longer needed or maintained. Use `PowerSync.Common` and `MDSQLiteAdapter` / `MDSQLiteDBOpenFactory` instead.
 
 ## 1.0.0 (unlisted)
 
