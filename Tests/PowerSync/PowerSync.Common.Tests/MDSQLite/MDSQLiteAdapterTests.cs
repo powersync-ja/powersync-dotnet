@@ -53,7 +53,7 @@ public class MDSQLiteAdapterTests
     public async Task LoadsCustomPowerSyncExtensionFromOverriddenPath()
     {
         var dbName = $"MDSQLiteAdapter-{Guid.NewGuid():N}.db";
-        var sourcePath = PowerSyncPathResolver.GetNativeLibraryPath(AppContext.BaseDirectory);
+        var sourcePath = PowerSyncDesktopPathResolver.GetNativeLibraryPath(AppContext.BaseDirectory);
         var customPath = Path.Combine(
             Path.GetTempPath(),
             $"powersync-ext-copy-{Guid.NewGuid():N}{Path.GetExtension(sourcePath)}"

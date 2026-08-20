@@ -24,7 +24,7 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
-      - name: Install MAUI Workloads
+      - name: Install native workloads
         run: dotnet workload restore
 
       - name: Download PowerSync extension
@@ -32,9 +32,6 @@ jobs:
 
       - name: Restore dependencies
         run: dotnet restore
-
-      - name: Install Android SDK for net8.0-android
-        run: dotnet build PowerSync/PowerSync.Common -t:InstallAndroidDependencies -f net8.0-android -p:AndroidSdkDirectory="$ANDROID_HOME" -p:AcceptAndroidSdkLicenses=True
 
       - name: Extract Common Package Version from CHANGELOG.md
         shell: bash
@@ -49,20 +46,6 @@ jobs:
 
       - name: Run Pack For Common
         run: dotnet pack PowerSync/PowerSync.Common -c Release -o ${{ github.workspace }}/output
-
-      - name: Extract MAUI Package Version from CHANGELOG.md
-        shell: bash
-        run: |
-          MAUI_VERSION=$(awk '/^## [0-9]+\.[0-9]+\.[0-9]+-dev(\.[0-9]+)?$/ {print $2; exit}' PowerSync/PowerSync.Maui/CHANGELOG.md)
-          if [[ -z "$MAUI_VERSION" ]]; then
-            echo "Error: Invalid dev version found in PowerSync.Maui/CHANGELOG.md. Expected format: x.x.x-dev.x"
-            exit 1
-          fi
-          echo "Detected Version: $MAUI_VERSION"
-          echo "VERSION=$MAUI_VERSION" >> $GITHUB_ENV
-
-      - name: Run Pack For MAUI
-        run: dotnet pack PowerSync/PowerSync.Maui -c Release -o ${{ github.workspace }}/output
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
@@ -90,7 +73,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: "8.0.x"
+          dotnet-version: "10.0.x"
 
       - name: Install Sign CLI tool
         run: dotnet tool install --tool-path . --prerelease sign
@@ -142,7 +125,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: "8.0.x"
+          dotnet-version: "10.0.x"
 
       - name: Validate artifact signatures
         run: dotnet nuget verify ${{ github.workspace }}/SignedArtifacts/**/*.nupkg
@@ -156,11 +139,5 @@ jobs:
       - name: Run Push For Common
         run: >
           dotnet nuget push "${{ github.workspace }}\SignedArtifacts\PowerSync.Common*.nupkg"
-          --api-key "${{ steps.login.outputs.NUGET_API_KEY }}"
-          --source https://api.nuget.org/v3/index.json
-
-      - name: Run Push For Maui
-        run: >
-          dotnet nuget push "${{ github.workspace }}\SignedArtifacts\PowerSync.Maui*.nupkg"
           --api-key "${{ steps.login.outputs.NUGET_API_KEY }}"
           --source https://api.nuget.org/v3/index.json
