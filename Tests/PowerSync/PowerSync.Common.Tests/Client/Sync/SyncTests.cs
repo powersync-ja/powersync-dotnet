@@ -6,7 +6,7 @@ using PowerSync.Common.Tests.Utils.Sync;
 
 
 /// <summary>
-/// dotnet test -v n --framework net8.0 --filter "SyncTests"
+/// dotnet test -v n --framework net10.0 --filter "SyncTests"
 /// </summary>
 public class SyncTests : IAsyncLifetime
 {

@@ -7,7 +7,7 @@ using PowerSync.Common.DB.Schema.Attributes;
 using PowerSync.Common.Tests;
 
 /// <summary>
-/// dotnet test -v n --framework net8.0 --filter "SchemaTests"
+/// dotnet test -v n --framework net10.0 --filter "SchemaTests"
 /// </summary>
 public class SchemaTests
 {
@@ -201,7 +201,7 @@ public class SchemaTests
 
     class Invalid1 { public string id { get; set; } = ""; }
     [Fact]
-    public async void AttributeParser_InvalidSchema_1()
+    public async Task AttributeParser_InvalidSchema_1()
     {
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
         {
@@ -214,7 +214,7 @@ public class SchemaTests
     [Table("invalid")]
     class Invalid2 { }
     [Fact]
-    public async void AttributeParser_InvalidSchema_2()
+    public async Task AttributeParser_InvalidSchema_2()
     {
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
         {
@@ -227,7 +227,7 @@ public class SchemaTests
     [Table("invalid")]
     class Invalid3 { public int id { get; set; } }
     [Fact]
-    public async void AttributeParser_InvalidSchema_3()
+    public async Task AttributeParser_InvalidSchema_3()
     {
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
         {
@@ -244,7 +244,7 @@ public class SchemaTests
         public string id { get; set; } = "";
     }
     [Fact]
-    public async void AttributeParser_InvalidSchema_4()
+    public async Task AttributeParser_InvalidSchema_4()
     {
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
         {
@@ -261,7 +261,7 @@ public class SchemaTests
         public Invalid1 invalid_type { get; set; } = default!;
     }
     [Fact]
-    public async void AttributeParser_InvalidSchema_5()
+    public async Task AttributeParser_InvalidSchema_5()
     {
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
         {
@@ -277,7 +277,7 @@ public class SchemaTests
         public string id { get; set; } = "";
     }
     [Fact]
-    public async void AttributeParser_InvalidSchema_6()
+    public async Task AttributeParser_InvalidSchema_6()
     {
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
         {
@@ -293,7 +293,7 @@ public class SchemaTests
         public string id { get; set; } = "";
     }
     [Fact]
-    public async void AttributeParser_InvalidSchema_7()
+    public async Task AttributeParser_InvalidSchema_7()
     {
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
         {

@@ -3,9 +3,9 @@
 	<PropertyGroup>
 	    <ApplicationId>com.companyname.todo</ApplicationId>
 
-		<TargetFrameworks>net8.0-android;net9.0-android</TargetFrameworks>
-		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net8.0-windows10.0.19041.0</TargetFrameworks>
-		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('osx'))">$(TargetFrameworks);net8.0-ios;net8.0-maccatalyst;net9.0-ios;net9.0-maccatalyst</TargetFrameworks>
+		<TargetFrameworks>net9.0-android;net10.0-android</TargetFrameworks>
+		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('Windows'))">$(TargetFrameworks);net9.0-windows;net10.0-windows</TargetFrameworks>
+		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('OSX'))">$(TargetFrameworks);net9.0-ios;net9.0-maccatalyst;net10.0-ios;net10.0-maccatalyst</TargetFrameworks>
 		
 		<OutputType>Exe</OutputType>
 		<RootNamespace>MAUITodo</RootNamespace>
@@ -29,19 +29,13 @@
 		<WindowsAppSDKSelfContained Condition="'$(IsUnpackaged)' == 'true'">true</WindowsAppSDKSelfContained>
 		<SelfContained Condition="'$(IsUnpackaged)' == 'true'">true</SelfContained>
 	
-	    <MauiVersion>8.0.90</MauiVersion>
+        <MauiVersion>8.0.90</MauiVersion>
 
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">15.0</SupportedOSPlatformVersion>
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">15.0</SupportedOSPlatformVersion>
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">21.0</SupportedOSPlatformVersion>
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.19041.0</SupportedOSPlatformVersion>
 		<TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.19041.0</TargetPlatformMinVersion>
-	</PropertyGroup>
-	
-	<!-- Potentially only needed for net8.0-ios: https://github.com/microsoft/appcenter-sdk-dotnet/issues/1755#issuecomment-2373256340 -->
-	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net8.0-ios|AnyCPU'">
-		<RuntimeIdentifier>iossimulator-x64</RuntimeIdentifier>
-		<ForceSimulatorX64ArchitectureInIDE>true</ForceSimulatorX64ArchitectureInIDE>
 	</PropertyGroup>
 	
 	<ItemGroup>
@@ -63,15 +57,13 @@
 	</ItemGroup>
 		
 	<ItemGroup>
-	  <PackageReference Include="sqlite-net-pcl" Version="1.8.116" />
-	  <PackageReference Include="SQLitePCLRaw.bundle_green" Version="2.1.2" />
 		<PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
 		<PackageReference Include="Microsoft.Maui.Controls.Compatibility" Version="$(MauiVersion)" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="8.0.0" />
 	</ItemGroup>
 
 	<ItemGroup>
-    	<ProjectReference Include="..\..\PowerSync\Powersync.Common\PowerSync.Common.csproj" />
-		<ProjectReference Include="..\..\PowerSync\Powersync.Maui\PowerSync.Maui.csproj" />
+    	<ProjectReference Include="..\..\PowerSync\PowerSync.Common\PowerSync.Common.csproj" />
+		<ProjectReference Include="..\..\PowerSync\PowerSync.Maui\PowerSync.Maui.csproj" />
   	</ItemGroup>
 </Project>
