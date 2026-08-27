@@ -196,21 +196,26 @@ public class MockRemote : Remote
         }
         else if (options.Path.Contains("/sync/checkpoint-request"))
         {
-
+            // TODO
+            throw new Exception("Not implemented");
         }
         else if (options.Path.Contains("/write-checkpoint2.json"))
         {
+            // TODO
+            throw new Exception("Not implemented");
         }
+
+        throw new Exception("Not implemented");
     }
 
-    public override Task<T> Get<T>(string path, Dictionary<string, string>? headers = null)
+    public override Task<T> FetchJson<T>(string path, HttpMethod? method = null, object? data = null, Dictionary<string, string>? headers = null, CancellationToken ct = default)
     {
-        // Write checkpoint
         if (path.Contains("checkpoint2.json"))
         {
-            return Task.FromResult(new StreamingSyncImplementation.ApiResponse(
+            var response = (T)(object)new StreamingSyncImplementation.ApiResponse(
                 new StreamingSyncImplementation.ResponseData("1")
-            ));
+            );
+            return Task.FromResult(response);
         }
 
         throw new InvalidOperationException("Not implemented");

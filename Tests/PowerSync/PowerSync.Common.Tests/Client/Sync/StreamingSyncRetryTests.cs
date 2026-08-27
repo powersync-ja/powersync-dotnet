@@ -96,7 +96,7 @@ internal sealed class ThrowingRemote : Remote
         );
     }
 
-    public override Task<T> Get<T>(string path, Dictionary<string, string>? headers = null)
+    public override Task<T> FetchJson<T>(string path, HttpMethod? method = null, object? data = null, Dictionary<string, string>? headers = null, CancellationToken ct = default)
     {
         var response = new StreamingSyncImplementation.ApiResponse(
             new StreamingSyncImplementation.ResponseData("1")

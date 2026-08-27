@@ -102,12 +102,13 @@ public class Remote
         return $"powersync-dotnet/{version}";
     }
 
-    public virtual async Task<T> Get<T>(string path, Dictionary<string, string>? headers = null)
+    // TODO: Potentially use an abstract base class (similar to JS) instead of making arbitrary virtual
+    public virtual async Task<T> FetchJson<T>(string path, HttpMethod? method = null, object? data = null, Dictionary<string, string>? headers = null, CancellationToken ct = default)
     {
-        var request = await BuildRequest(HttpMethod.Get, path, data: null, additionalHeaders: headers);
+        var request = await BuildRequest(method ?? HttpMethod.Get, path, data, headers);
 
         using var client = new HttpClient();
-        var response = await client.SendAsync(request);
+        var response = await client.SendAsync(request, ct);
 
         if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
@@ -116,11 +117,11 @@ public class Remote
 
         if (!response.IsSuccessStatusCode)
         {
-            var errorMessage = await response.Content.ReadAsStringAsync();
+            var errorMessage = await response.Content.ReadAsStringAsync(ct);
             throw new HttpRequestException($"Received {response.StatusCode} - {response.ReasonPhrase} when getting from {path}: {errorMessage}");
         }
 
-        var responseData = await response.Content.ReadAsStringAsync();
+        var responseData = await response.Content.ReadAsStringAsync(ct);
         return JsonConvert.DeserializeObject<T>(responseData)!;
     }
 
@@ -129,8 +130,8 @@ public class Remote
     /// </summary>
     public virtual async Task<Stream> PostStreamRaw(SyncStreamOptions options)
     {
-        var requestMessage = await BuildRequest(HttpMethod.Post, options.Path, options.Data, options.Headers);
-        var response = await httpClient.SendAsync(requestMessage, HttpCompletionOption.ResponseHeadersRead, options.CancellationToken);
+        var request = await BuildRequest(HttpMethod.Post, options.Path, options.Data, options.Headers);
+        var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, options.CancellationToken);
 
         if (response.Content == null)
         {
@@ -144,11 +145,11 @@ public class Remote
 
         if (!response.IsSuccessStatusCode)
         {
-            var errorText = await response.Content.ReadAsStringAsync();
+            var errorText = await response.Content.ReadAsStringAsync(options.CancellationToken);
             throw new HttpRequestException($"HTTP {response.StatusCode}: {errorText}");
         }
 
-        return await response.Content.ReadAsStreamAsync();
+        return await response.Content.ReadAsStreamAsync(options.CancellationToken);
     }
 
     private async Task<HttpRequestMessage> BuildRequest(HttpMethod method, string path, object? data = null, Dictionary<string, string>? additionalHeaders = null)

@@ -2,6 +2,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 using PowerSync.Common.DB.Crud;
+using PowerSync.Common.Utils.Converters;
 
 namespace PowerSync.Common.Client.Sync.Stream;
 
@@ -21,7 +22,7 @@ public abstract class Instruction
             instructions.Add(ParseInstruction(item));
         }
 
-        return instructions.ToArray();
+        return [.. instructions];
     }
 
     public static Instruction ParseInstruction(JObject json)
@@ -62,8 +63,7 @@ public class EstablishSyncStream : Instruction
     [JsonProperty("request")]
     public StreamingSyncRequest Request { get; set; } = null!;
 
-    // TODO Find out how to make it so that the "request" key is not included if null but only for this class
-    [JsonProperty("request")]
+    [JsonProperty("checkpoint_request", NullValueHandling = NullValueHandling.Ignore)]
     public CheckpointRequestPayload? CheckpointRequest { get; set; } = null!;
 }
 
@@ -135,8 +135,7 @@ public class CoreSyncStatus
     public List<CoreStreamSubscription> Streams { get; set; } = [];
 
     [JsonProperty("internal_last_applied_checkpoint_request_id")]
-    // TODO Uncomment and implement (copy from temp branch)
-    // [JsonConverter(typeof(LongToStringConverter))]
+    [JsonConverter(typeof(LongToStringConverter))]
     public long? LastAppliedCheckpointRequestId { get; set; }
 }
 

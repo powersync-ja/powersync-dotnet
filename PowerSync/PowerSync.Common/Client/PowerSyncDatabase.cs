@@ -819,6 +819,9 @@ public class SQLWatchOptions
     /// </summary>
     public int? ThrottleMs { get; set; }
 
+    /// <summary>
+    /// If true, runs the query once when creating the watch. Defaults to false.
+    /// </summary>
     public bool TriggerImmediately { get; set; } = false;
 }
 

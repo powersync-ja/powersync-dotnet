@@ -222,6 +222,7 @@ public class StreamingSyncImplementation : ICloseable
                 isUploadingCrud = false;
             });
         };
+
     }
 
     /// <summary>
@@ -319,6 +320,48 @@ public class StreamingSyncImplementation : ICloseable
         }
 
         UpdateSyncStatus(new SyncStatusOptions { Connected = false, Connecting = false });
+    }
+
+    private async Task<long> RequestNextCheckpointFromService(CancellationToken signal)
+    {
+        // TODO CheckpointState manager
+        await Checkpoints.WaitForCheckpointRequestsReady(signal);
+
+        // TODO implement on adapter
+        // TODO type safety
+        var nextCheckpointRequestId = await Options.Adapter.ReadCheckpointRequestId("next");
+        var clientId = await Options.Adapter.GetClientId();
+        return await RequestCheckpointFromService(signal, new()
+        {
+            ClientId = clientId,
+            CheckpointRequestId = nextCheckpointRequestId,
+        });
+    }
+
+    private async Task<long> RequestCheckpointFromService(CancellationToken signal, CheckpointRequestPayload request)
+    {
+        // First, check if we can use a custom checkpoint request implementation.
+        // TODO add and default implement PostCheckpointRequest
+        var customResponse = await Options.PostCheckpointRequest(request.ClientId, request.CheckpointRequestId);
+        if (customResponse != null) return customResponse;
+
+        var status = await Options.Remote.FetchJson<CheckpointRequestResponse>(
+            path: "/sync/checkpoint-request",
+            method: HttpMethod.Post,
+            data: request,
+            ct: signal
+        );
+        return status.Data.CheckpointRequestId;
+    }
+
+    // TODO convert write checkpoint data type to long
+    private async Task<string> GetLegacyWriteCheckpoint()
+    {
+        var clientId = await Options.Adapter.GetClientId();
+        var path = $"/write-checkpoint2.json?client_id={clientId}";
+        var response = await Options.Remote.FetchJson<LegacyWriteCheckpointApiResponse>(path);
+
+        return response.Data.WriteCheckpoint;
     }
 
     protected async Task StreamingSync(CancellationToken? signal, PowerSyncConnectionOptions? options)
@@ -454,7 +497,6 @@ public class StreamingSyncImplementation : ICloseable
         public string Command { get; init; } = null!;
         public object? Payload { get; init; }
     }
-
 
     protected async Task<StreamingSyncIterationResult> StreamingSyncIteration(CancellationToken signal, PowerSyncConnectionOptions? options)
     {
@@ -808,22 +850,6 @@ public class StreamingSyncImplementation : ICloseable
         Events.Close();
     }
 
-    public record ResponseData(
-        [property: JsonProperty("write_checkpoint")] string WriteCheckpoint
-    );
-
-    public record ApiResponse(
-        [property: JsonProperty("data")] ResponseData Data
-    );
-    public async Task<string> GetWriteCheckpoint()
-    {
-        var clientId = await Options.Adapter.GetClientId();
-        var path = $"/write-checkpoint2.json?client_id={clientId}";
-        var response = await Options.Remote.Get<ApiResponse>(path);
-
-        return response.Data.WriteCheckpoint;
-    }
-
     protected async Task InternalUploadAllCrud()
     {
 
@@ -868,7 +894,7 @@ public class StreamingSyncImplementation : ICloseable
                         else
                         {
                             // Uploading is completed
-                            await Options.Adapter.UpdateLocalTarget(GetWriteCheckpoint);
+                            await Options.Adapter.UpdateLocalTarget(GetLegacyWriteCheckpoint);
                             break;
                         }
                     }
@@ -968,12 +994,18 @@ public class StreamingSyncImplementation : ICloseable
         }
     }
 
-
     public void UpdateSubscriptions(SubscribedStream[] subscriptions)
     {
         activeStreams = subscriptions;
         handleActiveStreamsChange?.Invoke();
     }
+
+    public record LegacyWriteCheckpointResponseData(
+        [property: JsonProperty("write_checkpoint")] string WriteCheckpoint
+    );
+    public record LegacyWriteCheckpointApiResponse(
+        [property: JsonProperty("data")] LegacyWriteCheckpointResponseData Data
+    );
 }
 
 /// <summary>

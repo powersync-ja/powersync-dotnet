@@ -136,8 +136,9 @@ public interface IBucketStorageAdapter : ICloseable
     Task<CrudBatch?> GetCrudBatch(int limit = 100);
 
     Task<bool> UpdateLocalTarget(Func<Task<string>> callback);
-
     Task HandleCrudCheckpoint(long lastClientId, string? writeCheckpoint = null);
+    // TODO type safety
+    Task<long> ReadCheckpointRequestId(string variant, string? payload = null);
 
     /// <summary>
     /// Get a unique client ID.

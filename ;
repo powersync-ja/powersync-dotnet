@@ -200,6 +200,7 @@ public class SqliteBucketStorage : IBucketStorageAdapter
 
     public async Task<long> PostCheckpointRequestId(string variant, long? payload = null)
     {
+        // TODO validate Control this happens in transaction
         string rawResponse = await Control($"{variant}_checkpoint_request_id", payload);
         if (long.TryParse(rawResponse, out var response))
         {

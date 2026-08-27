@@ -180,10 +180,6 @@ public class ConnectionManager : ICloseable
         {
             Logger.LogWarning("The backend connector implements ICustomCheckpointRequestConnector, but Connect() was called without checkpoint requests enabled.");
         }
-        else
-        {
-            Logger.LogWarning($"It didn't work? CheckpointMode is: {PendingConnectionOptions.Options.CheckpointMode}");
-        }
 
         // Disconnecting here provides aborting in progress connection attempts.
         // The ConnectInternal method will clear pending options once it starts connecting (with the options).
