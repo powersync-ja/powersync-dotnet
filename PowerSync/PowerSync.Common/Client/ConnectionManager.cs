@@ -175,6 +175,15 @@ public class ConnectionManager : ICloseable
         // Update pending options to the latest values
         PendingConnectionOptions = new StoredConnectionOptions(connector, options);
 
+        // Warn if connector expects checkpoint requests but write checkpoints are enabled
+        if (connector is ICustomCheckpointRequestConnector && PendingConnectionOptions.Options.CheckpointMode == CheckpointMode.Legacy)
+        {
+            Logger.LogWarning("The backend connector implements ICustomCheckpointRequestConnector, but Connect() was called without checkpoint requests enabled.");
+        }
+        else
+        {
+            Logger.LogWarning($"It didn't work? CheckpointMode is: {PendingConnectionOptions.Options.CheckpointMode}");
+        }
 
         // Disconnecting here provides aborting in progress connection attempts.
         // The ConnectInternal method will clear pending options once it starts connecting (with the options).

@@ -1,4 +1,4 @@
-using System.Dynamic;
+using System.Collections.Concurrent;
 using System.IO.Pipelines;
 using System.Text;
 
@@ -19,9 +19,16 @@ namespace PowerSync.Common.Tests.Utils.Sync;
 
 public class MockSyncService : EventStream<string>
 {
-    private readonly List<StreamingSyncRequest> _requests = new();
-
+    private readonly List<StreamingSyncRequest> _requests = [];
     public IReadOnlyList<StreamingSyncRequest> Requests => _requests;
+
+    private readonly ListLoggerProvider _listLoggerProvider = new();
+    public IReadOnlyList<LogRecord> Logs => _listLoggerProvider.Logs;
+
+    public long LastWriteCheckpoint { get; set; } = 0;
+
+    private readonly List<long> _checkpointRequests = [];
+    public IReadOnlyList<long> CheckpointRequests => _checkpointRequests;
 
     public void PushLine(StreamingSyncLine line)
     {
@@ -44,16 +51,17 @@ public class MockSyncService : EventStream<string>
             Database = new SQLOpenOptions { DbFilename = dbFilename },
             Schema = TestSchemaTodoList.AppSchema,
             RemoteFactory = _ => mockRemote,
-            Logger = createLogger()
+            Logger = CreateLogger()
         });
     }
 
-    private ILogger createLogger()
+    private ILogger CreateLogger()
     {
         ILoggerFactory loggerFactory = LoggerFactory.Create(builder =>
         {
             builder.AddConsole();
-            builder.SetMinimumLevel(LogLevel.Error);
+            builder.AddProvider(_listLoggerProvider);
+            builder.SetMinimumLevel(LogLevel.Warning);
         });
         return loggerFactory.CreateLogger("PowerSyncLogger");
     }
@@ -154,43 +162,58 @@ public class MockRemote : Remote
         this.connectedListeners = connectedListeners;
     }
 
+    // TODO This should be able to parse and handle /sync/stream AND /sync/checkpoint_request (or whatever the URL is)
     public override Task<Stream> PostStreamRaw(SyncStreamOptions options)
     {
-        connectedListeners.Add(options.Data);
-
-        var pipe = new Pipe();
-        var writer = pipe.Writer;
-
-        var cts = CancellationTokenSource.CreateLinkedTokenSource(options.CancellationToken);
-        var listener = syncService.ListenAsync(cts.Token);
-        _ = Task.Run(async () =>
+        if (options.Path.EndsWith("/sync/stream"))
         {
-            try
-            {
-                await foreach (var line in listener)
-                {
-                    var bytes = Encoding.UTF8.GetBytes(line + "\n");
-                    await writer.WriteAsync(bytes);
-                }
-            }
-            finally
-            {
-                await writer.CompleteAsync();
-                cts.Cancel();
-                cts.Dispose();
-            }
-        });
+            connectedListeners.Add(options.Data);
 
-        return Task.FromResult(pipe.Reader.AsStream());
+            var pipe = new Pipe();
+            var writer = pipe.Writer;
+
+            var cts = CancellationTokenSource.CreateLinkedTokenSource(options.CancellationToken);
+            var listener = syncService.ListenAsync(cts.Token);
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await foreach (var line in listener)
+                    {
+                        var bytes = Encoding.UTF8.GetBytes(line + "\n");
+                        await writer.WriteAsync(bytes);
+                    }
+                }
+                finally
+                {
+                    await writer.CompleteAsync();
+                    cts.Cancel();
+                    cts.Dispose();
+                }
+            });
+
+            return Task.FromResult(pipe.Reader.AsStream());
+        }
+        else if (options.Path.Contains("/sync/checkpoint-request"))
+        {
+
+        }
+        else if (options.Path.Contains("/write-checkpoint2.json"))
+        {
+        }
     }
 
     public override Task<T> Get<T>(string path, Dictionary<string, string>? headers = null)
     {
-        var response = new StreamingSyncImplementation.ApiResponse(
-            new StreamingSyncImplementation.ResponseData("1")
-        );
+        // Write checkpoint
+        if (path.Contains("checkpoint2.json"))
+        {
+            return Task.FromResult(new StreamingSyncImplementation.ApiResponse(
+                new StreamingSyncImplementation.ResponseData("1")
+            ));
+        }
 
-        return Task.FromResult((T)(object)response);
+        throw new InvalidOperationException("Not implemented");
     }
 }
 
@@ -212,4 +235,33 @@ public class TestConnector : IPowerSyncBackendConnector
             await tx.Complete();
         }
     }
+}
+
+public record LogRecord(LogLevel LogLevel, string CategoryName, string Message, Exception? Exception);
+
+public class ListLogger(string categoryName, ConcurrentQueue<LogRecord> drain) : ILogger
+{
+    private readonly string _categoryName = categoryName;
+    private readonly ConcurrentQueue<LogRecord> _drain = drain;
+
+    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+    {
+        _drain.Enqueue(new(logLevel, _categoryName, formatter(state, exception), exception));
+    }
+
+    public IDisposable BeginScope<TState>(TState state) => null;
+    public bool IsEnabled(LogLevel logLevel) => true;
+}
+
+public class ListLoggerProvider : ILoggerProvider
+{
+    private readonly ConcurrentQueue<LogRecord> _logs = new();
+    public IReadOnlyList<LogRecord> Logs => [.. _logs];
+
+    public ILogger CreateLogger(string categoryName)
+    {
+        return new ListLogger(categoryName, _logs);
+    }
+
+    public void Dispose() => GC.SuppressFinalize(this);
 }

@@ -451,16 +451,6 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         await WaitForReady();
     }
 
-    private RequiredAdditionalConnectionOptions resolveConnectionOptions(PowerSyncConnectionOptions? options)
-    {
-        var defaults = RequiredAdditionalConnectionOptions.DEFAULT_ADDITIONAL_CONNECTION_OPTIONS;
-        return new RequiredAdditionalConnectionOptions
-        {
-            RetryDelayMs = options?.RetryDelayMs ?? defaults.RetryDelayMs,
-            CrudUploadThrottleMs = options?.CrudUploadThrottleMs ?? defaults.CrudUploadThrottleMs,
-        };
-    }
-
     public async Task Connect(IPowerSyncBackendConnector connector, PowerSyncConnectionOptions? options = null)
     {
         await WaitForReady();

@@ -16,15 +16,12 @@ using PowerSync.Common.Utils;
 public class AdditionalConnectionOptions(int? retryDelayMs = null, int? crudUploadThrottleMs = null)
 {
     /// <summary>
-    /// Delay for retrying sync streaming operations
-    /// from the PowerSync backend after an error occurs.
+    /// Delay for retrying sync streaming operations from the PowerSync backend after an error occurs.
     /// </summary>
     public int? RetryDelayMs { get; set; } = retryDelayMs;
 
     /// <summary>
-    /// Backend Connector CRUD operations are throttled
-    /// to occur at most every `CrudUploadThrottleMs`
-    /// milliseconds.
+    /// Backend Connector CRUD operations are throttled to occur at most every `CrudUploadThrottleMs` milliseconds.
     /// </summary>
     public int? CrudUploadThrottleMs { get; set; } = crudUploadThrottleMs;
 }
@@ -43,7 +40,6 @@ public class RequiredAdditionalConnectionOptions : AdditionalConnectionOptions
     public new int CrudUploadThrottleMs { get; set; }
 
     public SubscribedStream[] Subscriptions { get; init; } = null!;
-
 }
 
 public class StreamingSyncImplementationOptions : AdditionalConnectionOptions
@@ -59,7 +55,7 @@ public class StreamingSyncImplementationOptions : AdditionalConnectionOptions
     public ILogger? Logger { get; init; }
 }
 
-public class BaseConnectionOptions(Dictionary<string, object>? parameters = null, Dictionary<string, string>? appMetadata = null, bool? includeDefaultStreams = true)
+public class BaseConnectionOptions(Dictionary<string, object>? parameters = null, Dictionary<string, string>? appMetadata = null, bool? includeDefaultStreams = true, CheckpointMode? checkpointMode = null)
 {
     /// <summary>
     /// A set of metadata to be included in service logs.
@@ -77,11 +73,17 @@ public class BaseConnectionOptions(Dictionary<string, object>? parameters = null
     /// This defaults to `true`.
     /// </summary>
     public bool? IncludeDefaultStreams { get; set; } = includeDefaultStreams;
+
+    /// <summary>
+    /// The mode used to request checkpoint requests from the PowerSync service.
+    /// 
+    /// Defaults to <see cref="CheckpointMode.Legacy" />, but will default to <see cref="CheckpointMode.Requests" /> in a future release.
+    /// </summary>
+    public CheckpointMode CheckpointMode { get; set; } = checkpointMode ?? CheckpointMode.Legacy;
 }
 
 public class RequiredPowerSyncConnectionOptions : BaseConnectionOptions
 {
-
     public new Dictionary<string, string> AppMetadata { get; set; } = new();
 
     public new Dictionary<string, object> Params { get; set; } = new();
@@ -124,8 +126,9 @@ public class PowerSyncConnectionOptions(
     int? retryDelayMs = null,
     int? crudUploadThrottleMs = null,
     Dictionary<string, string>? appMetadata = null,
-    bool? includeDefaultStreams = true
-) : BaseConnectionOptions(@params, appMetadata, includeDefaultStreams)
+    bool? includeDefaultStreams = true,
+    CheckpointMode? checkpointMode = null
+) : BaseConnectionOptions(@params, appMetadata, includeDefaultStreams, checkpointMode)
 {
     /// <summary>
     /// Delay for retrying sync streaming operations from the PowerSync backend after an error occurs.
@@ -145,16 +148,16 @@ public class SubscribedStream
 
     [JsonProperty("params")]
     public Dictionary<string, object>? Params { get; set; }
-
 }
 
 public class StreamingSyncImplementation : ICloseable
 {
-    public static RequiredPowerSyncConnectionOptions DEFAULT_STREAM_CONNECTION_OPTIONS = new()
+    public static readonly RequiredPowerSyncConnectionOptions DEFAULT_STREAM_CONNECTION_OPTIONS = new()
     {
         AppMetadata = [],
         Params = [],
-        IncludeDefaultStreams = true
+        IncludeDefaultStreams = true,
+        CheckpointMode = CheckpointMode.Legacy,
     };
 
     public StreamingSyncImplementationEvents Events { get; } = new();
@@ -466,6 +469,7 @@ public class StreamingSyncImplementation : ICloseable
                     AppMetadata = options?.AppMetadata ?? DEFAULT_STREAM_CONNECTION_OPTIONS.AppMetadata,
                     Params = options?.Params ?? DEFAULT_STREAM_CONNECTION_OPTIONS.Params,
                     IncludeDefaultStreams = options?.IncludeDefaultStreams ?? DEFAULT_STREAM_CONNECTION_OPTIONS.IncludeDefaultStreams,
+                    CheckpointMode = options?.CheckpointMode ?? DEFAULT_STREAM_CONNECTION_OPTIONS.CheckpointMode,
                 };
 
                 return await RustStreamingSyncIteration(signal, resolvedOptions);
@@ -655,7 +659,8 @@ public class StreamingSyncImplementation : ICloseable
                 parameters = resolvedOptions.Params,
                 active_streams = activeStreams,
                 include_defaults = resolvedOptions.IncludeDefaultStreams,
-                app_metadata = resolvedOptions.AppMetadata
+                app_metadata = resolvedOptions.AppMetadata,
+                checkpoint_mode = resolvedOptions.CheckpointMode == CheckpointMode.Legacy ? "legacy" : "requests",
             };
 
             StreamingSyncRequest? establishRequest = null;
@@ -971,6 +976,64 @@ public class StreamingSyncImplementation : ICloseable
     }
 }
 
+/// <summary>
+/// The mechanism to request checkpoints from the PowerSync service.
+///
+/// Checkpoint requests are used after a client uploads local mutations. The PowerSync service later references them in
+/// downloaded data, allowing the SDK to assume that uploaded data has been synced down again.
+///
+/// There are two ways to send checkpoint requests: A legacy (but default and stable) format supported by all PowerSync
+/// service versions, and a newer (`requests`) method which is only available from PowerSync service version 1.24.0 or
+/// later.
+///
+/// Note that the requests checkpoint mode is an alpha API.
+/// </summary>
+public record CheckpointMode
+{
+    private CheckpointMode() { }
+
+    /// <summary>
+    /// Uses a legacy but stable endpoint to request checkpoints.
+    /// </summary>
+    public static readonly CheckpointMode Legacy = new();
+
+    /// <summary>
+    /// Adopts a new and more efficient checkpoint protocol with better support for switching users
+    /// on devices.
+    /// </summary>
+    public sealed record Requests : CheckpointMode
+    {
+        const long MINIMUM_RETRY_DELAY = 10_000;
+        const long DEFAULT_RETRY_DELAY = MINIMUM_RETRY_DELAY;
+
+        /// <summary>
+        /// The periodic interval before re-posting the latest checkpoint request to the service if
+        /// it has not been applied in time.
+        /// </summary>
+        public long RetryDelayMs { get; }
+
+        /// <summary>
+        /// Use checkpoint requests with the default retry delay.
+        /// </summary>
+        public Requests()
+        {
+            RetryDelayMs = DEFAULT_RETRY_DELAY;
+        }
+
+        /// <summary>
+        /// Use checkpoint requests with a custom retry delay.
+        /// </summary>
+        /// <exception cref="ArgumentException">Thrown when retry delay is less than <see cref="MINIMUM_RETRY_DELAY" /></exception>
+        public Requests(long retryDelayMs)
+        {
+            if (retryDelayMs < MINIMUM_RETRY_DELAY)
+            {
+                throw new ArgumentException($"Retry delay must be at least {MINIMUM_RETRY_DELAY}ms.");
+            }
+            RetryDelayMs = retryDelayMs;
+        }
+    }
+}
 
 enum LockType
 {

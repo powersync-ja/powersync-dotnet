@@ -40,7 +40,7 @@ public class SyncStreamsTests : IAsyncLifetime
             IncludeDefaultStreams = false
         });
 
-        TestUtils.DeepEquivalent(new RequestStream { IncludeDefaults = false, Subscriptions = [] }, syncService.Requests[0].Streams);
+        TestUtils.DeepEquivalent(new RequestStream { IncludeDefaults = false, Subscriptions = [] }, syncService.StreamingSyncRequests[0].Streams);
     }
 
     [Fact]
@@ -49,8 +49,8 @@ public class SyncStreamsTests : IAsyncLifetime
         var a = await db.SyncStream("a").Subscribe();
 
         await db.Connect(new TestConnector(), new PowerSyncConnectionOptions());
-        Assert.Equal(1, syncService.Requests[0]?.Streams?.Subscriptions.Count);
-        Assert.Equal("a", syncService.Requests[0]?.Streams?.Subscriptions[0].Stream);
+        Assert.Equal(1, syncService.StreamingSyncRequests[0]?.Streams?.Subscriptions.Count);
+        Assert.Equal("a", syncService.StreamingSyncRequests[0]?.Streams?.Subscriptions[0].Stream);
 
         a.Unsubscribe();
     }
@@ -64,8 +64,8 @@ public class SyncStreamsTests : IAsyncLifetime
 
         await db.Connect(new TestConnector());
 
-        Assert.True(syncService.Requests[0]?.Streams?.IncludeDefaults);
-        Assert.Equal(2, syncService.Requests[0]?.Streams?.Subscriptions.Count);
+        Assert.True(syncService.StreamingSyncRequests[0]?.Streams?.IncludeDefaults);
+        Assert.Equal(2, syncService.StreamingSyncRequests[0]?.Streams?.Subscriptions.Count);
         TestUtils.DeepEquivalent(
             new RequestStreamSubscription
             {
@@ -73,7 +73,7 @@ public class SyncStreamsTests : IAsyncLifetime
                 Parameters = new Dictionary<string, object> { { "foo", "a" } },
                 OverridePriority = null
             },
-            syncService.Requests[0]?.Streams?.Subscriptions[0]
+            syncService.StreamingSyncRequests[0]?.Streams?.Subscriptions[0]
         );
         TestUtils.DeepEquivalent(
             new RequestStreamSubscription
@@ -82,7 +82,7 @@ public class SyncStreamsTests : IAsyncLifetime
                 Parameters = new Dictionary<string, object> { { "foo", "b" } },
                 OverridePriority = 1
             },
-            syncService.Requests[0]?.Streams?.Subscriptions[1]
+            syncService.StreamingSyncRequests[0]?.Streams?.Subscriptions[1]
         );
 
         var statusTask = MockSyncService.NextStatus(db);
@@ -159,13 +159,13 @@ public class SyncStreamsTests : IAsyncLifetime
         var subscription = await db.SyncStream("a").Subscribe();
 
         // Wait for subscription request to register
-        await TestUtils.WaitForAsync(() => syncService.Requests.Count > 1);
-        Assert.Single(syncService.Requests[1]?.Streams?.Subscriptions!);
+        await TestUtils.WaitForAsync(() => syncService.StreamingSyncRequests.Count > 1);
+        Assert.Single(syncService.StreamingSyncRequests[1]?.Streams?.Subscriptions!);
 
         // Given that the subscription has a TTL, dropping the handle should not re-subscribe.
         subscription.Unsubscribe();
-        await TestUtils.WaitForAsync(() => syncService.Requests.Count == 2);
-        Assert.Equal(2, syncService.Requests.Count);
+        await TestUtils.WaitForAsync(() => syncService.StreamingSyncRequests.Count == 2);
+        Assert.Equal(2, syncService.StreamingSyncRequests.Count);
     }
 
     [Fact]
@@ -192,8 +192,8 @@ public class SyncStreamsTests : IAsyncLifetime
         await db.Execute("UPDATE ps_stream_subscriptions SET expires_at = unixepoch() - 1000");
         await db.Connect(new TestConnector());
 
-        Assert.True(syncService.Requests[0]?.Streams?.IncludeDefaults);
-        Assert.Single(syncService.Requests[0]?.Streams?.Subscriptions!);
+        Assert.True(syncService.StreamingSyncRequests[0]?.Streams?.IncludeDefaults);
+        Assert.Single(syncService.StreamingSyncRequests[0]?.Streams?.Subscriptions!);
 
         aAgain.Unsubscribe();
     }
@@ -205,6 +205,6 @@ public class SyncStreamsTests : IAsyncLifetime
         await db.SyncStream("a").UnsubscribeAll();
 
         await db.Connect(new TestConnector(), new PowerSyncConnectionOptions());
-        TestUtils.DeepEquivalent(new RequestStream { IncludeDefaults = true, Subscriptions = [] }, syncService.Requests[0].Streams);
+        TestUtils.DeepEquivalent(new RequestStream { IncludeDefaults = true, Subscriptions = [] }, syncService.StreamingSyncRequests[0].Streams);
     }
 }

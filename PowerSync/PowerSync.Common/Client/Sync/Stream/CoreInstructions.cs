@@ -61,6 +61,10 @@ public class EstablishSyncStream : Instruction
 {
     [JsonProperty("request")]
     public StreamingSyncRequest Request { get; set; } = null!;
+
+    // TODO Find out how to make it so that the "request" key is not included if null but only for this class
+    [JsonProperty("request")]
+    public CheckpointRequestPayload? CheckpointRequest { get; set; } = null!;
 }
 
 public class UpdateSyncStatus : NonInterruptingInstruction
@@ -129,6 +133,11 @@ public class CoreSyncStatus
 
     [JsonProperty("streams")]
     public List<CoreStreamSubscription> Streams { get; set; } = [];
+
+    [JsonProperty("internal_last_applied_checkpoint_request_id")]
+    // TODO Uncomment and implement (copy from temp branch)
+    // [JsonConverter(typeof(LongToStringConverter))]
+    public long? LastAppliedCheckpointRequestId { get; set; }
 }
 
 public class SyncPriorityStatus

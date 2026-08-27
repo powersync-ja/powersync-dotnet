@@ -19,6 +19,7 @@
     <PackageIcon>icon.png</PackageIcon>
     <NoWarn>NU5100</NoWarn>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <DefaultItemExcludes>$(DefaultItemExcludes);runtimes/**/*.*;</DefaultItemExcludes>
   </PropertyGroup>
   

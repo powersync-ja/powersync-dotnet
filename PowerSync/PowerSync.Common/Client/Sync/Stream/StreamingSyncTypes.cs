@@ -190,3 +190,28 @@ public class CrudResponse
     [JsonProperty("checkpoint")]
     public string? Checkpoint { get; set; }
 }
+
+public class CheckpointRequestPayload
+{
+    [JsonProperty("client_id")]
+    public string ClientId { get; set; }
+
+    [JsonProperty("checkpoint_request_id")]
+    // TODO Uncomment and implement (copy from temp branch)
+    // [JsonConverter(typeof(LongToStringConverter))]
+    public long CheckpointRequestId { get; set; }
+}
+
+public class CheckpointRequestResponse
+{
+    [JsonProperty("data")]
+    public CheckpointRequestResponseData Data { get; set; }
+}
+
+public class CheckpointRequestResponseData
+{
+    [JsonProperty("checkpoint_request_id")]
+    // TODO Uncomment and implement (copy from temp branch)
+    // [JsonConverter(typeof(LongToStringConverter))]
+    public long CheckpointRequestId { get; set; }
+}
