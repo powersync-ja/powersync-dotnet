@@ -42,7 +42,7 @@ public interface IPowerSyncBackendConnector
 public interface ICustomCheckpointRequestConnector : IPowerSyncBackendConnector
 {
     /// <summary>
-    /// TODO
+    /// Posts a client-generated checkpoint request to the backend and returns the effective checkpoint request state.
     /// </summary>
-    Task<long> PostCheckpointRequest(string clientId, long requestId);
+    Task<string> PostCheckpointRequest(string clientId, string requestId);
 }

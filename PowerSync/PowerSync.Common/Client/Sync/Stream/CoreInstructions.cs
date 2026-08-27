@@ -135,8 +135,7 @@ public class CoreSyncStatus
     public List<CoreStreamSubscription> Streams { get; set; } = [];
 
     [JsonProperty("internal_last_applied_checkpoint_request_id")]
-    [JsonConverter(typeof(LongToStringConverter))]
-    public long? LastAppliedCheckpointRequestId { get; set; }
+    public string? LastAppliedCheckpointRequestId { get; set; }
 }
 
 public class SyncPriorityStatus

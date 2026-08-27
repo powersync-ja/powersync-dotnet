@@ -117,11 +117,11 @@ public class Remote
 
         if (!response.IsSuccessStatusCode)
         {
-            var errorMessage = await response.Content.ReadAsStringAsync(ct);
+            var errorMessage = await response.Content.ReadAsStringAsync();
             throw new HttpRequestException($"Received {response.StatusCode} - {response.ReasonPhrase} when getting from {path}: {errorMessage}");
         }
 
-        var responseData = await response.Content.ReadAsStringAsync(ct);
+        var responseData = await response.Content.ReadAsStringAsync();
         return JsonConvert.DeserializeObject<T>(responseData)!;
     }
 
@@ -145,11 +145,11 @@ public class Remote
 
         if (!response.IsSuccessStatusCode)
         {
-            var errorText = await response.Content.ReadAsStringAsync(options.CancellationToken);
+            var errorText = await response.Content.ReadAsStringAsync();
             throw new HttpRequestException($"HTTP {response.StatusCode}: {errorText}");
         }
 
-        return await response.Content.ReadAsStreamAsync(options.CancellationToken);
+        return await response.Content.ReadAsStreamAsync();
     }
 
     private async Task<HttpRequestMessage> BuildRequest(HttpMethod method, string path, object? data = null, Dictionary<string, string>? additionalHeaders = null)

@@ -10,7 +10,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 using Newtonsoft.Json;
 
-using PowerSync.Common.Client.Sync.Stream;
 using PowerSync.Common.DB;
 using PowerSync.Common.DB.Crud;
 
@@ -69,17 +68,35 @@ public class SqliteBucketStorage : IBucketStorageAdapter
     }
 
     /// <summary>
-    /// Reads the stored target checkpoint request id, or updates it when the update parameter is set.
+    /// Reads or updates the stored checkpoint request id.
     /// </summary>
-    /// <returns>The previous checkpoint request.</returns>
-    private static Task<string?> TargetCheckpointRequestId(ILockContext tx, string? update = null)
+    public Task<string?> ReadOrUpdateCheckpoint(string variant, string? payload = null)
+        => db.WriteTransaction(tx => ReadOrUpdateCheckpoint(tx, variant, payload));
+
+    /// <summary>
+    /// Reads or updates the stored checkpoint request id using the given transaction.
+    /// </summary>
+    public static Task<string?> ReadOrUpdateCheckpoint(ITransaction tx, string variant, string? payload = null)
     {
-        // TODO Note that we are only casting in Dart/JS because this returns a 64-bit integer we can't natively represent there.
-        // Turning MAX_OP_ID into a 64-bit integer here and comparing ints would be better.
+        // TODO Return 64-bit integer in later release.
         return tx.Get<string?>(
             "SELECT CAST(powersync_control(?, ?) AS TEXT) AS r",
-            [PowerSyncControlCommand.TARGET_CHECKPOINT_REQUEST_ID, update]);
+            [$"{variant}_checkpoint_request_id", payload]);
     }
+
+    // This is called within existing transactions, therefore accepts ITransaction
+    private static Task<string?> TargetCheckpointRequestId(ITransaction tx, string? update = null)
+        => ReadOrUpdateCheckpoint(tx, "target", update);
+
+    // These are called from external functions, therefore create transaction
+    internal Task<string?> CurrentCheckpointRequestId(string? update = null)
+        => db.WriteTransaction(tx => ReadOrUpdateCheckpoint(tx, "current", update));
+
+    internal Task<string> NextCheckpointRequestId(string? update = null)
+        => db.WriteTransaction(tx => ReadOrUpdateCheckpoint(tx, "next", update))!;
+
+    internal Task SeedCheckpointRequestId(string? update = null)
+        => db.WriteTransaction(tx => ReadOrUpdateCheckpoint(tx, "seed", update));
 
     private record ResultResult(object result);
 
@@ -154,6 +171,7 @@ public class SqliteBucketStorage : IBucketStorageAdapter
             return true;
         });
     }
+
     public Task HandleCrudCheckpoint(long lastClientId, string? writeCheckpoint = null)
     {
         return db.WriteTransaction(async tx =>
@@ -196,16 +214,6 @@ public class SqliteBucketStorage : IBucketStorageAdapter
             HaveMore: true,
             CompleteCallback: writeCheckpoint => HandleCrudCheckpoint(last.ClientId, writeCheckpoint)
         );
-    }
-
-    public async Task<long> PostCheckpointRequestId(string variant, long? payload = null)
-    {
-        string rawResponse = await Control($"{variant}_checkpoint_request_id", payload);
-        if (long.TryParse(rawResponse, out var response))
-        {
-            return response;
-        }
-        throw new Exception($"Expected {variant}_checkpoint_request_id to return value of type long.");
     }
 
     public async Task<CrudEntry?> NextCrudItem()

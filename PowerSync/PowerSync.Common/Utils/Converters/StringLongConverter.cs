@@ -3,11 +3,15 @@ using Newtonsoft.Json;
 namespace PowerSync.Common.Utils.Converters;
 
 /// <summary>
-/// Converts a long to a string representation when converting JSON values. Used
+/// Converts a long to and from a string when converting JSON values. Used
 /// for converting checkpoint request IDs from a long to a string before being
 /// passed to the core extension.
+///
+/// TODO: This is not currently in use because checkpoint request IDs are
+///       currently represented as strings, however this is going to change
+///       in the 1.0 release.
 /// </summary>
-internal class LongToStringConverter : JsonConverter
+internal class StringLongConverter : JsonConverter
 {
     public override bool CanConvert(Type objectType)
     {

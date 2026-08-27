@@ -207,7 +207,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         subscriptions = new InternalSubscriptionManager(
             firstStatusMatching: WaitForStatus,
             resolveOfflineSyncStatus: ResolveOfflineSyncStatus,
-            subscriptionsCommand: async (payload) => await this.WriteTransaction(async tx =>
+            subscriptionsCommand: async (payload) => await WriteTransaction(async tx =>
                 {
                     await tx.Execute("SELECT powersync_control(?, ?) AS r", ["subscriptions", JsonConvert.SerializeObject(payload)]);
                 }));
@@ -226,6 +226,9 @@ public class PowerSyncDatabase : IPowerSyncDatabase
                         await WaitForReady();
                         await connector.UploadData(this);
                     },
+                    PostCheckpointRequest = (connector is ICustomCheckpointRequestConnector c)
+                        ? (string clientId, string requestId) => c.PostCheckpointRequest(clientId, requestId)
+                        : (_, _) => null,
                     RetryDelayMs = options.RetryDelayMs,
                     Subscriptions = options.Subscriptions,
                     CrudUploadThrottleMs = options.CrudUploadThrottleMs,

@@ -50,6 +50,8 @@ public class StreamingSyncImplementationOptions : AdditionalConnectionOptions
 
     public Func<Task> UploadCrud { get; init; } = null!;
 
+    public Func<string, string, Task<string>?> PostCheckpointRequest = null!;
+
     public Remote Remote { get; init; } = null!;
 
     public ILogger? Logger { get; init; }
@@ -174,6 +176,8 @@ public class StreamingSyncImplementation : ICloseable
 
     private CancellationTokenSource? crudUpdateCts;
     private Task? crudUpdateTask;
+
+    private readonly CheckpointStateSignals _checkpointState = new();
 
     private readonly ILogger logger;
     private SubscribedStream[] activeStreams;
@@ -322,14 +326,12 @@ public class StreamingSyncImplementation : ICloseable
         UpdateSyncStatus(new SyncStatusOptions { Connected = false, Connecting = false });
     }
 
-    private async Task<long> RequestNextCheckpointFromService(CancellationToken signal)
+    private async Task<string> RequestNextCheckpointFromService(CancellationToken signal)
     {
-        // TODO CheckpointState manager
-        await Checkpoints.WaitForCheckpointRequestsReady(signal);
+        await _checkpointState.WaitForCheckpointRequestsReady(signal);
 
         // TODO implement on adapter
-        // TODO type safety
-        var nextCheckpointRequestId = await Options.Adapter.ReadCheckpointRequestId("next");
+        var nextCheckpointRequestId = await Options.Adapter.ReadOrUpdateCheckpoint("next");
         var clientId = await Options.Adapter.GetClientId();
         return await RequestCheckpointFromService(signal, new()
         {
@@ -338,12 +340,13 @@ public class StreamingSyncImplementation : ICloseable
         });
     }
 
-    private async Task<long> RequestCheckpointFromService(CancellationToken signal, CheckpointRequestPayload request)
+    private async Task<string> RequestCheckpointFromService(CancellationToken signal, CheckpointRequestPayload request)
     {
         // First, check if we can use a custom checkpoint request implementation.
-        // TODO add and default implement PostCheckpointRequest
-        var customResponse = await Options.PostCheckpointRequest(request.ClientId, request.CheckpointRequestId);
-        if (customResponse != null) return customResponse;
+        if (Options.PostCheckpointRequest != null)
+        {
+            return await Options.PostCheckpointRequest(request.ClientId, request.CheckpointRequestId);
+        }
 
         var status = await Options.Remote.FetchJson<CheckpointRequestResponse>(
             path: "/sync/checkpoint-request",
@@ -1000,10 +1003,10 @@ public class StreamingSyncImplementation : ICloseable
         handleActiveStreamsChange?.Invoke();
     }
 
-    public record LegacyWriteCheckpointResponseData(
+    private record LegacyWriteCheckpointResponseData(
         [property: JsonProperty("write_checkpoint")] string WriteCheckpoint
     );
-    public record LegacyWriteCheckpointApiResponse(
+    private record LegacyWriteCheckpointApiResponse(
         [property: JsonProperty("data")] LegacyWriteCheckpointResponseData Data
     );
 }

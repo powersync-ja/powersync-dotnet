@@ -212,8 +212,8 @@ public class MockRemote : Remote
     {
         if (path.Contains("checkpoint2.json"))
         {
-            var response = (T)(object)new StreamingSyncImplementation.ApiResponse(
-                new StreamingSyncImplementation.ResponseData("1")
+            var response = (T)(object)new StreamingSyncImplementation.LegacyWriteCheckpointApiResponse(
+                new StreamingSyncImplementation.LegacyWriteCheckpointResponseData("1")
             );
             return Task.FromResult(response);
         }
@@ -242,6 +242,14 @@ public class TestConnector : IPowerSyncBackendConnector
     }
 }
 
+public class TestCustomCheckpointsConnector(Func<string, long, Task<long>> postCheckpointRequest) : TestConnector(), ICustomCheckpointRequestConnector
+{
+    private readonly Func<string, long, Task<long>> _postCheckpointRequest = postCheckpointRequest;
+
+    public Task<long> PostCheckpointRequest(string clientId, long requestId)
+        => _postCheckpointRequest(clientId, requestId);
+}
+
 public record LogRecord(LogLevel LogLevel, string CategoryName, string Message, Exception? Exception);
 
 public class ListLogger(string categoryName, ConcurrentQueue<LogRecord> drain) : ILogger
@@ -254,7 +262,7 @@ public class ListLogger(string categoryName, ConcurrentQueue<LogRecord> drain) :
         _drain.Enqueue(new(logLevel, _categoryName, formatter(state, exception), exception));
     }
 
-    public IDisposable BeginScope<TState>(TState state) => null;
+    public IDisposable BeginScope<TState>(TState state) => null!;
     public bool IsEnabled(LogLevel logLevel) => true;
 }
 

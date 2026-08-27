@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 
 using Newtonsoft.Json;
 
+using PowerSync.Common.DB;
 using PowerSync.Common.DB.Crud;
 using PowerSync.Common.Utils;
 
@@ -18,7 +19,6 @@ public static class PowerSyncControlCommand
     public const string NOTIFY_TOKEN_REFRESHED = "refreshed_token";
     public const string NOTIFY_CRUD_UPLOAD_COMPLETED = "completed_upload";
     public const string UPDATE_SUBSCRIPTIONS = "update_subscriptions";
-
     public const string TARGET_CHECKPOINT_REQUEST_ID = "target_checkpoint_request_id";
 
     /// <summary>
@@ -137,8 +137,9 @@ public interface IBucketStorageAdapter : ICloseable
 
     Task<bool> UpdateLocalTarget(Func<Task<string>> callback);
     Task HandleCrudCheckpoint(long lastClientId, string? writeCheckpoint = null);
-    // TODO type safety
-    Task<long> ReadCheckpointRequestId(string variant, string? payload = null);
+
+    // TODO Return int64 from this in future release
+    Task<string?> ReadOrUpdateCheckpoint(string variant, string? update = null);
 
     /// <summary>
     /// Get a unique client ID.
