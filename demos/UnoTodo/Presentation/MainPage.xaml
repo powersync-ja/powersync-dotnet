@@ -1,0 +1,22 @@
+<Page x:Class="UnoTodo.Presentation.MainPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:local="using:UnoTodo.Presentation"
+      xmlns:uen="using:Uno.Extensions.Navigation.UI"
+      xmlns:utu="using:Uno.Toolkit.UI"
+      NavigationCacheMode="Required"
+      Background="{ThemeResource BackgroundBrush}">
+  <Grid uen:Region.Attached="True" utu:SafeArea.Insets="VisibleBounds">
+    <Grid.RowDefinitions>
+      <RowDefinition />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <Grid uen:Region.Attached="True" uen:Region.Navigator="Visibility" />
+
+    <utu:TabBar Grid.Row="1" uen:Region.Attached="True">
+      <utu:TabBarItem Content="Lists" uen:Region.Name="Lists" />
+      <utu:TabBarItem Content="SQL Console" uen:Region.Name="SqlConsole" />
+    </utu:TabBar>
+  </Grid>
+</Page>

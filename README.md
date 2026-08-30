@@ -24,6 +24,7 @@ Demo applications are located in the [`demos/`](./demos/) directory. Also see ou
 - [demos/CommandLine](./demos/CommandLine/README.md): A CLI-based app demonstrating real-time data sync
 - [demos/WPF](./demos/WPF/README.md): A Windows desktop to-do list app real-time data sync
 - [demos/MAUITodo](./demos/MAUITodo/README.md): A cross-platform mobile and desktop to-do list app built with .NET MAUI, running on iOS, Android and Windows
+- [demos/UnoTodo](./demos/UnoTodo/ReadMe.md): A cross-platform mobile and desktop to-do list app built with Uno Platform
 
 # Supported Frameworks
 
