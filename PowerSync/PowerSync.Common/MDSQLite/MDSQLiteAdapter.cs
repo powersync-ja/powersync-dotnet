@@ -153,15 +153,40 @@ public class MDSQLiteAdapter : IDBAdapter
     }
 
     /// <summary>
-    /// Loads the bundled PowerSync core SQLite extension. Override on
-    /// platform-specific adapters (e.g. MAUI iOS/Android) where the native library
-    /// lives outside the desktop runtime path.
+    /// Loads the bundled PowerSync core SQLite extension. The extension ships in a
+    /// different form per platform: an xcframework on iOS/MacCatalyst, a jniLib on
+    /// Android, and a plain native library under runtimes/ on desktop.
     /// </summary>
     protected virtual void LoadDefaultPowerSyncExtension(SqliteConnection db)
     {
+#if IOS || MACCATALYST
+        LoadAppleFrameworkExtension(db);
+#elif ANDROID
+        db.LoadExtension("libpowersync");
+#else
         var path = PowerSyncPathResolver.GetNativeLibraryPath(AppContext.BaseDirectory);
         db.LoadExtension(path, "sqlite3_powersync_init");
+#endif
     }
+
+#if IOS || MACCATALYST
+    private static void LoadAppleFrameworkExtension(SqliteConnection db)
+    {
+        var bundlePath = Foundation.NSBundle.FromIdentifier("co.powersync.sqlitecore")?.BundlePath;
+        if (bundlePath == null)
+        {
+            throw new Exception("Could not find PowerSync SQLite extension bundle path");
+        }
+
+        var filePath = Path.Combine(bundlePath, "powersync-sqlite-core");
+
+        using var loadExtension = db.CreateCommand();
+        loadExtension.CommandText = "SELECT load_extension(@path, @entryPoint)";
+        loadExtension.Parameters.AddWithValue("@path", filePath);
+        loadExtension.Parameters.AddWithValue("@entryPoint", "sqlite3_powersync_init");
+        loadExtension.ExecuteNonQuery();
+    }
+#endif
 
     public async Task Close()
     {

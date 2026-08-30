@@ -50,20 +50,6 @@ jobs:
       - name: Run Pack For Common
         run: dotnet pack PowerSync/PowerSync.Common -c Release -o ${{ github.workspace }}/output
 
-      - name: Extract MAUI Package Version from CHANGELOG.md
-        shell: bash
-        run: |
-          MAUI_VERSION=$(awk '/^## [0-9]+\.[0-9]+\.[0-9]+-dev(\.[0-9]+)?$/ {print $2; exit}' PowerSync/PowerSync.Maui/CHANGELOG.md)
-          if [[ -z "$MAUI_VERSION" ]]; then
-            echo "Error: Invalid dev version found in PowerSync.Maui/CHANGELOG.md. Expected format: x.x.x-dev.x"
-            exit 1
-          fi
-          echo "Detected Version: $MAUI_VERSION"
-          echo "VERSION=$MAUI_VERSION" >> $GITHUB_ENV
-
-      - name: Run Pack For MAUI
-        run: dotnet pack PowerSync/PowerSync.Maui -c Release -o ${{ github.workspace }}/output
-
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -156,11 +142,5 @@ jobs:
       - name: Run Push For Common
         run: >
           dotnet nuget push "${{ github.workspace }}\SignedArtifacts\PowerSync.Common*.nupkg"
-          --api-key "${{ steps.login.outputs.NUGET_API_KEY }}"
-          --source https://api.nuget.org/v3/index.json
-
-      - name: Run Push For Maui
-        run: >
-          dotnet nuget push "${{ github.workspace }}\SignedArtifacts\PowerSync.Maui*.nupkg"
           --api-key "${{ steps.login.outputs.NUGET_API_KEY }}"
           --source https://api.nuget.org/v3/index.json

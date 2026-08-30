@@ -1,5 +1,11 @@
 # PowerSync.Common Changelog
 
+## Unreleased
+
+- **Breaking:** `PowerSync.Maui` has been folded into `PowerSync.Common` and is no longer published. Mobile and desktop targets are now served by a single package.
+  - Remove the `PowerSync.Maui` package reference; `PowerSync.Common` alone is sufficient on all platforms.
+  - Replace `MAUISQLiteDBOpenFactory` with `MDSQLiteDBOpenFactory` (from `PowerSync.Common.MDSQLite`) and drop the `using PowerSync.Maui.SQLite;` import. `MAUISQLiteAdapter` is likewise replaced by `MDSQLiteAdapter`, which now selects the correct native extension per platform.
+
 ## 0.1.4
 
 - Update the PowerSync SQLite core extension to 0.5.2.

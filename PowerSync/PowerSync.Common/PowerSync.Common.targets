@@ -1,4 +1,19 @@
 <Project>
+  <!-- Copies the desktop native libraries out of the package and into the consuming
+       project's output, where PowerSyncPathResolver looks for them at runtime.
+
+       This replaces packing them as contentFiles. NuGet gathers content during the
+       cross-targeting outer build, where $(TargetFramework) is empty, so it cannot tell the
+       target frameworks apart and fans the same files out to every one of them — including
+       iOS, Android and MacCatalyst, which bundle their own native extension and can never
+       use these. Here $(TargetFramework) is the consumer's, so the check works. -->
+  <ItemGroup Condition="!$(TargetFramework.Contains('-android')) AND !$(TargetFramework.Contains('-ios')) AND !$(TargetFramework.Contains('-maccatalyst'))">
+    <None Include="$(MSBuildThisFileDirectory)../runtimes/**/*.*"
+          Link="runtimes/%(RecursiveDir)%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest"
+          Visible="false" />
+  </ItemGroup>
+
   <Target Name="RemovePowerSyncNativeForAndroid" AfterTargets="ResolvePackageAssets" Condition="$(TargetFramework.Contains('android'))">
     <ItemGroup>
       <NativeCopyLocalItems Remove="@(NativeCopyLocalItems)" Condition="'%(NuGetPackageId)' == 'PowerSync.Common'" />

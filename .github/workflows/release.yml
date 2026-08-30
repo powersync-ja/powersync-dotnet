@@ -15,7 +15,6 @@ jobs:
 
     outputs:
       common_version: ${{ steps.extract_version.outputs.common_version }}
-      maui_version: ${{ steps.extract_maui_version.outputs.maui_version }}
 
     steps:
       - name: Checkout Repository
@@ -55,22 +54,6 @@ jobs:
 
       - name: Run Pack For Common
         run: dotnet pack PowerSync/PowerSync.Common -c Release -o ${{ github.workspace }}/output
-
-      - name: Extract MAUI Package Version from CHANGELOG.md
-        id: extract_maui_version
-        shell: bash
-        run: |
-          MAUI_VERSION=$(awk '/^## [0-9]+\.[0-9]+\.[0-9]+/ {print $2; exit}' PowerSync/PowerSync.Maui/CHANGELOG.md)
-          if [[ -z "$MAUI_VERSION" ]]; then
-            echo "Error: Invalid version found in PowerSync.Maui/CHANGELOG.md. Expected format: '## x.x.x'"
-            exit 1
-          fi
-          echo "Detected Version: $MAUI_VERSION"
-          echo "VERSION=$MAUI_VERSION" >> $GITHUB_ENV
-          echo "maui_version=$MAUI_VERSION" >> $GITHUB_OUTPUT
-
-      - name: Run Pack For MAUI
-        run: dotnet pack PowerSync/PowerSync.Maui -c Release -o ${{ github.workspace }}/output
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
@@ -182,23 +165,3 @@ jobs:
             --generate-notes \
             SignedArtifacts/PowerSync.Common*.nupkg
 
-      - name: Run Push For Maui
-        run: >
-          dotnet nuget push "${{ github.workspace }}\SignedArtifacts\PowerSync.Maui*.nupkg"
-          --api-key "${{ steps.login.outputs.NUGET_API_KEY }}"
-          --source https://api.nuget.org/v3/index.json
-
-      - name: Create GitHub Release For Maui
-        continue-on-error: true
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          MAUI_VERSION: ${{ needs.build.outputs.maui_version }}
-        run: |
-          gh release create "PowerSync.Maui@${MAUI_VERSION}" \
-            --draft \
-            --title "PowerSync.Maui@${MAUI_VERSION}" \
-            --target main \
-            --generate-notes \
-            SignedArtifacts/PowerSync.Maui*.nupkg
