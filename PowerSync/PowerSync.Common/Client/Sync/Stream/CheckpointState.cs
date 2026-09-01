@@ -1,120 +1,189 @@
-// TODO CheckpointStateTests.cs
-using PowerSync.Common.Utils;
-
 namespace PowerSync.Common.Client.Sync.Stream;
 
-internal class CheckpointStateSignals
-{
-    private CheckpointState _state = new CheckpointState.Pending();
-    private readonly BroadcastChannel<CheckpointState> _stateBroadcaster = new();
-    private TaskCompletionSource<bool> _waitingForCheckpointsReady = new();
+using System.Runtime.ExceptionServices;
+using System.Threading.Channels;
 
-    // -- Check behaviour
-    private void UpdateState(CheckpointState state)
-    {
-        // TODO Run this asynchronously in another Task?
-        _state = state;
-        _stateBroadcaster.Broadcast(state);
-    }
+/// <summary>
+/// Tracks whether the active download iteration has reconciled checkpoint request state with the
+/// PowerSync service, gating checkpoint requests until it has.
+/// </summary>
+internal sealed class CheckpointStateSignals
+{
+    private readonly object gate = new();
+
+    private CheckpointState state = new CheckpointState.Pending();
+
+    /// <summary>
+    /// One entry per caller currently blocked in <see cref="WaitForCheckpointRequestsReady"/>.
+    /// Completed by <see cref="SetState"/> so every waiter observes each transition.
+    /// </summary>
+    private readonly List<TaskCompletionSource<bool>> stateWaiters = [];
+
+    /// <summary>
+    /// Signalled when a caller starts waiting for checkpoint requests to become available. Used to
+    /// resume a download iteration that is currently sitting in its retry delay.
+    /// </summary>
+    private Channel<bool> checkpointWaiterArrived = CreateNotifier();
 
     /// <summary>
     /// Marks the current download iteration as ended, blocking new checkpoint requests until the
-    /// seed was performed in the next iteration.
+    /// seed performed by the next iteration completes.
     /// </summary>
     public void DownloadIterationEnded()
     {
-        _waitingForCheckpointsReady = new();
-        UpdateState(new CheckpointState.Pending());
+        lock (gate)
+        {
+            // Waiters arriving after this should be able to resume the next download iteration.
+            checkpointWaiterArrived = CreateNotifier();
+            SetState(new CheckpointState.Pending());
+        }
     }
 
     /// <summary>
-    /// Marks the sync client as disconnected, failing all outstanding checkpoint
-    /// requests and preventing new ones.
+    /// Marks the sync client as disconnected, failing all outstanding checkpoint requests and
+    /// preventing new ones.
     /// </summary>
-    public void Disconnect()
+    public void Disconnected()
     {
-        UpdateState(new CheckpointState.Disconnected());
-    }
-
-    /// Waits for a waiter wanting torequest a checkpoint.
-    ///
-    /// As the waiter is blocked for a seed run we start in the download
-    /// iteration we use this to wake up the download iteration if it's currently
-    /// paused.
-    public Task WaitForCheckpointWaiter() => _waitingForCheckpointsReady.Task;
-
-    public void MarkCheckpointsReady()
-    {
-        UpdateState(new CheckpointState.Ready());
-    }
-
-    public void MarkCheckpointsFailed(Exception ex)
-    {
-        UpdateState(new CheckpointState.Error(ex));
-    }
-
-    public Task WaitForCheckpointRequestsReady(CancellationToken signal, bool wakeDownloadLoop = true)
-    {
-        var tcs = new TaskCompletionSource<bool>();
-        var reader = _stateBroadcaster.Subscribe(out var subscriberId);
-
-        void UnsubscribeReader() => _stateBroadcaster.Unsubscribe(subscriberId);
-
-        // Resolves the promise from the current state if possible, returning true if it was
-        bool HandleState(CheckpointState state)
+        lock (gate)
         {
-            switch (state)
+            SetState(new CheckpointState.Disconnected());
+        }
+    }
+
+    /// <summary>
+    /// Runs <paramref name="seed"/>, publishing its outcome to callers of
+    /// <see cref="WaitForCheckpointRequestsReady"/>. Cancellation leaves the state pending, since a
+    /// later iteration will seed it again.
+    /// </summary>
+    public async Task MarkCheckpointsReady(Func<Task> seed)
+    {
+        try
+        {
+            await seed();
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            lock (gate)
             {
-                case CheckpointState.Disconnected:
-                    tcs.TrySetException(CheckpointRequestException.Disconnected);
-                    UnsubscribeReader();
-                    return true;
-
-                case CheckpointState.Ready:
-                    tcs.TrySetResult(true);
-                    UnsubscribeReader();
-                    return true;
-
-                case CheckpointState.Error e:
-                    tcs.TrySetException(e.Exception);
-                    UnsubscribeReader();
-                    return true;
-
-                case CheckpointState.Pending:
-                    if (wakeDownloadLoop)
-                    {
-                        _waitingForCheckpointsReady.TrySetResult(true);
-                    }
-                    return false;
+                SetState(new CheckpointState.Failed(ex));
             }
-            return false;
+            throw;
         }
 
-        // Listen to state changes until task resolves
-        var cts = CancellationTokenSource.CreateLinkedTokenSource(signal);
-        _ = Task.Run(async () =>
+        lock (gate)
         {
-            while (reader.TryRead(out var state))
+            SetState(new CheckpointState.Ready());
+        }
+    }
+
+    /// <summary>
+    /// Waits for a caller wanting to request a checkpoint.
+    /// <para />
+    /// That caller is blocked until the seed run started by a download iteration completes, so this
+    /// is used to wake up the download loop while it is paused between iterations.
+    /// </summary>
+    public async Task WaitForCheckpointWaiter(CancellationToken signal)
+    {
+        ChannelReader<bool> reader;
+        lock (gate)
+        {
+            reader = checkpointWaiterArrived.Reader;
+        }
+
+        await reader.ReadAsync(signal);
+    }
+
+    /// <summary>
+    /// Waits until a download iteration is active and has seeded the checkpoint state, meaning that
+    /// checkpoint request ids can safely be allocated.
+    /// </summary>
+    /// <param name="signal">Cancelled when the sync client disconnects.</param>
+    /// <param name="wakeDownloadLoop">
+    /// Whether a paused download loop should be resumed to seed the state. Callers that only want to
+    /// piggyback on an iteration someone else needs should pass false.
+    /// </param>
+    /// <exception cref="CheckpointRequestException">
+    /// Thrown when the client is disconnected, or when seeding the checkpoint state failed.
+    /// </exception>
+    public async Task WaitForCheckpointRequestsReady(CancellationToken signal, bool wakeDownloadLoop = true)
+    {
+        while (true)
+        {
+            signal.ThrowIfCancellationRequested();
+
+            TaskCompletionSource<bool> waiter;
+            lock (gate)
             {
-                if (HandleState(state))
+                switch (state)
                 {
-                    cts.Cancel();
+                    case CheckpointState.Ready:
+                        return;
+                    case CheckpointState.Disconnected:
+                        throw CheckpointRequestException.Disconnected;
+                    case CheckpointState.Failed failed:
+                        ExceptionDispatchInfo.Capture(failed.Exception).Throw();
+                        return;
+                }
+
+                // Pending: wait for the next transition, optionally asking the download loop to start
+                // an iteration which can seed the state we're waiting for.
+                waiter = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                stateWaiters.Add(waiter);
+
+                if (wakeDownloadLoop)
+                {
+                    checkpointWaiterArrived.Writer.TryWrite(true);
                 }
             }
-        }, cts.Token);
-        HandleState(_state);
 
-        return tcs.Task;
-        // TODO CHECK IF THIS WORKS
+            using var registration = signal.Register(() => waiter.TrySetCanceled(signal));
+            try
+            {
+                await waiter.Task;
+            }
+            finally
+            {
+                lock (gate)
+                {
+                    stateWaiters.Remove(waiter);
+                }
+            }
+        }
     }
+
+    private void SetState(CheckpointState next)
+    {
+        state = next;
+
+        foreach (var waiter in stateWaiters)
+        {
+            waiter.TrySetResult(true);
+        }
+    }
+
+    /// <summary>A conflating single-slot channel: only the fact that a signal arrived matters.</summary>
+    private static Channel<bool> CreateNotifier() =>
+        Channel.CreateBounded<bool>(new BoundedChannelOptions(1) { FullMode = BoundedChannelFullMode.DropWrite });
 }
 
-internal record CheckpointState
+internal abstract record CheckpointState
 {
     private CheckpointState() { }
 
+    /// <summary>No iteration has seeded the checkpoint state, requests have to wait.</summary>
     public sealed record Pending : CheckpointState;
+
+    /// <summary>The sync client is disconnected, requests cannot be made at all.</summary>
     public sealed record Disconnected : CheckpointState;
+
+    /// <summary>The active iteration has seeded its state, requests can be made.</summary>
     public sealed record Ready : CheckpointState;
-    public sealed record Error(Exception Exception) : CheckpointState;
+
+    /// <summary>Seeding the checkpoint state failed.</summary>
+    public sealed record Failed(Exception Exception) : CheckpointState;
 }

@@ -25,10 +25,59 @@ public class MockSyncService : EventStream<string>
     private readonly ListLoggerProvider _listLoggerProvider = new();
     public IReadOnlyList<LogRecord> Logs => _listLoggerProvider.Logs;
 
-    public long LastWriteCheckpoint { get; set; } = 0;
+    private readonly object checkpointGate = new();
+    private readonly List<string> checkpointRequests = [];
+    private long lastWriteCheckpoint;
 
-    private readonly List<long> _checkpointRequests = [];
-    public IReadOnlyList<long> CheckpointRequests => _checkpointRequests;
+    /// <summary>
+    /// The highest checkpoint request id this service has handed out. Settable so tests can simulate a
+    /// client whose local counter has drifted from the service's.
+    /// </summary>
+    public long LastWriteCheckpoint
+    {
+        get { lock (checkpointGate) { return lastWriteCheckpoint; } }
+        set { lock (checkpointGate) { lastWriteCheckpoint = value; } }
+    }
+
+    /// <summary>Every checkpoint request id received on `/sync/checkpoint-request`, in order.</summary>
+    public IReadOnlyList<string> CheckpointRequests
+    {
+        get { lock (checkpointGate) { return [.. checkpointRequests]; } }
+    }
+
+    /// <summary>Set to false to emulate a service too old to know `/sync/checkpoint-request`.</summary>
+    public bool CheckpointRequestsSupported { get; set; } = true;
+
+    /// <summary>Runs after a checkpoint request is recorded, but before it is answered.</summary>
+    public Func<Task> BeforeCheckpointRequestResponse { get; set; } = () => Task.CompletedTask;
+
+    /// <summary>
+    /// Answers a checkpoint request the way the service does: the effective id is the higher of the
+    /// requested id and the one the service already knows about.
+    /// </summary>
+    internal async Task<CheckpointRequestResponse> HandleCheckpointRequest(CheckpointRequestPayload request)
+    {
+        if (!CheckpointRequestsSupported)
+        {
+            throw new HttpRequestException(
+                "Received NotFound - Not Found when getting from /sync/checkpoint-request: ");
+        }
+
+        long resolved;
+        lock (checkpointGate)
+        {
+            checkpointRequests.Add(request.CheckpointRequestId);
+            resolved = Math.Max(lastWriteCheckpoint, long.Parse(request.CheckpointRequestId));
+            lastWriteCheckpoint = resolved;
+        }
+
+        await BeforeCheckpointRequestResponse();
+
+        return new CheckpointRequestResponse
+        {
+            Data = new CheckpointRequestResponseData { CheckpointRequestId = resolved.ToString() }
+        };
+    }
 
     public void PushLine(StreamingSyncLine line)
     {
@@ -40,7 +89,7 @@ public class MockSyncService : EventStream<string>
         Emit(line);
     }
 
-    public PowerSyncDatabase CreateDatabase(string? dbFilename = null)
+    public PowerSyncDatabase CreateDatabase(string? dbFilename = null, TimeProvider? timeProvider = null)
     {
         dbFilename ??= $"sync-stream-{Guid.NewGuid():N}.db";
         var connector = new TestConnector();
@@ -51,6 +100,7 @@ public class MockSyncService : EventStream<string>
             Database = new SQLOpenOptions { DbFilename = dbFilename },
             Schema = TestSchemaTodoList.AppSchema,
             RemoteFactory = _ => mockRemote,
+            TimeProvider = timeProvider,
             Logger = CreateLogger()
         });
     }
@@ -162,7 +212,6 @@ public class MockRemote : Remote
         this.connectedListeners = connectedListeners;
     }
 
-    // TODO This should be able to parse and handle /sync/stream AND /sync/checkpoint_request (or whatever the URL is)
     public override Task<Stream> PostStreamRaw(SyncStreamOptions options)
     {
         if (options.Path.EndsWith("/sync/stream"))
@@ -194,31 +243,26 @@ public class MockRemote : Remote
 
             return Task.FromResult(pipe.Reader.AsStream());
         }
-        else if (options.Path.Contains("/sync/checkpoint-request"))
-        {
-            // TODO
-            throw new Exception("Not implemented");
-        }
-        else if (options.Path.Contains("/write-checkpoint2.json"))
-        {
-            // TODO
-            throw new Exception("Not implemented");
-        }
 
-        throw new Exception("Not implemented");
+        throw new InvalidOperationException($"MockRemote received an unexpected stream request: {options.Path}");
     }
 
-    public override Task<T> FetchJson<T>(string path, HttpMethod? method = null, object? data = null, Dictionary<string, string>? headers = null, CancellationToken ct = default)
+    public override async Task<T> FetchJson<T>(string path, HttpMethod? method = null, object? data = null, Dictionary<string, string>? headers = null, CancellationToken ct = default)
     {
-        if (path.Contains("checkpoint2.json"))
+        if (path.Contains("/sync/checkpoint-request"))
         {
-            var response = (T)(object)new StreamingSyncImplementation.LegacyWriteCheckpointApiResponse(
-                new StreamingSyncImplementation.LegacyWriteCheckpointResponseData("1")
-            );
-            return Task.FromResult(response);
+            var response = await syncService.HandleCheckpointRequest((CheckpointRequestPayload)data!);
+            return (T)(object)response;
         }
 
-        throw new InvalidOperationException("Not implemented");
+        if (path.Contains("write-checkpoint2.json"))
+        {
+            return (T)(object)new StreamingSyncImplementation.LegacyWriteCheckpointApiResponse(
+                new StreamingSyncImplementation.LegacyWriteCheckpointResponseData("1")
+            );
+        }
+
+        throw new InvalidOperationException($"MockRemote received an unexpected request: {path}");
     }
 }
 
@@ -242,11 +286,11 @@ public class TestConnector : IPowerSyncBackendConnector
     }
 }
 
-public class TestCustomCheckpointsConnector(Func<string, long, Task<long>> postCheckpointRequest) : TestConnector(), ICustomCheckpointRequestConnector
+public class TestCustomCheckpointsConnector(Func<string, string, Task<string>> postCheckpointRequest) : TestConnector, ICustomCheckpointRequestConnector
 {
-    private readonly Func<string, long, Task<long>> _postCheckpointRequest = postCheckpointRequest;
+    private readonly Func<string, string, Task<string>> _postCheckpointRequest = postCheckpointRequest;
 
-    public Task<long> PostCheckpointRequest(string clientId, long requestId)
+    public Task<string> PostCheckpointRequest(string clientId, string requestId)
         => _postCheckpointRequest(clientId, requestId);
 }
 

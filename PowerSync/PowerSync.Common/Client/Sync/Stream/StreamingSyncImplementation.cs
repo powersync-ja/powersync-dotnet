@@ -3,6 +3,7 @@ namespace PowerSync.Common.Client.Sync.Stream;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
+using System.Threading.Channels;
 
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -50,11 +51,21 @@ public class StreamingSyncImplementationOptions : AdditionalConnectionOptions
 
     public Func<Task> UploadCrud { get; init; } = null!;
 
-    public Func<string, string, Task<string>?> PostCheckpointRequest = null!;
+    /// <summary>
+    /// Posts a checkpoint request with the connector. Null when the connector doesn't support that,
+    /// in which case the request is posted to the PowerSync service directly.
+    /// </summary>
+    public Func<string, string, Task<string>>? PostCheckpointRequest { get; init; }
 
     public Remote Remote { get; init; } = null!;
 
     public ILogger? Logger { get; init; }
+
+    /// <summary>
+    /// Source of the delays in the sync loops. Tests substitute a fake clock so they don't have to
+    /// wait out real retry delays.
+    /// </summary>
+    internal TimeProvider TimeProvider { get; init; } = TimeProvider.System;
 }
 
 public class BaseConnectionOptions(Dictionary<string, object>? parameters = null, Dictionary<string, string>? appMetadata = null, bool? includeDefaultStreams = true, CheckpointMode? checkpointMode = null)
@@ -172,20 +183,25 @@ public class StreamingSyncImplementation : ICloseable
     protected CancellationTokenSource? CancellationTokenSource { get; set; }
 
     private Task? streamingSyncTask;
-    public Action TriggerCrudUpload { get; }
 
     private CancellationTokenSource? crudUpdateCts;
     private Task? crudUpdateTask;
 
-    private readonly CheckpointStateSignals _checkpointState = new();
+    private readonly CheckpointStateSignals checkpointState = new();
+
+    /// <summary>
+    /// The highest checkpoint request id the core extension has reported as applied, if any.
+    /// </summary>
+    private string? lastAppliedCheckpointRequestId;
 
     private readonly ILogger logger;
     private SubscribedStream[] activeStreams;
 
-    private bool isUploadingCrud;
-    private Task? crudUploadTask;
     private Action? notifyCompletedUploads;
     private Action? handleActiveStreamsChange;
+
+    /// <summary>Signals <see cref="CrudUploadLoop"/> that there may be local writes to upload.</summary>
+    private readonly Channel<bool> crudUploadRequested = CreateNotifier<bool>();
 
     private readonly StreamingSyncLocks locks;
 
@@ -207,33 +223,14 @@ public class StreamingSyncImplementation : ICloseable
 
         locks = new StreamingSyncLocks();
         logger = options.Logger ?? NullLogger.Instance;
-        isUploadingCrud = false;
 
         CancellationTokenSource = null;
-
-        TriggerCrudUpload = () =>
-        {
-            if (!SyncStatus.Connected || isUploadingCrud)
-            {
-                return;
-            }
-
-            isUploadingCrud = true;
-            crudUploadTask = Task.Run(async () =>
-            {
-                await InternalUploadAllCrud();
-                notifyCompletedUploads?.Invoke();
-                isUploadingCrud = false;
-            });
-        };
-
     }
 
     /// <summary>
     /// Indicates if the sync service is connected.
     /// </summary>
     public bool IsConnected => SyncStatus.Connected;
-
 
     /// <summary>
     /// The timestamp of the last successful sync.
@@ -309,31 +306,29 @@ public class StreamingSyncImplementation : ICloseable
         streamingSyncTask = null;
         CancellationTokenSource = null;
 
-        // Do the same for any pending CRUD uploads
-        if (crudUploadTask != null)
-        {
-            try
-            {
-                await crudUploadTask;
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning("CRUD upload task failed during disconnect: {Message}", ex.Message);
-            }
-            crudUploadTask = null;
-        }
-
         UpdateSyncStatus(new SyncStatusOptions { Connected = false, Connecting = false });
     }
 
+    /// <summary>
+    /// Requests a CRUD upload, without waiting for it to complete.
+    /// </summary>
+    public void TriggerCrudUpload()
+    {
+        crudUploadRequested.Writer.TryWrite(true);
+    }
+
+    /// <summary>
+    /// Allocates the next checkpoint request id and posts it, waiting for the active download
+    /// iteration to have reconciled checkpoint state with the service first.
+    /// </summary>
     private async Task<string> RequestNextCheckpointFromService(CancellationToken signal)
     {
-        await _checkpointState.WaitForCheckpointRequestsReady(signal);
+        await checkpointState.WaitForCheckpointRequestsReady(signal);
 
-        // TODO implement on adapter
-        var nextCheckpointRequestId = await Options.Adapter.ReadOrUpdateCheckpoint("next");
+        var nextCheckpointRequestId = await Options.Adapter.ReadOrUpdateCheckpoint("next")
+            ?? throw new InvalidOperationException("The core extension did not return a checkpoint request id.");
         var clientId = await Options.Adapter.GetClientId();
-        return await RequestCheckpointFromService(signal, new()
+        return await RequestCheckpointFromService(signal, new CheckpointRequestPayload
         {
             ClientId = clientId,
             CheckpointRequestId = nextCheckpointRequestId,
@@ -357,13 +352,24 @@ public class StreamingSyncImplementation : ICloseable
         return status.Data.CheckpointRequestId;
     }
 
-    // TODO convert write checkpoint data type to long
+    /// <summary>
+    /// Asks the service for the checkpoint request state it has for this client, and hands it to the
+    /// core extension so that subsequent requests continue from a counter both parties agree on.
+    /// </summary>
+    private async Task SeedCheckpointRequestState(CancellationToken signal, CheckpointRequestPayload request)
+    {
+        var seed = await RequestCheckpointFromService(signal, request);
+        await Options.Adapter.ReadOrUpdateCheckpoint("seed", seed);
+    }
+
+    // TODO convert write checkpoint data type to long in a future release
     private async Task<string> GetLegacyWriteCheckpoint()
     {
         var clientId = await Options.Adapter.GetClientId();
         var path = $"/write-checkpoint2.json?client_id={clientId}";
         var response = await Options.Remote.FetchJson<LegacyWriteCheckpointApiResponse>(path);
 
+        logger.LogDebug("Created write checkpoint: {checkpoint}", response.Data.WriteCheckpoint);
         return response.Data.WriteCheckpoint;
     }
 
@@ -374,6 +380,29 @@ public class StreamingSyncImplementation : ICloseable
             CancellationTokenSource = new CancellationTokenSource();
             signal = CancellationTokenSource.Token;
         }
+
+        var token = signal.Value;
+        var resolvedOptions = options ?? new PowerSyncConnectionOptions();
+
+        try
+        {
+            await Task.WhenAll(
+                DownloadLoop(token, resolvedOptions),
+                CrudUploadLoop(token, resolvedOptions),
+                RepostUnacknowledgedCheckpointRequests(token, resolvedOptions)
+            );
+        }
+        finally
+        {
+            // These loops only complete when we want to disconnect. No further sync iteration can
+            // resume checkpoint requests, so fail any that are still pending.
+            checkpointState.Disconnected();
+        }
+    }
+
+    protected async Task DownloadLoop(CancellationToken signal, PowerSyncConnectionOptions options)
+    {
+        var retryDelayMs = options.RetryDelayMs ?? DEFAULT_RETRY_DELAY_MS;
 
         crudUpdateCts = new CancellationTokenSource();
         crudUpdateTask = Task.Run(async () =>
@@ -387,7 +416,7 @@ public class StreamingSyncImplementation : ICloseable
         // Create a new cancellation token source for nested operations.
         // This is needed to close any previous connections.
         var nestedCts = new CancellationTokenSource();
-        signal.Value.Register(() =>
+        signal.Register(() =>
         {
             nestedCts.Cancel();
             crudUpdateCts?.Cancel();
@@ -413,7 +442,7 @@ public class StreamingSyncImplementation : ICloseable
 
             try
             {
-                if (signal.Value.IsCancellationRequested)
+                if (signal.IsCancellationRequested)
                 {
                     break;
                 }
@@ -460,7 +489,7 @@ public class StreamingSyncImplementation : ICloseable
             {
                 notifyCompletedUploads = null;
 
-                if (!signal.Value.IsCancellationRequested)
+                if (!signal.IsCancellationRequested)
                 {
                     // Closing sync stream network requests before retry.
                     nestedCts.Cancel();
@@ -475,7 +504,9 @@ public class StreamingSyncImplementation : ICloseable
                         Connecting = true
                     });
 
-                    await DelayRetry();
+                    // Someone wanting to request a checkpoint needs a seeded iteration, so cut the
+                    // delay short instead of making them wait for it.
+                    await DelayRetry(signal, retryDelayMs, resumeOnCheckpointRequest: true);
                 }
             }
         }
@@ -486,6 +517,119 @@ public class StreamingSyncImplementation : ICloseable
             Connected = false,
             Connecting = false
         });
+    }
+
+    /// <summary>
+    /// Uploads local writes for as long as the connection lasts: once on connect, and then whenever
+    /// <see cref="TriggerCrudUpload"/> signals that there may be more.
+    /// </summary>
+    protected async Task CrudUploadLoop(CancellationToken signal, PowerSyncConnectionOptions options)
+    {
+        var throttleMs = options.CrudUploadThrottleMs ?? DEFAULT_CRUD_UPLOAD_THROTTLE_MS;
+
+        try
+        {
+            while (!signal.IsCancellationRequested)
+            {
+                // Start the initial CRUD upload on connect. Then, keep polling until we're done.
+                await Task.WhenAll(
+                    InternalUploadAllCrud(signal, options),
+                    Options.TimeProvider.Delay(TimeSpan.FromMilliseconds(throttleMs), signal)
+                );
+
+                await crudUploadRequested.Reader.ReadAsync(signal);
+            }
+        }
+        catch (OperationCanceledException) when (signal.IsCancellationRequested)
+        {
+            // Disconnecting.
+        }
+        catch (Exception ex)
+        {
+            logger.LogError("Error in CRUD upload loop: {message}", ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Periodically re-posts the current checkpoint request while the service has not applied it yet.
+    /// <para />
+    /// The service is allowed to forget checkpoint requests, and re-posting an id it has already seen
+    /// is a cheap no-op, so this doubles as a catch-all for requests lost to network failures.
+    /// </summary>
+    protected async Task RepostUnacknowledgedCheckpointRequests(CancellationToken signal, PowerSyncConnectionOptions options)
+    {
+        if (options.CheckpointMode is not CheckpointMode.Requests requests)
+        {
+            return;
+        }
+
+        var retryDelayMs = (int)requests.RetryDelayMs;
+
+        while (!signal.IsCancellationRequested)
+        {
+            try
+            {
+                // Never wakes the download loop: this only re-posts what another caller requested.
+                await checkpointState.WaitForCheckpointRequestsReady(signal, wakeDownloadLoop: false);
+
+                var requestId = await Options.Adapter.ReadOrUpdateCheckpoint("current");
+
+                // Give the request some time to sync.
+                await DelayRetry(signal, retryDelayMs);
+
+                // If a new request was made, reset the timer.
+                if (requestId != await Options.Adapter.ReadOrUpdateCheckpoint("current"))
+                {
+                    continue;
+                }
+
+                // If the request was applied, we don't need to retry.
+                if (requestId == null || IsCheckpointRequestApplied(requestId))
+                {
+                    continue;
+                }
+
+                // Make sure we're online and ready before making the request.
+                await checkpointState.WaitForCheckpointRequestsReady(signal, wakeDownloadLoop: false);
+
+                // It's safe if this request races with a new one, the service will reject it.
+                logger.LogDebug("Retry checkpoint request {requestId}", requestId);
+                await RequestCheckpointFromService(signal, new CheckpointRequestPayload
+                {
+                    ClientId = await Options.Adapter.GetClientId(),
+                    CheckpointRequestId = requestId,
+                });
+            }
+            catch (OperationCanceledException) when (signal.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning("Error retrying checkpoint request: {message}", ex.Message);
+
+                try
+                {
+                    await DelayRetry(signal, retryDelayMs);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether the core extension has reported <paramref name="requestId"/> (or a later request) as
+    /// applied.
+    /// </summary>
+    private bool IsCheckpointRequestApplied(string requestId)
+    {
+        return lastAppliedCheckpointRequestId is { } applied
+            && long.TryParse(applied, out var appliedId)
+            && long.TryParse(requestId, out var required)
+            && appliedId >= required;
     }
 
     protected record StreamingSyncIterationResult
@@ -499,6 +643,12 @@ public class StreamingSyncImplementation : ICloseable
     {
         public string Command { get; init; } = null!;
         public object? Payload { get; init; }
+
+        /// <summary>
+        /// Set instead of <see cref="Command"/> when work running alongside the iteration (seeding
+        /// checkpoint state) failed and the iteration should fail with it.
+        /// </summary>
+        public Exception? Error { get; init; }
     }
 
     protected async Task<StreamingSyncIterationResult> StreamingSyncIteration(CancellationToken signal, PowerSyncConnectionOptions? options)
@@ -530,6 +680,9 @@ public class StreamingSyncImplementation : ICloseable
 
         // A failure opening or reading the stream, surfaced from the control loop so it retries.
         Exception? streamError = null;
+
+        // Reconciling checkpoint request state runs alongside line processing rather than blocking it.
+        Task? seedingCheckpointState = null;
 
         var nestedCts = new CancellationTokenSource();
         signal?.Register(() => { nestedCts.Cancel(); });
@@ -659,6 +812,7 @@ public class StreamingSyncImplementation : ICloseable
                     }
                     break;
                 case UpdateSyncStatus syncStatus:
+                    lastAppliedCheckpointRequestId = syncStatus.Status.LastAppliedCheckpointRequestId;
                     UpdateSyncStatus(CoreInstructionHelpers.CoreStatusToSyncStatusOptions(syncStatus.Status));
                     break;
                 case FetchCredentials fetchCredentials:
@@ -705,7 +859,7 @@ public class StreamingSyncImplementation : ICloseable
                 active_streams = activeStreams,
                 include_defaults = resolvedOptions.IncludeDefaultStreams,
                 app_metadata = resolvedOptions.AppMetadata,
-                checkpoint_mode = resolvedOptions.CheckpointMode == CheckpointMode.Legacy ? "legacy" : "requests",
+                checkpoint_mode = resolvedOptions.CheckpointMode is CheckpointMode.Requests ? "requests" : "legacy",
             };
 
             StreamingSyncRequest? establishRequest = null;
@@ -756,6 +910,37 @@ public class StreamingSyncImplementation : ICloseable
                             });
                         }
                     };
+
+                    if (establish.CheckpointRequest is { } seedRequest)
+                    {
+                        // Reconcile checkpoint state on every started download iteration to:
+                        //   1. Align service and client checkpoint ids, allowing both parties to
+                        //      safely forget old checkpoints.
+                        //   2. If the user id changes between connections, agree on the highest
+                        //      checkpoint request between the old and new user to make sure we'll
+                        //      receive that checkpoint eventually.
+                        // This runs concurrently so that sync lines are processed while it's pending.
+                        seedingCheckpointState = Task.Run(async () =>
+                        {
+                            try
+                            {
+                                await checkpointState.MarkCheckpointsReady(
+                                    () => SeedCheckpointRequestState(nestedCts.Token, seedRequest));
+                            }
+                            catch (OperationCanceledException)
+                            {
+                                // Tearing down, the next iteration will seed again.
+                            }
+                            catch (Exception ex)
+                            {
+                                // Fail the download iteration if checkpoint requests are broken.
+                                if (!invocations.Closed)
+                                {
+                                    invocations.Emit(new EnqueuedCommand { Error = ex });
+                                }
+                            }
+                        });
+                    }
                 }
                 else if (startInstruction is CloseSyncStream)
                 {
@@ -779,6 +964,11 @@ public class StreamingSyncImplementation : ICloseable
             {
                 await foreach (var command in commands!)
                 {
+                    if (command.Error != null)
+                    {
+                        System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(command.Error).Throw();
+                    }
+
                     var close = false;
                     foreach (var instruction in await InvokePowerSyncControl(command.Command, command.Payload))
                     {
@@ -839,6 +1029,16 @@ public class StreamingSyncImplementation : ICloseable
                 try { await receivingLines; } catch { /* surfaced via streamError */ }
             }
 
+            // Let the seed settle before marking the iteration as ended, otherwise a seed completing
+            // during teardown could report readiness for an iteration that is already gone.
+            if (seedingCheckpointState != null)
+            {
+                try { await seedingCheckpointState; } catch { /* surfaced via EnqueuedCommand.Error */ }
+            }
+
+            // No checkpoint requests can be made until the next iteration seeds its state.
+            checkpointState.DownloadIterationEnded();
+
             await Stop();
         }
 
@@ -853,9 +1053,8 @@ public class StreamingSyncImplementation : ICloseable
         Events.Close();
     }
 
-    protected async Task InternalUploadAllCrud()
+    protected async Task InternalUploadAllCrud(CancellationToken signal, PowerSyncConnectionOptions options)
     {
-
         await locks.ObtainLock(new LockOptions<Task>
         {
             Type = LockType.CRUD,
@@ -863,16 +1062,16 @@ public class StreamingSyncImplementation : ICloseable
             {
                 CrudEntry? checkedCrudItem = null;
 
-                while (true)
+                while (!signal.IsCancellationRequested)
                 {
-                    UpdateSyncStatus(new SyncStatusOptions { DataFlow = new SyncDataFlowStatus { Uploading = true } });
-
                     try
                     {
                         // This is the first item in the FIFO CRUD queue.
                         var nextCrudItem = await Options.Adapter.NextCrudItem();
                         if (nextCrudItem != null)
                         {
+                            UpdateSyncStatus(new SyncStatusOptions { DataFlow = new SyncDataFlowStatus { Uploading = true } });
+
                             if (checkedCrudItem?.ClientId == nextCrudItem.ClientId)
                             {
                                 logger.LogWarning(
@@ -897,9 +1096,26 @@ public class StreamingSyncImplementation : ICloseable
                         else
                         {
                             // Uploading is completed
-                            await Options.Adapter.UpdateLocalTarget(GetLegacyWriteCheckpoint);
+                            var neededUpdate = await Options.Adapter.UpdateLocalTarget(() =>
+                                options.CheckpointMode is CheckpointMode.Requests
+                                    ? RequestNextCheckpointFromService(signal)
+                                    : GetLegacyWriteCheckpoint());
+                            if (neededUpdate)
+                            {
+                                notifyCompletedUploads?.Invoke();
+                            }
+                            else if (checkedCrudItem != null)
+                            {
+                                // Only log this if there was something to upload
+                                logger.LogDebug("Upload complete, no write checkpoint needed.");
+                            }
                             break;
                         }
+                    }
+                    catch (OperationCanceledException) when (signal.IsCancellationRequested)
+                    {
+                        // Disconnecting.
+                        break;
                     }
                     catch (Exception ex)
                     {
@@ -913,7 +1129,7 @@ public class StreamingSyncImplementation : ICloseable
                             }
                         });
 
-                        await DelayRetry();
+                        await DelayRetry(signal, options.RetryDelayMs ?? DEFAULT_RETRY_DELAY_MS);
 
                         if (!IsConnected)
                         {
@@ -989,12 +1205,29 @@ public class StreamingSyncImplementation : ICloseable
         }
     }
 
-    private async Task DelayRetry()
+    /// <param name="resumeOnCheckpointRequest">
+    /// When set, the delay also ends as soon as a caller starts waiting to request a checkpoint. Such
+    /// a caller needs a seeded download iteration, so there is no point in making it wait out the
+    /// full delay.
+    /// </param>
+    private async Task DelayRetry(CancellationToken signal, int delay, bool resumeOnCheckpointRequest = false)
     {
-        if (Options.RetryDelayMs.HasValue)
+        if (!resumeOnCheckpointRequest)
         {
-            await Task.Delay(Options.RetryDelayMs.Value);
+            await Options.TimeProvider.Delay(TimeSpan.FromMilliseconds(delay), signal);
+            return;
         }
+
+        using var nestedCts = CancellationTokenSource.CreateLinkedTokenSource(signal);
+        await Task.WhenAny(
+            checkpointState.WaitForCheckpointWaiter(nestedCts.Token),
+            Options.TimeProvider.Delay(TimeSpan.FromMilliseconds(delay), nestedCts.Token));
+
+        // Ends the loser. Without this an abandoned checkpoint waiter would consume the signal that
+        // should have woken the next delay.
+        nestedCts.Cancel();
+
+        signal.ThrowIfCancellationRequested();
     }
 
     public void UpdateSubscriptions(SubscribedStream[] subscriptions)
@@ -1003,10 +1236,13 @@ public class StreamingSyncImplementation : ICloseable
         handleActiveStreamsChange?.Invoke();
     }
 
-    private record LegacyWriteCheckpointResponseData(
+    /// <summary>A conflating single-slot channel: only the fact that a signal arrived matters.</summary>
+    private static Channel<T> CreateNotifier<T>() => Channel.CreateBounded<T>(new BoundedChannelOptions(1) { FullMode = BoundedChannelFullMode.DropWrite });
+
+    internal record LegacyWriteCheckpointResponseData(
         [property: JsonProperty("write_checkpoint")] string WriteCheckpoint
     );
-    private record LegacyWriteCheckpointApiResponse(
+    internal record LegacyWriteCheckpointApiResponse(
         [property: JsonProperty("data")] LegacyWriteCheckpointResponseData Data
     );
 }

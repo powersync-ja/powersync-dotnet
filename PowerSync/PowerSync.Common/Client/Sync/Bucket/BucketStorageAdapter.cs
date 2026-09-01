@@ -19,7 +19,6 @@ public static class PowerSyncControlCommand
     public const string NOTIFY_TOKEN_REFRESHED = "refreshed_token";
     public const string NOTIFY_CRUD_UPLOAD_COMPLETED = "completed_upload";
     public const string UPDATE_SUBSCRIPTIONS = "update_subscriptions";
-    public const string TARGET_CHECKPOINT_REQUEST_ID = "target_checkpoint_request_id";
 
     /// <summary>
     /// An `established` or `end` event for response streams.

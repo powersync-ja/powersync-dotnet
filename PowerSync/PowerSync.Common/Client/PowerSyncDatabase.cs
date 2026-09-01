@@ -50,6 +50,13 @@ public class PowerSyncDatabaseOptions() : BasePowerSyncDatabaseOptions()
     /// If not provided, a default Remote will be created.
     /// </summary>
     public Func<IPowerSyncBackendConnector, Remote>? RemoteFactory { get; set; }
+
+    /// <summary>
+    /// Source of the delays used by the sync client (retry delays, upload throttling).
+    /// Defaults to <see cref="System.TimeProvider.System" />; tests substitute a fake clock so they
+    /// don't have to wait out real retry delays.
+    /// </summary>
+    internal TimeProvider? TimeProvider { get; set; }
 }
 
 public class PowerSyncDBEvents : EventManager
@@ -200,6 +207,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         SdkVersion = "";
 
         remoteFactory = options.RemoteFactory ?? (connector => new Remote(connector));
+        var timeProvider = options.TimeProvider ?? TimeProvider.System;
 
         watchManager = new WatchManager(this, masterCts.Token);
 
@@ -226,12 +234,17 @@ public class PowerSyncDatabase : IPowerSyncDatabase
                         await WaitForReady();
                         await connector.UploadData(this);
                     },
-                    PostCheckpointRequest = (connector is ICustomCheckpointRequestConnector c)
-                        ? (string clientId, string requestId) => c.PostCheckpointRequest(clientId, requestId)
-                        : (_, _) => null,
+                    PostCheckpointRequest = connector is ICustomCheckpointRequestConnector checkpointConnector
+                        ? async (clientId, requestId) =>
+                        {
+                            await WaitForReady();
+                            return await checkpointConnector.PostCheckpointRequest(clientId, requestId);
+                        }
+                        : null,
                     RetryDelayMs = options.RetryDelayMs,
                     Subscriptions = options.Subscriptions,
                     CrudUploadThrottleMs = options.CrudUploadThrottleMs,
+                    TimeProvider = timeProvider,
                     Logger = Logger
                 });
 
