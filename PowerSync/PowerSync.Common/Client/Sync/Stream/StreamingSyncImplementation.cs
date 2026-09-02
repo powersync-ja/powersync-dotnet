@@ -917,13 +917,7 @@ public class StreamingSyncImplementation : ICloseable
 
                     if (establish.CheckpointRequest is { } seedRequest)
                     {
-                        // Reconcile checkpoint state on every started download iteration to:
-                        //   1. Align service and client checkpoint ids, allowing both parties to
-                        //      safely forget old checkpoints.
-                        //   2. If the user id changes between connections, agree on the highest
-                        //      checkpoint request between the old and new user to make sure we'll
-                        //      receive that checkpoint eventually.
-                        // This runs concurrently so that sync lines are processed while it's pending.
+                        // Run concurrently so that seeding checkpoint state doesn't block sync line processing.
                         seedingCheckpointState = Task.Run(async () =>
                         {
                             try
@@ -931,10 +925,7 @@ public class StreamingSyncImplementation : ICloseable
                                 await checkpointState.MarkCheckpointsReady(
                                     () => SeedCheckpointRequestState(nestedCts.Token, seedRequest));
                             }
-                            catch (OperationCanceledException)
-                            {
-                                // Tearing down, the next iteration will seed again.
-                            }
+                            catch (OperationCanceledException) { }
                             catch (Exception ex)
                             {
                                 // Fail the download iteration if checkpoint requests are broken.
