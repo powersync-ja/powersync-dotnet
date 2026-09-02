@@ -120,6 +120,9 @@ public class SyncStreamsTests : IAsyncLifetime
 
         syncService.PushLine(MockDataFactory.CheckpointComplete(lastOpId: "0"));
         await a.WaitForFirstSync();
+
+        a.Unsubscribe();
+        b.Unsubscribe();
     }
 
     [Fact]
@@ -176,6 +179,7 @@ public class SyncStreamsTests : IAsyncLifetime
         var status = await statusTask;
 
         Assert.NotNull(status.ForStream(subscription));
+        subscription.Unsubscribe();
     }
 
     // FIx

@@ -74,7 +74,7 @@ public class CheckpointRequestsTests : IAsyncLifetime
         });
         _syncService.PushLine(new StreamingSyncDataJSON
         {
-            Data = new()
+            Data = new SyncDataBucketJSON
             {
                 Bucket = "a",
                 Data = [
