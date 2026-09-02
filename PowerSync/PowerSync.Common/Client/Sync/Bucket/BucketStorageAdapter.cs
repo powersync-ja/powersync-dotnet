@@ -138,7 +138,45 @@ public interface IBucketStorageAdapter : ICloseable
     Task HandleCrudCheckpoint(long lastClientId, string? writeCheckpoint = null);
 
     // TODO Return int64 from this in future release
+    /// <summary>
+    /// Reads or updates the local checkpoint request ID counter.
+    /// </summary>
     Task<string?> ReadOrUpdateCheckpoint(string variant, string? update = null);
+
+    /// <summary>
+    /// Increments and returns the local checkpoint counter.
+    /// </summary>
+    Task<string> NextCheckpointRequestId()
+        => ReadOrUpdateCheckpoint("next")!;
+
+    /// <summary>
+    /// Returns the highest checkpoint request ID that has been requested on this device.
+    /// </summary>
+    Task<string?> CurrentCheckpointRequestId()
+        => ReadOrUpdateCheckpoint("current");
+
+    /// <summary>
+    /// Seeds the local checkpoint request ID counter using a response from the server.
+    ///
+    /// Seeding the local counter achieves two goals:
+    /// <list type="number">
+    ///     <item>
+    ///         <description>
+    ///             The service is allowed to forget our checkpoint counter, so we remind
+    ///             it whenever we connect.
+    ///         </description>
+    ///     </item>
+    ///     <item>
+    ///         <description>
+    ///             Checkpoint requests are scoped per user-and-device combo, but the
+    ///             local ID counter is scoped per-device. Seeding ensures we generate
+    ///             correctly incrementing IDs after switching user accounts.
+    ///         </description>
+    ///     </item>
+    /// </list>
+    /// </summary>
+    Task<string> SeedCheckpointRequestId(string serviceResponse)
+        => ReadOrUpdateCheckpoint("next", serviceResponse)!;
 
     /// <summary>
     /// Get a unique client ID.

@@ -329,7 +329,7 @@ public class StreamingSyncImplementation : ICloseable
     {
         await checkpointState.WaitForCheckpointRequestsReady(signal);
 
-        var nextCheckpointRequestId = await Options.Adapter.ReadOrUpdateCheckpoint("next")
+        var nextCheckpointRequestId = await Options.Adapter.NextCheckpointRequestId()
             ?? throw new InvalidOperationException("The core extension did not return a checkpoint request id.");
         var clientId = await Options.Adapter.GetClientId();
         return await RequestCheckpointFromService(signal, new CheckpointRequestPayload
@@ -363,7 +363,7 @@ public class StreamingSyncImplementation : ICloseable
     private async Task SeedCheckpointRequestState(CancellationToken signal, CheckpointRequestPayload request)
     {
         var seed = await RequestCheckpointFromService(signal, request);
-        await Options.Adapter.ReadOrUpdateCheckpoint("seed", seed);
+        await Options.Adapter.SeedCheckpointRequestId(seed);
     }
 
     // TODO convert write checkpoint data type to long in a future release
@@ -576,13 +576,13 @@ public class StreamingSyncImplementation : ICloseable
                 // Never wakes the download loop: this only re-posts what another caller requested.
                 await checkpointState.WaitForCheckpointRequestsReady(signal, wakeDownloadLoop: false);
 
-                var requestId = await Options.Adapter.ReadOrUpdateCheckpoint("current");
+                var requestId = await Options.Adapter.CurrentCheckpointRequestId();
 
                 // Give the request some time to sync.
                 await DelayRetry(signal, retryDelayMs);
 
                 // If a new request was made, reset the timer.
-                if (requestId != await Options.Adapter.ReadOrUpdateCheckpoint("current"))
+                if (requestId != await Options.Adapter.CurrentCheckpointRequestId())
                 {
                     continue;
                 }

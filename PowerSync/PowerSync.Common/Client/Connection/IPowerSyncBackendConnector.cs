@@ -43,6 +43,10 @@ public interface ICustomCheckpointRequestConnector : IPowerSyncBackendConnector
 {
     /// <summary>
     /// Posts a client-generated checkpoint request to the backend and returns the effective checkpoint request state.
+    /// <para />
+    /// Currently, checkpoint request IDs are represented as strings. This is because some PowerSync SDKs are for runtimes
+    /// that don't have a fast 64-bit integer type. In a future release, checkpoint request IDs will change to be
+    /// represented by longs, meaning the <paramref name="requestId" /> parameter's type will also change to `long`.
     /// </summary>
     Task<string> PostCheckpointRequest(string clientId, string requestId);
 }

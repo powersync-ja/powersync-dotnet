@@ -70,13 +70,13 @@ public class SqliteBucketStorage : IBucketStorageAdapter
     /// <summary>
     /// Reads or updates the stored checkpoint request id.
     /// </summary>
-    public Task<string?> ReadOrUpdateCheckpoint(string variant, string? payload = null)
-        => db.WriteTransaction(tx => ReadOrUpdateCheckpoint(tx, variant, payload));
+    public Task<string?> ReadOrUpdateCheckpoint(string variant, string? update = null)
+        => db.WriteTransaction(tx => ReadOrUpdateCheckpoint(tx, variant, update));
 
     /// <summary>
     /// Reads or updates the stored checkpoint request id using the given transaction.
     /// </summary>
-    private static Task<string?> ReadOrUpdateCheckpoint(ITransaction tx, string variant, string? payload = null)
+    public static Task<string?> ReadOrUpdateCheckpoint(ITransaction tx, string variant, string? payload = null)
     {
         // TODO Return 64-bit integer in later release.
         return tx.Get<string?>(
@@ -84,7 +84,7 @@ public class SqliteBucketStorage : IBucketStorageAdapter
             [$"{variant}_checkpoint_request_id", payload]);
     }
 
-    // This is called within existing transactions, therefore accepts ITransaction
+    // This is called within existing transactions, therefore accept an ITransaction instead of creating a new one
     private static Task<string?> TargetCheckpointRequestId(ITransaction tx, string? update = null)
         => ReadOrUpdateCheckpoint(tx, "target", update);
 
