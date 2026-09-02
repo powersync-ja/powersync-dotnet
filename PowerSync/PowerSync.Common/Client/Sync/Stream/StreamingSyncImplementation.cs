@@ -298,6 +298,10 @@ public class StreamingSyncImplementation : ICloseable
                 await streamingSyncTask;
             }
         }
+        catch (OperationCanceledException)
+        {
+            // Expected: disconnecting cancels whatever the sync loops had in flight.
+        }
         catch (Exception ex)
         {
             // The operation might have failed, all we care about is if it has completed
@@ -534,7 +538,7 @@ public class StreamingSyncImplementation : ICloseable
                 // Start the initial CRUD upload on connect. Then, keep polling until we're done.
                 await Task.WhenAll(
                     InternalUploadAllCrud(signal, options),
-                    Options.TimeProvider.Delay(TimeSpan.FromMilliseconds(throttleMs), signal)
+                    DelayRetry(signal, throttleMs)
                 );
 
                 await crudUploadRequested.Reader.ReadAsync(signal);
@@ -979,7 +983,7 @@ public class StreamingSyncImplementation : ICloseable
                         if (instruction is CloseSyncStream closeSyncStream)
                         {
                             hideDisconnectOnRestart = closeSyncStream.HideDisconnect;
-                            logger.LogWarning("Closing stream");
+                            logger.LogDebug("Closing stream");
                             close = true;
                             break;
                         }
@@ -1205,6 +1209,10 @@ public class StreamingSyncImplementation : ICloseable
         }
     }
 
+    /// <summary>
+    /// Waits out a retry delay. Disconnecting ends the delay rather than throwing: callers check the
+    /// signal themselves, and a deliberate disconnect isn't a failure worth surfacing.
+    /// </summary>
     /// <param name="resumeOnCheckpointRequest">
     /// When set, the delay also ends as soon as a caller starts waiting to request a checkpoint. Such
     /// a caller needs a seeded download iteration, so there is no point in making it wait out the
@@ -1212,22 +1220,34 @@ public class StreamingSyncImplementation : ICloseable
     /// </param>
     private async Task DelayRetry(CancellationToken signal, int delay, bool resumeOnCheckpointRequest = false)
     {
-        if (!resumeOnCheckpointRequest)
+        if (signal.IsCancellationRequested)
         {
-            await Options.TimeProvider.Delay(TimeSpan.FromMilliseconds(delay), signal);
             return;
         }
 
         using var nestedCts = CancellationTokenSource.CreateLinkedTokenSource(signal);
-        await Task.WhenAny(
-            checkpointState.WaitForCheckpointWaiter(nestedCts.Token),
-            Options.TimeProvider.Delay(TimeSpan.FromMilliseconds(delay), nestedCts.Token));
+        var timeout = Options.TimeProvider.Delay(TimeSpan.FromMilliseconds(delay), nestedCts.Token);
 
-        // Ends the loser. Without this an abandoned checkpoint waiter would consume the signal that
-        // should have woken the next delay.
+        if (resumeOnCheckpointRequest)
+        {
+            // WhenAny returns the winner without observing it, so neither branch throws here.
+            await Task.WhenAny(checkpointState.WaitForCheckpointWaiter(nestedCts.Token), timeout);
+        }
+        else
+        {
+            try
+            {
+                await timeout;
+            }
+            catch (OperationCanceledException)
+            {
+                // Disconnected.
+            }
+        }
+
+        // Ends whichever task is still pending. Without this an abandoned checkpoint waiter would
+        // consume the signal that should have woken the next delay.
         nestedCts.Cancel();
-
-        signal.ThrowIfCancellationRequested();
     }
 
     public void UpdateSubscriptions(SubscribedStream[] subscriptions)
