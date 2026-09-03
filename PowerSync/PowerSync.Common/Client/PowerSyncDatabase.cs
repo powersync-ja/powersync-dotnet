@@ -52,9 +52,8 @@ public class PowerSyncDatabaseOptions() : BasePowerSyncDatabaseOptions()
     public Func<IPowerSyncBackendConnector, Remote>? RemoteFactory { get; set; }
 
     /// <summary>
-    /// Source of the delays used by the sync client (retry delays, upload throttling).
-    /// Defaults to <see cref="System.TimeProvider.System" />; tests substitute a fake clock so they
-    /// don't have to wait out real retry delays.
+    /// Used to calculate delays for the sync client (retry delays, upload throttling).
+    /// Used for testing to avoid waiting out some long delays (retry delay is minimum 10 seconds).
     /// </summary>
     internal TimeProvider? TimeProvider { get; set; }
 }
@@ -240,7 +239,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
                             await WaitForReady();
                             return await checkpointConnector.PostCheckpointRequest(clientId, requestId);
                         }
-                        : null,
+                    : null,
                     RetryDelayMs = options.RetryDelayMs,
                     Subscriptions = options.Subscriptions,
                     CrudUploadThrottleMs = options.CrudUploadThrottleMs,

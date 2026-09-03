@@ -201,7 +201,7 @@ public class StreamingSyncImplementation : ICloseable
     private Action? handleActiveStreamsChange;
 
     /// <summary>Signals <see cref="CrudUploadLoop"/> that there may be local writes to upload.</summary>
-    private readonly Channel<bool> crudUploadRequested = CreateNotifier<bool>();
+    private readonly Channel<bool> crudUploadRequested = CreateNotifier();
 
     private readonly StreamingSyncLocks locks;
 
@@ -298,10 +298,7 @@ public class StreamingSyncImplementation : ICloseable
                 await streamingSyncTask;
             }
         }
-        catch (OperationCanceledException)
-        {
-            // Expected: disconnecting cancels whatever the sync loops had in flight.
-        }
+        catch (OperationCanceledException) { }
         catch (Exception ex)
         {
             // The operation might have failed, all we care about is if it has completed
@@ -425,7 +422,7 @@ public class StreamingSyncImplementation : ICloseable
             nestedCts.Cancel();
             crudUpdateCts?.Cancel();
             crudUpdateCts = null;
-            try { crudUpdateTask?.Wait(2000); } catch (Exception) { }
+            try { crudUpdateTask?.Wait(2000); } catch { }
             UpdateSyncStatus(new SyncStatusOptions
             {
                 Connected = false,
@@ -544,10 +541,7 @@ public class StreamingSyncImplementation : ICloseable
                 await crudUploadRequested.Reader.ReadAsync(signal);
             }
         }
-        catch (OperationCanceledException) when (signal.IsCancellationRequested)
-        {
-            // Disconnecting.
-        }
+        catch (OperationCanceledException) when (signal.IsCancellationRequested) { /* Disconnecting. */ }
         catch (Exception ex)
         {
             logger.LogError("Error in CRUD upload loop: {message}", ex.Message);
@@ -1021,14 +1015,14 @@ public class StreamingSyncImplementation : ICloseable
 
             if (receivingLines != null)
             {
-                try { await receivingLines; } catch { /* surfaced via streamError */ }
+                try { await receivingLines; } catch { }
             }
 
             // Let the seed settle before marking the iteration as ended, otherwise a seed completing
             // during teardown could report readiness for an iteration that is already gone.
             if (seedingCheckpointState != null)
             {
-                try { await seedingCheckpointState; } catch { /* surfaced via EnqueuedCommand.Error */ }
+                try { await seedingCheckpointState; } catch { }
             }
 
             // No checkpoint requests can be made until the next iteration seeds its state.
@@ -1044,7 +1038,7 @@ public class StreamingSyncImplementation : ICloseable
     {
         crudUpdateCts?.Cancel();
         crudUpdateCts = null;
-        try { crudUpdateTask?.Wait(2000); } catch (Exception) { }
+        try { crudUpdateTask?.Wait(2000); } catch { }
         Events.Close();
     }
 
@@ -1201,8 +1195,7 @@ public class StreamingSyncImplementation : ICloseable
     }
 
     /// <summary>
-    /// Waits out a retry delay. Disconnecting ends the delay rather than throwing: callers check the
-    /// signal themselves, and a deliberate disconnect isn't a failure worth surfacing.
+    /// Waits out a retry delay. Cancellation resolves the delay early instead of throwing an exception.
     /// </summary>
     /// <param name="resumeOnCheckpointRequest">
     /// When set, the delay also ends as soon as a caller starts waiting to request a checkpoint. Such
@@ -1230,14 +1223,11 @@ public class StreamingSyncImplementation : ICloseable
             {
                 await timeout;
             }
-            catch (OperationCanceledException)
-            {
-                // Disconnected.
-            }
+            catch (OperationCanceledException) { /* Disconnecting. */ }
         }
 
-        // Ends whichever task is still pending. Without this an abandoned checkpoint waiter would
-        // consume the signal that should have woken the next delay.
+        // Ends whichever task is still pending to prevent abandoned tasks from consuming
+        // signals intended for future consumers of DelayRetry.
         nestedCts.Cancel();
     }
 
@@ -1247,8 +1237,10 @@ public class StreamingSyncImplementation : ICloseable
         handleActiveStreamsChange?.Invoke();
     }
 
-    /// <summary>A conflating single-slot channel: only the fact that a signal arrived matters.</summary>
-    private static Channel<T> CreateNotifier<T>() => Channel.CreateBounded<T>(new BoundedChannelOptions(1) { FullMode = BoundedChannelFullMode.DropWrite });
+    /// <summary>
+    /// A conflating single-slot channel, equivalent to Channel.CONFLATED in Kotlin.
+    /// </summary>
+    private static Channel<bool> CreateNotifier() => Channel.CreateBounded<bool>(new BoundedChannelOptions(1) { FullMode = BoundedChannelFullMode.DropOldest });
 
     internal record LegacyWriteCheckpointResponseData(
         [property: JsonProperty("write_checkpoint")] string WriteCheckpoint

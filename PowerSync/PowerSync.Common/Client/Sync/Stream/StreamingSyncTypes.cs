@@ -195,20 +195,20 @@ public class CrudResponse
 public class CheckpointRequestPayload
 {
     [JsonProperty("client_id")]
-    public string ClientId { get; set; }
+    public string ClientId { get; set; } = "";
 
     [JsonProperty("checkpoint_request_id")]
-    public string CheckpointRequestId { get; set; }
+    public string CheckpointRequestId { get; set; } = "";
 }
 
 public class CheckpointRequestResponse
 {
     [JsonProperty("data")]
-    public CheckpointRequestResponseData Data { get; set; }
+    public CheckpointRequestResponseData Data { get; set; } = new();
 }
 
 public class CheckpointRequestResponseData
 {
     [JsonProperty("checkpoint_request_id")]
-    public string CheckpointRequestId { get; set; }
+    public string CheckpointRequestId { get; set; } = "";
 }
