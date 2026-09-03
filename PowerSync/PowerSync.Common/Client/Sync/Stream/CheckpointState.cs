@@ -100,8 +100,14 @@ internal sealed class CheckpointStateSignals
         var reader = _stateBroadcaster.Subscribe(out var subscriberId);
         try
         {
-            while (!HandleState(wakeDownloadLoop))
+            // Only the first check may wake the download loop. A waiter that is already parked when
+            // an iteration ends must not resume the next one, otherwise a download loop that keeps
+            // failing would retry without ever waiting out its retry delay.
+            var wake = wakeDownloadLoop;
+
+            while (!HandleState(wake))
             {
+                wake = false;
                 await reader.ReadAsync(signal);
             }
         }

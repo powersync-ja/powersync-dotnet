@@ -1210,7 +1210,7 @@ public class StreamingSyncImplementation : ICloseable
         }
 
         using var nestedCts = CancellationTokenSource.CreateLinkedTokenSource(signal);
-        var timeout = Options.TimeProvider.Delay(TimeSpan.FromMilliseconds(delay), nestedCts.Token);
+        var timeout = Options.TimeProvider.Delay(TimeSpan.FromMilliseconds(WithJitter(delay)), nestedCts.Token);
 
         if (resumeOnCheckpointRequest)
         {
@@ -1241,6 +1241,23 @@ public class StreamingSyncImplementation : ICloseable
     /// A conflating single-slot channel, equivalent to Channel.CONFLATED in Kotlin.
     /// </summary>
     private static Channel<bool> CreateNotifier() => Channel.CreateBounded<bool>(new BoundedChannelOptions(1) { FullMode = BoundedChannelFullMode.DropOldest });
+
+    private static readonly Random jitterRandom = new();
+
+    /// <summary>
+    /// Applies a random +/- 10% jitter to a delay, so that clients that dropped during the same
+    /// service outage don't all retry in lockstep.
+    /// </summary>
+    private static double WithJitter(int delayMs)
+    {
+        double factor;
+        lock (jitterRandom)
+        {
+            factor = 0.9 + (jitterRandom.NextDouble() * 0.2);
+        }
+
+        return delayMs * factor;
+    }
 
     internal record LegacyWriteCheckpointResponseData(
         [property: JsonProperty("write_checkpoint")] string WriteCheckpoint

@@ -107,8 +107,7 @@ public class Remote
     {
         var request = await BuildRequest(method ?? HttpMethod.Get, path, data, headers);
 
-        using var client = new HttpClient();
-        var response = await client.SendAsync(request, ct);
+        var response = await httpClient.SendAsync(request, ct);
 
         if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
