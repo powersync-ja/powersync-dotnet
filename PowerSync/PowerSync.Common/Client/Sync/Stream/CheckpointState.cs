@@ -105,7 +105,7 @@ internal sealed class CheckpointStateSignals
             // failing would retry without ever waiting out its retry delay.
             var wake = wakeDownloadLoop;
 
-            while (!HandleState(wake))
+            while (!CheckpointRequestsReady(wake))
             {
                 wake = false;
                 await reader.ReadAsync(signal);
@@ -118,10 +118,9 @@ internal sealed class CheckpointStateSignals
     }
 
     /// <summary>
-    /// Returns true if checkpoint requests are ready and false if we need
-    /// to keep waiting.
+    /// Returns true if checkpoint requests are ready and false if we need to keep waiting.
     /// </summary>
-    private bool HandleState(bool wakeDownloadLoop)
+    private bool CheckpointRequestsReady(bool wakeDownloadLoop)
     {
         lock (_lock)
         {

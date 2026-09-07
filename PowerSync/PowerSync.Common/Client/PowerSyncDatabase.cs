@@ -234,10 +234,10 @@ public class PowerSyncDatabase : IPowerSyncDatabase
                         await connector.UploadData(this);
                     },
                     PostCheckpointRequest = connector is ICustomCheckpointRequestConnector checkpointConnector
-                        ? async (clientId, requestId) =>
+                        ? async (clientId, requestId, token) =>
                         {
                             await WaitForReady();
-                            return await checkpointConnector.PostCheckpointRequest(clientId, requestId);
+                            return await checkpointConnector.PostCheckpointRequest(clientId, requestId, token);
                         }
                     : null,
                     RetryDelayMs = options.RetryDelayMs,

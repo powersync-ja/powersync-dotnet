@@ -239,7 +239,7 @@ public class CheckpointRequestsTests : IAsyncLifetime
     public async Task CheckpointRequests_CanUseCheckpointMethodFromConnector()
     {
         var didRequestCheckpoint = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var connector = new TestCustomCheckpointsConnector((_, requestId) =>
+        var connector = new TestCustomCheckpointsConnector((_, requestId, _) =>
         {
             didRequestCheckpoint.TrySetResult(requestId);
             return Task.FromResult(requestId);
@@ -301,6 +301,22 @@ public class CheckpointRequestsTests : IAsyncLifetime
         completeInitialRequest.TrySetResult(true);
     }
 
+    [Fact(Timeout = 5000)]
+    public async Task CheckpointRequests_CanAbortCustomCheckpointRequest()
+    {
+        var connector = new StagedCheckpointRequestConnector();
+        await _db.Connect(connector, WithRequests());
+        await TestUtils.WaitForAsync(() => connector.Launched);
+
+        // Simulate the database disconnecting mid-request.
+        var disconnectTask = _db.Disconnect();
+        connector.Continue();
+        await disconnectTask;
+
+        await TestUtils.WaitForAsync(() => connector.Canceled);
+        Assert.False(connector.Completed);
+    }
+
     // A class with a settable property rather than a positional record: Dapper can't pick a
     // constructor when the result set is empty and SQLite reports no column type.
     private class NameResult
@@ -311,8 +327,79 @@ public class CheckpointRequestsTests : IAsyncLifetime
 
 class CheckpointRequestConnector : TestConnector, ICustomCheckpointRequestConnector
 {
-    public Task<string> PostCheckpointRequest(string clientId, string requestId)
+    public Task<string> PostCheckpointRequest(string clientId, string requestId, CancellationToken token)
     {
         return Task.FromResult(requestId);
+    }
+}
+
+// Runs a single, multi-stage PostCheckpointRequest call.
+class StagedCheckpointRequestConnector(bool enableConsole = false) : TestConnector, ICustomCheckpointRequestConnector
+{
+    private readonly bool _enableConsole = enableConsole;
+
+    private readonly TaskCompletionSource _continueTcs = new();
+
+    private bool _launched = false;
+    private bool _completed = false;
+    private bool _canceled = false;
+
+    public bool Launched
+    {
+        get { lock (_lock) { return _launched; } }
+        private set { lock (_lock) { _launched = value; } }
+    }
+    public bool Completed
+    {
+        get { lock (_lock) { return _completed; } }
+        private set { lock (_lock) { _completed = value; } }
+    }
+    public bool Canceled
+    {
+        get { lock (_lock) { return _canceled; } }
+        private set { lock (_lock) { _canceled = value; } }
+    }
+
+    private readonly object _lock = new();
+
+    public void Continue()
+    {
+        _continueTcs.TrySetResult();
+    }
+
+    private void ThrowIfCancellationRequested(CancellationToken ct)
+    {
+        if (ct.IsCancellationRequested)
+        {
+            Debug("Cancellation requested, throwing OperationCanceledException.");
+            Canceled = true;
+            throw new OperationCanceledException();
+        }
+    }
+
+    // Used to debug and diagnose a malformed test.
+    private void Debug(string message)
+    {
+        if (_enableConsole)
+            Console.WriteLine($"[CheckpointRequestConnector] {message}");
+    }
+
+    public async Task<string> PostCheckpointRequest(string clientId, string requestId, CancellationToken token)
+    {
+        Launched = true;
+        Debug("Launched.");
+
+        ThrowIfCancellationRequested(token);
+        Debug("First guard cleared, awaiting continue...");
+
+        await _continueTcs.Task;
+        Debug("Continue received.");
+        ThrowIfCancellationRequested(token);
+        Debug("Second guard cleared.");
+
+        Completed = true;
+        Debug("Completed.");
+
+        return requestId;
     }
 }
