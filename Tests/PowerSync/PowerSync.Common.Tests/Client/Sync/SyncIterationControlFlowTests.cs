@@ -201,6 +201,54 @@ public class SyncIterationControlFlowTests
             "Expected CloseSyncStream(hide_disconnect: true) to request an immediate restart.");
     }
 
+    /// <summary>
+    /// A CRUD upload pass that finishes while no download iteration is running must still reach the
+    /// core extension. The core holds a checkpoint back while it believes local writes are still
+    /// pending, so a dropped notification leaves downloaded data unapplied until the next local
+    /// write happens to produce another notification.
+    /// Surfaces on connect (the upload loop starts alongside the download loop) and between retries.
+    /// </summary>
+    [Fact(Timeout = 15000)]
+    public async Task UploadCompletedWithNoActiveIterationStillReachesCore()
+    {
+        var uploadPassReachedEnd = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var completedUpload = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var adapter = new ScriptedAdapter(
+            (op, _) =>
+            {
+                switch (op)
+                {
+                    case PowerSyncControlCommand.START:
+                        return EstablishOnly;
+                    case PowerSyncControlCommand.NOTIFY_CRUD_UPLOAD_COMPLETED:
+                        completedUpload.TrySetResult(true);
+                        return NoInstructions;
+                    default:
+                        return NoInstructions;
+                }
+            },
+            onUpdateLocalTarget: () => uploadPassReachedEnd.TrySetResult(true));
+
+        // Stream stays open so the control loop keeps consuming.
+        var harness = Harness.Create(adapter, _ => Task.FromResult<Stream>(new HangingStream("")));
+
+        // The upload pass runs and finishes before any iteration exists to be notified.
+        var crudLoop = harness.RunCrudUploadLoop();
+        await uploadPassReachedEnd.Task;
+
+        var iteration = harness.RunIteration();
+        var forwarded = await Task.WhenAny(completedUpload.Task, Task.Delay(5000)) == completedUpload.Task;
+
+        harness.Cancel();
+        try { await iteration; } catch { /* teardown */ }
+        try { await crudLoop; } catch { /* teardown */ }
+
+        Assert.True(forwarded,
+            "Expected 'completed_upload' to reach the core from the iteration that started after the " +
+            $"upload completed, but only saw: {string.Join(", ", adapter.Ops)}");
+    }
+
     // ---- harness -----------------------------------------------------------
 
     private sealed class Harness
@@ -223,6 +271,8 @@ public class SyncIterationControlFlowTests
 
         public Task<bool?> RunIteration() => sync.RunIteration(cts.Token);
 
+        public Task RunCrudUploadLoop() => sync.RunCrudUploadLoop(cts.Token);
+
         public void Cancel() => cts.Cancel();
     }
 
@@ -235,10 +285,15 @@ public class SyncIterationControlFlowTests
             var result = await RustStreamingSyncIteration(token, DEFAULT_STREAM_CONNECTION_OPTIONS);
             return result.ImmediateRestart;
         }
+
+        public Task RunCrudUploadLoop(CancellationToken token) =>
+            CrudUploadLoop(token, new PowerSyncConnectionOptions(crudUploadThrottleMs: 0));
     }
 
     /// <summary>Records every powersync_control op and replies with canned instructions.</summary>
-    private sealed class ScriptedAdapter(Func<string, object?, string> respond) : IBucketStorageAdapter
+    private sealed class ScriptedAdapter(
+        Func<string, object?, string> respond,
+        Action? onUpdateLocalTarget = null) : IBucketStorageAdapter
     {
         private readonly ConcurrentQueue<string> ops = new();
 
@@ -255,7 +310,13 @@ public class SyncIterationControlFlowTests
         public Task<CrudEntry?> NextCrudItem() => Task.FromResult<CrudEntry?>(null);
         public Task<bool> HasCrud() => Task.FromResult(false);
         public Task<CrudBatch?> GetCrudBatch(int limit = 100) => Task.FromResult<CrudBatch?>(null);
-        public Task<bool> UpdateLocalTarget(Func<Task<string>> callback) => Task.FromResult(false);
+
+        public Task<bool> UpdateLocalTarget(Func<Task<string>> callback)
+        {
+            onUpdateLocalTarget?.Invoke();
+            return Task.FromResult(false);
+        }
+
         public Task HandleCrudCheckpoint(long lastClientId, string? writeCheckpoint = null) => Task.CompletedTask;
         public Task<string?> ReadOrUpdateCheckpoint(string variant, string? update = null) => Task.FromResult<string?>("1");
         public Task<string> GetClientId() => Task.FromResult("test-client");

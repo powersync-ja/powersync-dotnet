@@ -199,11 +199,16 @@ public class StreamingSyncImplementation : ICloseable
     private readonly ILogger logger;
     private SubscribedStream[] activeStreams;
 
-    private Action? notifyCompletedUploads;
     private Action? handleActiveStreamsChange;
 
     /// <summary>Signals <see cref="CrudUploadLoop"/> that there may be local writes to upload.</summary>
     private readonly Channel<bool> crudUploadRequested = CreateNotifier();
+
+    /// <summary>
+    /// Signals that a CRUD upload pass finished, so the core extension can re-check whether it still
+    /// has to hold a checkpoint back for pending local writes.
+    /// </summary>
+    private readonly Channel<bool> crudUploadCompleted = CreateNotifier();
 
     private readonly StreamingSyncLocks locks;
 
@@ -502,8 +507,6 @@ public class StreamingSyncImplementation : ICloseable
             }
             finally
             {
-                notifyCompletedUploads = null;
-
                 if (!signal.IsCancellationRequested)
                 {
                     // Closing sync stream network requests before retry.
@@ -544,11 +547,27 @@ public class StreamingSyncImplementation : ICloseable
 
         try
         {
+            // This function bundles InternalUploadAllCrud and crudUploadCompleter.Write to
+            // prevent the write call from waiting on the retry delay.
+            async Task UploadAllCrudThenSignalCompletion()
+            {
+                try
+                {
+                    await InternalUploadAllCrud(signal, options);
+                }
+                finally
+                {
+                    crudUploadCompleted.Writer.TryWrite(true);
+                }
+            }
+
             while (!signal.IsCancellationRequested)
             {
                 // Start the initial CRUD upload on connect. Then, keep polling until we're done.
+                // The throttle runs alongside the upload so that completing it isn't delayed by
+                // the remainder of the throttle.
                 await Task.WhenAll(
-                    InternalUploadAllCrud(signal, options),
+                    UploadAllCrudThenSignalCompletion(),
                     DelayRetry(signal, throttleMs)
                 );
 
@@ -889,18 +908,32 @@ public class StreamingSyncImplementation : ICloseable
                     // "established" event is lost.
                     commands = invocations.ListenAsync(nestedCts.Token);
 
+                    // Forwards upload completions for as long as this iteration lasts. One reported
+                    // before the iteration started stays buffered in the channel, so it still
+                    // reaches the core extension here.
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            while (!invocations.Closed)
+                            {
+                                await crudUploadCompleted.Reader.ReadAsync(nestedCts.Token);
+                                if (invocations.Closed)
+                                {
+                                    return;
+                                }
+
+                                invocations.Emit(new EnqueuedCommand
+                                {
+                                    Command = PowerSyncControlCommand.NOTIFY_CRUD_UPLOAD_COMPLETED
+                                });
+                            }
+                        }
+                        catch (OperationCanceledException) { /* Iteration ended. */ }
+                    });
+
                     // Wired up here rather than after this loop: a later instruction in this
                     // same batch (FetchCredentials) already needs to enqueue a command.
-                    notifyCompletedUploads = () =>
-                    {
-                        if (!invocations.Closed)
-                        {
-                            invocations.Emit(new EnqueuedCommand
-                            {
-                                Command = PowerSyncControlCommand.NOTIFY_CRUD_UPLOAD_COMPLETED
-                            });
-                        }
-                    };
                     handleActiveStreamsChange = () =>
                     {
                         if (!invocations.Closed)
@@ -1020,7 +1053,6 @@ public class StreamingSyncImplementation : ICloseable
         }
         finally
         {
-            notifyCompletedUploads = null;
             handleActiveStreamsChange = null;
             notifyTokenRefreshed = null;
 
@@ -1103,11 +1135,7 @@ public class StreamingSyncImplementation : ICloseable
                                 options.CheckpointMode is CheckpointMode.Requests
                                     ? RequestNextCheckpointFromService(signal)
                                     : GetLegacyWriteCheckpoint());
-                            if (neededUpdate)
-                            {
-                                notifyCompletedUploads?.Invoke();
-                            }
-                            else if (checkedCrudItem != null)
+                            if (!neededUpdate && checkedCrudItem != null)
                             {
                                 // Only log this if there was something to upload
                                 logger.LogDebug("Upload complete, no write checkpoint needed.");
