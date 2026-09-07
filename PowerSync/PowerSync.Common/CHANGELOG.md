@@ -5,8 +5,8 @@
 - Update the PowerSync SQLite core extension to 0.5.3.
   - Fix a transaction affecting both insert-only and regular tables being recorded as two transaction ids.
   - Improve error messages for errors originating from the core extension.
-- Add `PowerSyncConnectionOptions.CheckpointMode`. When set to `CheckpointMode.Requests()`, the connection
-  manager uses a new protocol for checkpoints after crud uploads with better support for switching users.
+- Add `PowerSyncConnectionOptions.CheckpointMode`. When set to `CheckpointMode.Requests()`, the connection manager uses a new protocol for checkpoints after crud uploads with better support for switching users.
+- Add `PowerSyncDatabase.RequestCheckpoint()`, which can be used to request sync updates explicitly and wait for those to complete.
 
 ## 0.1.4
 
