@@ -286,12 +286,12 @@ public class TestConnector : IPowerSyncBackendConnector
     }
 }
 
-public class TestCustomCheckpointsConnector(Func<string, string, Task<string>> postCheckpointRequest) : TestConnector, ICustomCheckpointRequestConnector
+public class TestCustomCheckpointsConnector(Func<string, string, CancellationToken, Task<string>> postCheckpointRequest) : TestConnector, ICustomCheckpointRequestConnector
 {
-    private readonly Func<string, string, Task<string>> _postCheckpointRequest = postCheckpointRequest;
+    private readonly Func<string, string, CancellationToken, Task<string>> _postCheckpointRequest = postCheckpointRequest;
 
-    public Task<string> PostCheckpointRequest(string clientId, string requestId)
-        => _postCheckpointRequest(clientId, requestId);
+    public Task<string> PostCheckpointRequest(string clientId, string requestId, CancellationToken ct)
+        => _postCheckpointRequest(clientId, requestId, ct);
 }
 
 public record LogRecord(LogLevel LogLevel, string CategoryName, string Message, Exception? Exception);

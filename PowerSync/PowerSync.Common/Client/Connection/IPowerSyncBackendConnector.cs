@@ -48,5 +48,5 @@ public interface ICustomCheckpointRequestConnector : IPowerSyncBackendConnector
     /// that don't have a fast 64-bit integer type. In a future release, checkpoint request IDs will change to be
     /// represented by longs, meaning the <paramref name="requestId" /> parameter's type will also change to `long`.
     /// </summary>
-    Task<string> PostCheckpointRequest(string clientId, string requestId);
+    Task<string> PostCheckpointRequest(string clientId, string requestId, CancellationToken token);
 }

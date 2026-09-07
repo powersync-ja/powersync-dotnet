@@ -55,7 +55,7 @@ public class StreamingSyncImplementationOptions : AdditionalConnectionOptions
     /// Posts a checkpoint request with the connector. Null when the connector doesn't support that,
     /// in which case the request is posted to the PowerSync service directly.
     /// </summary>
-    public Func<string, string, Task<string>>? PostCheckpointRequest { get; init; }
+    public Func<string, string, CancellationToken, Task<string>>? PostCheckpointRequest { get; init; }
 
     public Remote Remote { get; init; } = null!;
 
@@ -194,7 +194,7 @@ public class StreamingSyncImplementation : ICloseable
     /// <summary>
     /// The highest checkpoint request id the core extension has reported as applied, if any.
     /// </summary>
-    internal string? LastAppliedCheckpointRequestId { get; private set; }
+    internal volatile string? LastAppliedCheckpointRequestId;
 
     private readonly ILogger logger;
     private SubscribedStream[] activeStreams;
@@ -359,7 +359,7 @@ public class StreamingSyncImplementation : ICloseable
         // First, check if we can use a custom checkpoint request implementation.
         if (Options.PostCheckpointRequest != null)
         {
-            return await Options.PostCheckpointRequest(request.ClientId, request.CheckpointRequestId);
+            return await Options.PostCheckpointRequest(request.ClientId, request.CheckpointRequestId, signal);
         }
 
         var status = await Options.Remote.FetchJson<CheckpointRequestResponse>(
@@ -382,11 +382,11 @@ public class StreamingSyncImplementation : ICloseable
     }
 
     // TODO convert write checkpoint data type to long in a future release
-    private async Task<string> GetLegacyWriteCheckpoint()
+    private async Task<string> GetLegacyWriteCheckpoint(CancellationToken signal)
     {
         var clientId = await Options.Adapter.GetClientId();
         var path = $"/write-checkpoint2.json?client_id={clientId}";
-        var response = await Options.Remote.FetchJson<LegacyWriteCheckpointApiResponse>(path);
+        var response = await Options.Remote.FetchJson<LegacyWriteCheckpointApiResponse>(path, ct: signal);
 
         logger.LogDebug("Created write checkpoint: {checkpoint}", response.Data.WriteCheckpoint);
         return response.Data.WriteCheckpoint;
@@ -594,7 +594,7 @@ public class StreamingSyncImplementation : ICloseable
             return;
         }
 
-        var retryDelayMs = (int)requests.RetryDelayMs;
+        var retryDelayMs = requests.RetryDelayMs;
 
         while (!signal.IsCancellationRequested)
         {
@@ -1134,7 +1134,7 @@ public class StreamingSyncImplementation : ICloseable
                             var neededUpdate = await Options.Adapter.UpdateLocalTarget(() =>
                                 options.CheckpointMode is CheckpointMode.Requests
                                     ? RequestNextCheckpointFromService(signal)
-                                    : GetLegacyWriteCheckpoint());
+                                    : GetLegacyWriteCheckpoint(signal));
                             if (!neededUpdate && checkedCrudItem != null)
                             {
                                 // Only log this if there was something to upload
@@ -1344,14 +1344,14 @@ public record CheckpointMode
     /// </summary>
     public sealed record Requests : CheckpointMode
     {
-        const long MINIMUM_RETRY_DELAY = 10_000;
-        const long DEFAULT_RETRY_DELAY = MINIMUM_RETRY_DELAY;
+        const int MINIMUM_RETRY_DELAY = 10_000;
+        const int DEFAULT_RETRY_DELAY = MINIMUM_RETRY_DELAY;
 
         /// <summary>
         /// The periodic interval before re-posting the latest checkpoint request to the service if
         /// it has not been applied in time.
         /// </summary>
-        public long RetryDelayMs { get; }
+        public int RetryDelayMs { get; }
 
         /// <summary>
         /// Use checkpoint requests with the default retry delay.
@@ -1365,7 +1365,7 @@ public record CheckpointMode
         /// Use checkpoint requests with a custom retry delay.
         /// </summary>
         /// <exception cref="ArgumentException">Thrown when retry delay is less than <see cref="MINIMUM_RETRY_DELAY" /></exception>
-        public Requests(long retryDelayMs)
+        public Requests(int retryDelayMs)
         {
             if (retryDelayMs < MINIMUM_RETRY_DELAY)
             {
