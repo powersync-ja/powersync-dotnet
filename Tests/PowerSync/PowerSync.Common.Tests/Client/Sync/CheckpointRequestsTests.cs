@@ -2,6 +2,7 @@ using Microsoft.Extensions.Time.Testing;
 
 using PowerSync.Common.Client;
 using PowerSync.Common.Client.Connection;
+using PowerSync.Common.Client.Sync;
 using PowerSync.Common.Client.Sync.Bucket;
 using PowerSync.Common.Client.Sync.Stream;
 using PowerSync.Common.Tests.Utils;
@@ -301,8 +302,120 @@ public class CheckpointRequestsTests : IAsyncLifetime
         completeInitialRequest.TrySetResult(true);
     }
 
-    // A class with a settable property rather than a positional record: Dapper can't pick a
-    // constructor when the result set is empty and SQLite reports no column type.
+    [Fact(Timeout = 15000)]
+    public async Task CheckpointRequests_FailsWhenDisconnected()
+    {
+        var exception = await Assert.ThrowsAsync<CheckpointRequestException>(_db.RequestCheckpoint);
+        Assert.Equal(CheckpointRequestException.Disconnected, exception.Message);
+    }
+
+    [Fact(Timeout = 5000)]
+    public async Task CheckpointRequests_FailsWhenConnectedInLegacyMode()
+    {
+        await _db.Connect(new TestConnector(), new() { CheckpointMode = CheckpointMode.Legacy });
+
+        var exception = await Assert.ThrowsAsync<CheckpointRequestException>(_db.RequestCheckpoint);
+        Assert.Equal(CheckpointRequestException.Disabled, exception.Message);
+    }
+
+    [Fact(Timeout = 5000)]
+    public async Task CheckpointRequests_WaitsUntilDataIsApplied()
+    {
+        await _db.Connect(new TestConnector(), new() { CheckpointMode = new CheckpointMode.Requests() });
+
+        var checkpoint = await _db.RequestCheckpoint();
+        _syncService.PushLine(new StreamingSyncCheckpoint
+        {
+            Checkpoint = new Checkpoint { LastOpId = "0", WriteCheckpoint = "2", },
+        });
+        Assert.False(checkpoint.HasSynced);
+        _syncService.PushLine(MockDataFactory.CheckpointComplete("0"));
+
+        await checkpoint.WaitForSync();
+        Assert.True(checkpoint.HasSynced);
+    }
+
+    [Fact(Timeout = 5000)]
+    public async Task CheckpointRequests_ThrowsOnDisconnectButCanConnectAgain()
+    {
+        await _db.Connect(new TestConnector(), new() { CheckpointMode = new CheckpointMode.Requests() });
+        var checkpoint = await _db.RequestCheckpoint();
+
+        var didThrowCorrectly = false;
+        var waitForSyncTask = Task.Run(async () =>
+        {
+            try
+            {
+                await checkpoint.WaitForSync();
+                // Expected WaitForSync to throw
+                didThrowCorrectly = false;
+            }
+            catch (CheckpointRequestException ex)
+            {
+                didThrowCorrectly = ex.Message == CheckpointRequestException.Disconnected;
+            }
+            catch
+            {
+                didThrowCorrectly = false;
+            }
+        });
+
+        await _db.Disconnect();
+        await waitForSyncTask;
+        Assert.True(didThrowCorrectly);
+
+        await _db.Connect(new TestConnector(), new() { CheckpointMode = new CheckpointMode.Requests() });
+        _syncService.PushLine(new StreamingSyncCheckpoint
+        {
+            Checkpoint = new Checkpoint { LastOpId = "0", WriteCheckpoint = "2", },
+        });
+        _syncService.PushLine(MockDataFactory.CheckpointComplete("0"));
+        await checkpoint.WaitForSync();
+    }
+
+    [Fact(Timeout = 5000)]
+    public async Task CheckpointRequests_FailsWhenReconnectingInLegacyMode()
+    {
+        await _db.Connect(new TestConnector(), new() { CheckpointMode = new CheckpointMode.Requests() });
+        var checkpoint = await _db.RequestCheckpoint();
+
+        await _db.Disconnect();
+        await _db.Connect(new TestConnector(), new() { CheckpointMode = CheckpointMode.Legacy });
+
+        var exception = await Assert.ThrowsAsync<CheckpointRequestException>(checkpoint.WaitForSync);
+        Assert.Equal(CheckpointRequestException.Disabled, exception.Message);
+    }
+
+    [Fact(Timeout = 5000)]
+    public async Task CheckpointRequests_FailsOnSyncErrors()
+    {
+        await _db.Connect(new TestConnector(), new() { CheckpointMode = new CheckpointMode.Requests() });
+        var checkpoint = await _db.RequestCheckpoint();
+
+        var didThrowCorrectly = false;
+        var waitForSyncTask = Task.Run(async () =>
+        {
+            try
+            {
+                await checkpoint.WaitForSync();
+                // Expected WaitForSync to throw
+                didThrowCorrectly = false;
+            }
+            catch (CheckpointRequestException ex)
+            {
+                didThrowCorrectly = ex.Message.Contains(CheckpointRequestException.StatusError);
+            }
+            catch
+            {
+                didThrowCorrectly = false;
+            }
+        });
+
+        _syncService.PushLine("not a valid sync line");
+        await waitForSyncTask;
+        Assert.True(didThrowCorrectly);
+    }
+
     private class NameResult
     {
         public string name { get; set; } = "";

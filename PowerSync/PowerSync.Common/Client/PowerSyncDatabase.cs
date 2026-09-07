@@ -11,6 +11,7 @@ using Newtonsoft.Json;
 using Nito.AsyncEx;
 
 using PowerSync.Common.Client.Connection;
+using PowerSync.Common.Client.Sync;
 using PowerSync.Common.Client.Sync.Bucket;
 using PowerSync.Common.Client.Sync.Stream;
 using PowerSync.Common.DB;
@@ -349,6 +350,11 @@ public class PowerSyncDatabase : IPowerSyncDatabase
                 }
             }
             catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                tcs.TrySetException(ex);
+                cts.Cancel();
+            }
         });
 
         await tcs.Task;
@@ -509,6 +515,27 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         // The data has been deleted - reset the sync status
         CurrentStatus = new SyncStatus(new SyncStatusOptions());
         Events.Emit(new PowerSyncDBEvents.StatusChangedEvent(CurrentStatus));
+    }
+
+    public async Task<CheckpointRequest> RequestCheckpoint()
+    {
+        await WaitForReady();
+
+        using (await runExclusive.LockAsync())
+        {
+            var sync = SyncStreamImplementation;
+            if (sync == null)
+            {
+                throw new CheckpointRequestException(CheckpointRequestException.Disconnected);
+            }
+
+            if (sync.ConnectionOptions?.CheckpointMode == CheckpointMode.Legacy)
+            {
+                throw new CheckpointRequestException(CheckpointRequestException.Disabled);
+            }
+
+            return await sync.RequestCheckpoint(this);
+        }
     }
 
     /// <summary>

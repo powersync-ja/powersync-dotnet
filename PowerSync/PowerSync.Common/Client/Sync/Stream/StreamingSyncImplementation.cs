@@ -178,7 +178,9 @@ public class StreamingSyncImplementation : ICloseable
     public static readonly int DEFAULT_CRUD_UPLOAD_THROTTLE_MS = 1000;
     public static readonly int DEFAULT_RETRY_DELAY_MS = 5000;
 
-    protected StreamingSyncImplementationOptions Options { get; }
+    protected internal StreamingSyncImplementationOptions Options { get; }
+
+    protected internal PowerSyncConnectionOptions? ConnectionOptions { get; private set; }
 
     protected CancellationTokenSource? CancellationTokenSource { get; set; }
 
@@ -192,7 +194,7 @@ public class StreamingSyncImplementation : ICloseable
     /// <summary>
     /// The highest checkpoint request id the core extension has reported as applied, if any.
     /// </summary>
-    private string? lastAppliedCheckpointRequestId;
+    internal string? LastAppliedCheckpointRequestId { get; private set; }
 
     private readonly ILogger logger;
     private SubscribedStream[] activeStreams;
@@ -318,6 +320,17 @@ public class StreamingSyncImplementation : ICloseable
         crudUploadRequested.Writer.TryWrite(true);
     }
 
+    internal async Task<CheckpointRequest> RequestCheckpoint(PowerSyncDatabase db)
+    {
+        if (ConnectionOptions?.CheckpointMode == CheckpointMode.Legacy)
+        {
+            throw new CheckpointRequestException(CheckpointRequestException.Disabled);
+        }
+
+        string requestId = await RequestNextCheckpointFromService(CancellationToken.None);
+        return new CheckpointRequest(requestId, db);
+    }
+
     /// <summary>
     /// Allocates the next checkpoint request id and posts it, waiting for the active download
     /// iteration to have reconciled checkpoint state with the service first.
@@ -384,6 +397,7 @@ public class StreamingSyncImplementation : ICloseable
 
         var token = signal.Value;
         var resolvedOptions = options ?? new PowerSyncConnectionOptions();
+        ConnectionOptions = resolvedOptions;
 
         try
         {
@@ -622,9 +636,9 @@ public class StreamingSyncImplementation : ICloseable
     /// Whether the core extension has reported <paramref name="requestId"/> (or a later request) as
     /// applied.
     /// </summary>
-    private bool IsCheckpointRequestApplied(string requestId)
+    internal bool IsCheckpointRequestApplied(string requestId)
     {
-        return lastAppliedCheckpointRequestId is { } applied
+        return LastAppliedCheckpointRequestId is { } applied
             && long.TryParse(applied, out var appliedId)
             && long.TryParse(requestId, out var required)
             && appliedId >= required;
@@ -810,7 +824,7 @@ public class StreamingSyncImplementation : ICloseable
                     }
                     break;
                 case UpdateSyncStatus syncStatus:
-                    lastAppliedCheckpointRequestId = syncStatus.Status.LastAppliedCheckpointRequestId;
+                    LastAppliedCheckpointRequestId = syncStatus.Status.LastAppliedCheckpointRequestId;
                     UpdateSyncStatus(CoreInstructionHelpers.CoreStatusToSyncStatusOptions(syncStatus.Status));
                     break;
                 case FetchCredentials fetchCredentials:
@@ -1098,6 +1112,14 @@ public class StreamingSyncImplementation : ICloseable
                                 // Only log this if there was something to upload
                                 logger.LogDebug("Upload complete, no write checkpoint needed.");
                             }
+                            UpdateSyncStatus(new SyncStatusOptions
+                            {
+                                DataFlow = new SyncDataFlowStatus
+                                {
+                                    Uploading = false,
+                                    UploadError = null,
+                                },
+                            });
                             break;
                         }
                     }
