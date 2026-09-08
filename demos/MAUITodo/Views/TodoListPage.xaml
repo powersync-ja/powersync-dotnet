@@ -9,51 +9,54 @@
                 Margin="10"
                 HorizontalOptions="End"/>
 
-        <CollectionView Grid.Row="1"
-                        x:Name="TodoItemsCollection"
-                        SelectionMode="Single"
-                        SelectionChanged="OnItemSelected">
-            <CollectionView.ItemTemplate>
-                <DataTemplate>
-                    <Grid Padding="10">
-                        <Frame BorderColor="Gray"
-                               Padding="10"
-                               CornerRadius="5">
-                            <Grid ColumnDefinitions="*,Auto">
-                                <Label Text="{Binding Description}"
-                                       FontSize="16"
-                                       VerticalOptions="Center"/>
-                                <HorizontalStackLayout Grid.Column="1"
-                                                       Spacing="10"
-                                                       VerticalOptions="Center">
-                                    <Button Text="No photo"
-                                            CommandParameter="{Binding .}"
-                                            Clicked="OnPhotoClicked"
-                                            IsVisible="{Binding HasNoPhoto}"/>
-                                    <ActivityIndicator IsRunning="{Binding IsDownloading}"
-                                                       IsVisible="{Binding IsDownloading}"
-                                                       WidthRequest="40"
-                                                       HeightRequest="40"
-                                                       Color="Gray"/>
-                                    <ImageButton Source="{Binding PhotoLocalUri}"
-                                                 IsVisible="{Binding IsPhotoReady}"
-                                                 CommandParameter="{Binding .}"
-                                                 Clicked="OnPhotoClicked"
-                                                 WidthRequest="56"
-                                                 HeightRequest="56"
-                                                 Aspect="AspectFill"/>
-                                    <CheckBox IsChecked="{Binding Completed}"
-                                              CheckedChanged="OnCheckBoxChanged"
-                                              VerticalOptions="Center"/>
-                                    <Button Text="Delete"
-                                            Clicked="OnDeleteClicked"
-                                            CommandParameter="{Binding .}"/>
-                                </HorizontalStackLayout>
-                            </Grid>
-                        </Frame>
-                    </Grid>
-                </DataTemplate>
-            </CollectionView.ItemTemplate>
-        </CollectionView>
+        <RefreshView Grid.Row="1"
+                     x:Name="TodoItemsRefreshView"
+                     Refreshing="OnRefreshing">
+            <CollectionView x:Name="TodoItemsCollection"
+                            SelectionMode="Single"
+                            SelectionChanged="OnItemSelected">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Padding="10">
+                            <Frame BorderColor="Gray"
+                                   Padding="10"
+                                   CornerRadius="5">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <Label Text="{Binding Description}"
+                                           FontSize="16"
+                                           VerticalOptions="Center"/>
+                                    <HorizontalStackLayout Grid.Column="1"
+                                                           Spacing="10"
+                                                           VerticalOptions="Center">
+                                        <Button Text="No photo"
+                                                CommandParameter="{Binding .}"
+                                                Clicked="OnPhotoClicked"
+                                                IsVisible="{Binding HasNoPhoto}"/>
+                                        <ActivityIndicator IsRunning="{Binding IsDownloading}"
+                                                           IsVisible="{Binding IsDownloading}"
+                                                           WidthRequest="40"
+                                                           HeightRequest="40"
+                                                           Color="Gray"/>
+                                        <ImageButton Source="{Binding PhotoLocalUri}"
+                                                     IsVisible="{Binding IsPhotoReady}"
+                                                     CommandParameter="{Binding .}"
+                                                     Clicked="OnPhotoClicked"
+                                                     WidthRequest="56"
+                                                     HeightRequest="56"
+                                                     Aspect="AspectFill"/>
+                                        <CheckBox IsChecked="{Binding Completed}"
+                                                  CheckedChanged="OnCheckBoxChanged"
+                                                  VerticalOptions="Center"/>
+                                        <Button Text="Delete"
+                                                Clicked="OnDeleteClicked"
+                                                CommandParameter="{Binding .}"/>
+                                    </HorizontalStackLayout>
+                                </Grid>
+                            </Frame>
+                        </Grid>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+        </RefreshView>
     </Grid>
 </ContentPage>

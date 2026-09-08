@@ -11,6 +11,7 @@ using Newtonsoft.Json;
 using Nito.AsyncEx;
 
 using PowerSync.Common.Client.Connection;
+using PowerSync.Common.Client.Sync;
 using PowerSync.Common.Client.Sync.Bucket;
 using PowerSync.Common.Client.Sync.Stream;
 using PowerSync.Common.DB;
@@ -334,6 +335,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         }
 
         var tcs = new TaskCompletionSource<bool>();
+        var canceledRegistration = cts.Token.Register(() => tcs.TrySetCanceled(cts.Token));
 
         _ = Task.Run(async () =>
         {
@@ -349,9 +351,22 @@ public class PowerSyncDatabase : IPowerSyncDatabase
                 }
             }
             catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                tcs.TrySetException(ex);
+                cts.Cancel();
+            }
         });
 
-        await tcs.Task;
+        try
+        {
+            await tcs.Task;
+        }
+        finally
+        {
+            canceledRegistration.Dispose();
+            cts.Cancel();
+        }
     }
 
     protected async Task Initialize(PowerSyncDatabaseOptions options)
@@ -509,6 +524,41 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         // The data has been deleted - reset the sync status
         CurrentStatus = new SyncStatus(new SyncStatusOptions());
         Events.Emit(new PowerSyncDBEvents.StatusChangedEvent(CurrentStatus));
+    }
+
+    /// <summary>
+    /// Requests a checkpoint from the PowerSync service.
+    ///
+    /// The returned request can be awaited using <see cref="CheckpointRequest.WaitForSync" />
+    /// to confirm that the local database has applied server-side changes up to
+    /// the checkpoint. This method requires an active or connecting sync client
+    /// connected with <see cref="CheckpointMode.Requests()" /> and PowerSync service version
+    /// 1.24.0 or later.
+    /// </summary>
+    /// <exception cref="CheckpointRequestException">
+    /// Thrown when requesting the checkpoint has failed, for example when the
+    /// database is disconnected.
+    /// </exception>
+    public async Task<CheckpointRequest> RequestCheckpoint(CancellationToken ct = default)
+    {
+        await WaitForReady();
+
+        // Important: `LockAsync(CancellationToken)` will still take the lock even if
+        // cancellation is requested, so long as the token is canceled before LockAsync
+        // is called and the lock is not in use; i.e. an already-canceled token will only
+        // prevent _waiting_ for the lock, not getting the lock. Therefore, we need to
+        // check for cancellation ourselves before entering the using block.
+        ct.ThrowIfCancellationRequested();
+        using (await runExclusive.LockAsync(ct))
+        {
+            var sync = SyncStreamImplementation;
+            if (sync == null)
+            {
+                throw new CheckpointRequestException(CheckpointRequestException.Disconnected);
+            }
+
+            return await sync.RequestCheckpoint(this, ct);
+        }
     }
 
     /// <summary>

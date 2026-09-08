@@ -178,7 +178,9 @@ public class StreamingSyncImplementation : ICloseable
     public static readonly int DEFAULT_CRUD_UPLOAD_THROTTLE_MS = 1000;
     public static readonly int DEFAULT_RETRY_DELAY_MS = 5000;
 
-    protected StreamingSyncImplementationOptions Options { get; }
+    protected internal StreamingSyncImplementationOptions Options { get; }
+
+    protected internal PowerSyncConnectionOptions? ConnectionOptions { get; private set; }
 
     protected CancellationTokenSource? CancellationTokenSource { get; set; }
 
@@ -192,16 +194,21 @@ public class StreamingSyncImplementation : ICloseable
     /// <summary>
     /// The highest checkpoint request id the core extension has reported as applied, if any.
     /// </summary>
-    private volatile string? lastAppliedCheckpointRequestId;
+    internal volatile string? LastAppliedCheckpointRequestId;
 
     private readonly ILogger logger;
     private SubscribedStream[] activeStreams;
 
-    private Action? notifyCompletedUploads;
     private Action? handleActiveStreamsChange;
 
     /// <summary>Signals <see cref="CrudUploadLoop"/> that there may be local writes to upload.</summary>
     private readonly Channel<bool> crudUploadRequested = CreateNotifier();
+
+    /// <summary>
+    /// Signals that a CRUD upload pass finished, so the core extension can re-check whether it still
+    /// has to hold a checkpoint back for pending local writes.
+    /// </summary>
+    private readonly Channel<bool> crudUploadCompleted = CreateNotifier();
 
     private readonly StreamingSyncLocks locks;
 
@@ -318,6 +325,17 @@ public class StreamingSyncImplementation : ICloseable
         crudUploadRequested.Writer.TryWrite(true);
     }
 
+    internal async Task<CheckpointRequest> RequestCheckpoint(PowerSyncDatabase db, CancellationToken ct)
+    {
+        if (ConnectionOptions?.CheckpointMode == CheckpointMode.Legacy)
+        {
+            throw new CheckpointRequestException(CheckpointRequestException.Disabled);
+        }
+
+        string requestId = await RequestNextCheckpointFromService(ct);
+        return new CheckpointRequest(requestId, db);
+    }
+
     /// <summary>
     /// Allocates the next checkpoint request id and posts it, waiting for the active download
     /// iteration to have reconciled checkpoint state with the service first.
@@ -384,6 +402,7 @@ public class StreamingSyncImplementation : ICloseable
 
         var token = signal.Value;
         var resolvedOptions = options ?? new PowerSyncConnectionOptions();
+        ConnectionOptions = resolvedOptions;
 
         try
         {
@@ -488,8 +507,6 @@ public class StreamingSyncImplementation : ICloseable
             }
             finally
             {
-                notifyCompletedUploads = null;
-
                 if (!signal.IsCancellationRequested)
                 {
                     // Closing sync stream network requests before retry.
@@ -530,11 +547,27 @@ public class StreamingSyncImplementation : ICloseable
 
         try
         {
+            // This function bundles InternalUploadAllCrud and crudUploadCompleter.Write to
+            // prevent the write call from waiting on the retry delay.
+            async Task UploadAllCrudThenSignalCompletion()
+            {
+                try
+                {
+                    await InternalUploadAllCrud(signal, options);
+                }
+                finally
+                {
+                    crudUploadCompleted.Writer.TryWrite(true);
+                }
+            }
+
             while (!signal.IsCancellationRequested)
             {
                 // Start the initial CRUD upload on connect. Then, keep polling until we're done.
+                // The throttle runs alongside the upload so that completing it isn't delayed by
+                // the remainder of the throttle.
                 await Task.WhenAll(
-                    InternalUploadAllCrud(signal, options),
+                    UploadAllCrudThenSignalCompletion(),
                     DelayRetry(signal, throttleMs)
                 );
 
@@ -622,9 +655,9 @@ public class StreamingSyncImplementation : ICloseable
     /// Whether the core extension has reported <paramref name="requestId"/> (or a later request) as
     /// applied.
     /// </summary>
-    private bool IsCheckpointRequestApplied(string requestId)
+    internal bool IsCheckpointRequestApplied(string requestId)
     {
-        return lastAppliedCheckpointRequestId is { } applied
+        return LastAppliedCheckpointRequestId is { } applied
             && long.TryParse(applied, out var appliedId)
             && long.TryParse(requestId, out var required)
             && appliedId >= required;
@@ -810,7 +843,7 @@ public class StreamingSyncImplementation : ICloseable
                     }
                     break;
                 case UpdateSyncStatus syncStatus:
-                    lastAppliedCheckpointRequestId = syncStatus.Status.LastAppliedCheckpointRequestId;
+                    LastAppliedCheckpointRequestId = syncStatus.Status.LastAppliedCheckpointRequestId;
                     UpdateSyncStatus(CoreInstructionHelpers.CoreStatusToSyncStatusOptions(syncStatus.Status));
                     break;
                 case FetchCredentials fetchCredentials:
@@ -875,18 +908,32 @@ public class StreamingSyncImplementation : ICloseable
                     // "established" event is lost.
                     commands = invocations.ListenAsync(nestedCts.Token);
 
+                    // Forwards upload completions for as long as this iteration lasts. One reported
+                    // before the iteration started stays buffered in the channel, so it still
+                    // reaches the core extension here.
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            while (!invocations.Closed)
+                            {
+                                await crudUploadCompleted.Reader.ReadAsync(nestedCts.Token);
+                                if (invocations.Closed)
+                                {
+                                    return;
+                                }
+
+                                invocations.Emit(new EnqueuedCommand
+                                {
+                                    Command = PowerSyncControlCommand.NOTIFY_CRUD_UPLOAD_COMPLETED
+                                });
+                            }
+                        }
+                        catch (OperationCanceledException) { /* Iteration ended. */ }
+                    });
+
                     // Wired up here rather than after this loop: a later instruction in this
                     // same batch (FetchCredentials) already needs to enqueue a command.
-                    notifyCompletedUploads = () =>
-                    {
-                        if (!invocations.Closed)
-                        {
-                            invocations.Emit(new EnqueuedCommand
-                            {
-                                Command = PowerSyncControlCommand.NOTIFY_CRUD_UPLOAD_COMPLETED
-                            });
-                        }
-                    };
                     handleActiveStreamsChange = () =>
                     {
                         if (!invocations.Closed)
@@ -1006,7 +1053,6 @@ public class StreamingSyncImplementation : ICloseable
         }
         finally
         {
-            notifyCompletedUploads = null;
             handleActiveStreamsChange = null;
             notifyTokenRefreshed = null;
 
@@ -1089,15 +1135,19 @@ public class StreamingSyncImplementation : ICloseable
                                 options.CheckpointMode is CheckpointMode.Requests
                                     ? RequestNextCheckpointFromService(signal)
                                     : GetLegacyWriteCheckpoint(signal));
-                            if (neededUpdate)
-                            {
-                                notifyCompletedUploads?.Invoke();
-                            }
-                            else if (checkedCrudItem != null)
+                            if (!neededUpdate && checkedCrudItem != null)
                             {
                                 // Only log this if there was something to upload
                                 logger.LogDebug("Upload complete, no write checkpoint needed.");
                             }
+                            UpdateSyncStatus(new SyncStatusOptions
+                            {
+                                DataFlow = new SyncDataFlowStatus
+                                {
+                                    Uploading = false,
+                                    UploadError = null,
+                                },
+                            });
                             break;
                         }
                     }

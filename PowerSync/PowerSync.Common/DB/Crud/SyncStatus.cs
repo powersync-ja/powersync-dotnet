@@ -45,9 +45,7 @@ public class SyncPriorityStatus
 
 public class SyncStatusOptions
 {
-    public SyncStatusOptions()
-    {
-    }
+    public SyncStatusOptions() { }
 
     public SyncStatusOptions(SyncStatusOptions options)
     {
@@ -218,7 +216,6 @@ public class SyncStatus(SyncStatusOptions options)
 
         return raw != null ? new SyncStreamStatusView(this, raw) : null;
     }
-
 
     private string SerializeObject()
     {

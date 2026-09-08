@@ -7,6 +7,8 @@ using Microsoft.Extensions.Logging;
 
 using PowerSync.Common.Attachments;
 using PowerSync.Common.Client;
+using PowerSync.Common.Client.Sync;
+using PowerSync.Common.Client.Sync.Stream;
 using PowerSync.Common.MDSQLite;
 using PowerSync.Maui.SQLite;
 
@@ -43,7 +45,10 @@ public class PowerSyncData
         var nodeConnector = new NodeConnector();
         UserId = nodeConnector.UserId;
 
-        Db.Connect(nodeConnector);
+        // Checkpoint requests let the app ask the service for a checkpoint on demand, which is what
+        // the pull-to-refresh gestures use. Requires PowerSync service 1.24.0 or later.
+        Db.Connect(nodeConnector, new PowerSyncConnectionOptions(
+            checkpointMode: new CheckpointMode.Requests()));
 
         var attachmentsDir = Path.Combine(FileSystem.AppDataDirectory, "attachments");
         var localStorage = new FileManagerLocalStorage(attachmentsDir);
@@ -75,6 +80,20 @@ public class PowerSyncData
     }
 
     private record PhotoIdResult(string photo_id);
+
+    /// <summary>
+    /// Asks the service for a checkpoint and waits until the local database has applied everything
+    /// up to it, so the caller knows the local view has caught up.
+    /// </summary>
+    /// <exception cref="CheckpointRequestException">
+    /// Thrown when the client is disconnected, was connected without checkpoint requests enabled,
+    /// or a sync error occurs before the checkpoint is applied.
+    /// </exception>
+    public async Task RefreshAsync()
+    {
+        var checkpoint = await Db.RequestCheckpoint();
+        await checkpoint.WaitForSync();
+    }
 
     public async Task SaveListAsync(TodoList list)
     {
