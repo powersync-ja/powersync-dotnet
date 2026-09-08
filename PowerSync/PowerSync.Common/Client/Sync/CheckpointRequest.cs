@@ -39,14 +39,18 @@ public class CheckpointRequest
     /// to await the checkpoint.
     /// </summary>
     /// <exception cref="CheckpointRequestException" />
-    public Task WaitForSync()
+    /// <exception cref="OperationCanceledException">
+    /// Thrown if the cancellation token is canceled. Importantly, this is not thrown if the checkpoint
+    /// has already finished syncing, as there is no work to be canceled.
+    /// </exception>
+    public Task WaitForSync(CancellationToken ct = default)
     {
         if (HasSynced) return Task.CompletedTask;
 
-        // TODO May need to lock ConnectionManager first.
-        //      Investigate if we can reuse PowerSyncDatabase.runExclusive lock for this.
+        ct.ThrowIfCancellationRequested();
 
         var sync = _db.SyncStreamImplementation;
+
         if (sync is null)
         {
             throw new CheckpointRequestException(CheckpointRequestException.Disconnected);
@@ -76,7 +80,7 @@ public class CheckpointRequest
             }
 
             return false;
-        });
+        }, ct);
     }
 }
 

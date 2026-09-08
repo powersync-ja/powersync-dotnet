@@ -325,14 +325,14 @@ public class StreamingSyncImplementation : ICloseable
         crudUploadRequested.Writer.TryWrite(true);
     }
 
-    internal async Task<CheckpointRequest> RequestCheckpoint(PowerSyncDatabase db)
+    internal async Task<CheckpointRequest> RequestCheckpoint(PowerSyncDatabase db, CancellationToken ct)
     {
         if (ConnectionOptions?.CheckpointMode == CheckpointMode.Legacy)
         {
             throw new CheckpointRequestException(CheckpointRequestException.Disabled);
         }
 
-        string requestId = await RequestNextCheckpointFromService(CancellationToken.None);
+        string requestId = await RequestNextCheckpointFromService(ct);
         return new CheckpointRequest(requestId, db);
     }
 

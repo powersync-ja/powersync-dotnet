@@ -305,7 +305,7 @@ public class CheckpointRequestsTests : IAsyncLifetime
     [Fact(Timeout = 15000)]
     public async Task CheckpointRequests_FailsWhenDisconnected()
     {
-        var exception = await Assert.ThrowsAsync<CheckpointRequestException>(_db.RequestCheckpoint);
+        var exception = await Assert.ThrowsAsync<CheckpointRequestException>(() => _db.RequestCheckpoint());
         Assert.Equal(CheckpointRequestException.Disconnected, exception.Message);
     }
 
@@ -314,7 +314,7 @@ public class CheckpointRequestsTests : IAsyncLifetime
     {
         await _db.Connect(new TestConnector(), new() { CheckpointMode = CheckpointMode.Legacy });
 
-        var exception = await Assert.ThrowsAsync<CheckpointRequestException>(_db.RequestCheckpoint);
+        var exception = await Assert.ThrowsAsync<CheckpointRequestException>(() => _db.RequestCheckpoint());
         Assert.Equal(CheckpointRequestException.Disabled, exception.Message);
     }
 
@@ -382,7 +382,7 @@ public class CheckpointRequestsTests : IAsyncLifetime
         await _db.Disconnect();
         await _db.Connect(new TestConnector(), new() { CheckpointMode = CheckpointMode.Legacy });
 
-        var exception = await Assert.ThrowsAsync<CheckpointRequestException>(checkpoint.WaitForSync);
+        var exception = await Assert.ThrowsAsync<CheckpointRequestException>(() => checkpoint.WaitForSync());
         Assert.Equal(CheckpointRequestException.Disabled, exception.Message);
     }
 
@@ -430,6 +430,171 @@ public class CheckpointRequestsTests : IAsyncLifetime
 
         await TestUtils.WaitForAsync(() => connector.Canceled);
         Assert.False(connector.Completed);
+    }
+
+    [Fact(Timeout = 5000)]
+    public async Task CheckpointRequests_RequestThrowsIfCanceledImmediately()
+    {
+        var canceledCts = new CancellationTokenSource();
+        canceledCts.Cancel();
+
+        await _db.Connect(new TestConnector(), WithRequests());
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => _db.RequestCheckpoint(canceledCts.Token));
+    }
+
+    [Fact(Timeout = 5000)]
+    public async Task CheckpointRequests_WaitForSyncThrowsIfCanceledImmediately()
+    {
+        var canceledCts = new CancellationTokenSource();
+        canceledCts.Cancel();
+
+        await _db.Connect(new TestConnector(), WithRequests());
+        var checkpoint = await _db.RequestCheckpoint();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => checkpoint.WaitForSync(canceledCts.Token));
+    }
+
+    /// <summary>
+    /// Cancellation has to reach the in-flight request itself, not just guard the entry point.
+    /// </summary>
+    [Fact(Timeout = 15000)]
+    public async Task CheckpointRequests_RequestThrowsIfCanceledWhileInFlight()
+    {
+        var blocked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var calls = 0;
+
+        // The first request is the seed posted by the download iteration, which has to complete
+        // before explicit requests are allowed. Only the request under test hangs, so that the
+        // retry afterwards can resolve.
+        var connector = new TestCustomCheckpointsConnector(async (_, requestId, token) =>
+        {
+            if (Interlocked.Increment(ref calls) == 2)
+            {
+                blocked.TrySetResult();
+                await Task.Delay(Timeout.Infinite, token);
+            }
+
+            return requestId;
+        });
+
+        await _db.Connect(connector, WithRequests());
+
+        using var cts = new CancellationTokenSource();
+        var request = _db.RequestCheckpoint(cts.Token);
+        await blocked.Task;
+
+        cts.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => request);
+
+        // The exclusive lock has to be released again, otherwise later requests would deadlock.
+        Assert.Equal(2, calls);
+        var checkpoint = await _db.RequestCheckpoint();
+        Assert.False(checkpoint.HasSynced);
+        Assert.Equal(3, calls);
+    }
+
+    /// <summary>
+    /// Requests park until a download iteration has reconciled checkpoint state with the service,
+    /// which is another point at which the caller can give up.
+    /// </summary>
+    [Fact(Timeout = 15000)]
+    public async Task CheckpointRequests_RequestThrowsIfCanceledWhileWaitingForSeed()
+    {
+        // A retry delay long enough that only a parked request can wake the download loop.
+        await _db.Connect(new TestConnector(), WithRequests(retryDelayMs: 60_000));
+        await TestUtils.WaitForAsync(() => _syncService.CheckpointRequests.Count >= 1);
+
+        // Leave the next iteration's seed unanswered, so checkpoint state stays pending.
+        var seedStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var completeSeed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _syncService.BeforeCheckpointRequestResponse = async () =>
+        {
+            seedStarted.TrySetResult(true);
+            await completeSeed.Task;
+        };
+
+        // Destroy the connection with a bogus line: checkpoint requests are no longer ready.
+        _syncService.PushLine(new StreamingSyncCheckpoint
+        {
+            Checkpoint = new() { LastOpId = "invalid line", Buckets = [] }
+        });
+        await TestUtils.WaitForAsync(() => _db.CurrentStatus.DataFlowStatus.DownloadError != null);
+
+        using var cts = new CancellationTokenSource();
+        var request = _db.RequestCheckpoint(cts.Token);
+
+        // Parking cuts the retry delay short, and the restarted iteration's seed is the one being
+        // held up above, so the request is still waiting on it here.
+        await seedStarted.Task;
+        Assert.False(request.IsCompleted);
+
+        cts.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => request);
+
+        completeSeed.TrySetResult(true);
+    }
+
+    [Fact(Timeout = 15000)]
+    public async Task CheckpointRequests_WaitForSyncThrowsIfCanceledWhileWaiting()
+    {
+        await _db.Connect(new TestConnector(), WithRequests());
+        var checkpoint = await _db.RequestCheckpoint();
+
+        var listenersBefore = _db.Events.OnStatusChanged.SubscriberCount();
+
+        using var cts = new CancellationTokenSource();
+        var wait = checkpoint.WaitForSync(cts.Token);
+
+        // Nothing has been applied, so the wait is parked on sync status updates.
+        await TestUtils.WaitForAsync(() => _db.Events.OnStatusChanged.SubscriberCount() > listenersBefore);
+        Assert.False(wait.IsCompleted);
+
+        cts.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => wait);
+        Assert.False(checkpoint.HasSynced);
+
+        // Abandoning a wait doesn't invalidate the request, it can still be awaited again.
+        _syncService.PushLine(new StreamingSyncCheckpoint
+        {
+            Checkpoint = new Checkpoint { LastOpId = "0", WriteCheckpoint = "2", },
+        });
+        _syncService.PushLine(MockDataFactory.CheckpointComplete("0"));
+
+        await checkpoint.WaitForSync();
+        Assert.True(checkpoint.HasSynced);
+    }
+
+    /// <summary>
+    /// Cancelling the wait must not take the checkpoint's other waiters down with it.
+    /// </summary>
+    [Fact(Timeout = 15000)]
+    public async Task CheckpointRequests_WaitForSyncCancellationIsPerCaller()
+    {
+        await _db.Connect(new TestConnector(), WithRequests());
+        var checkpoint = await _db.RequestCheckpoint();
+
+        var listenersBefore = _db.Events.OnStatusChanged.SubscriberCount();
+
+        using var cts = new CancellationTokenSource();
+        var canceledWait = checkpoint.WaitForSync(cts.Token);
+        var survivingWait = checkpoint.WaitForSync();
+
+        // Both waits listen for status updates; neither can be resolved before one is applied.
+        await TestUtils.WaitForAsync(() => _db.Events.OnStatusChanged.SubscriberCount() >= listenersBefore + 2);
+
+        cts.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => canceledWait);
+        Assert.False(survivingWait.IsCompleted);
+
+        _syncService.PushLine(new StreamingSyncCheckpoint
+        {
+            Checkpoint = new Checkpoint { LastOpId = "0", WriteCheckpoint = "2", },
+        });
+        _syncService.PushLine(MockDataFactory.CheckpointComplete("0"));
+
+        await survivingWait;
+        Assert.True(checkpoint.HasSynced);
     }
 
     // A class with a settable property rather than a positional record: Dapper can't pick a
