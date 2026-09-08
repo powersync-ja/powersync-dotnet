@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 
 using Newtonsoft.Json;
 
+using PowerSync.Common.DB;
 using PowerSync.Common.DB.Crud;
 using PowerSync.Common.Utils;
 
@@ -18,8 +19,6 @@ public static class PowerSyncControlCommand
     public const string NOTIFY_TOKEN_REFRESHED = "refreshed_token";
     public const string NOTIFY_CRUD_UPLOAD_COMPLETED = "completed_upload";
     public const string UPDATE_SUBSCRIPTIONS = "update_subscriptions";
-
-    public const string TARGET_CHECKPOINT_REQUEST_ID = "target_checkpoint_request_id";
 
     /// <summary>
     /// An `established` or `end` event for response streams.
@@ -136,8 +135,13 @@ public interface IBucketStorageAdapter : ICloseable
     Task<CrudBatch?> GetCrudBatch(int limit = 100);
 
     Task<bool> UpdateLocalTarget(Func<Task<string>> callback);
-
     Task HandleCrudCheckpoint(long lastClientId, string? writeCheckpoint = null);
+
+    // TODO Return int64 from this in future release
+    /// <summary>
+    /// Reads or updates the local checkpoint request ID counter.
+    /// </summary>
+    Task<string?> ReadOrUpdateCheckpoint(string variant, string? update = null);
 
     /// <summary>
     /// Get a unique client ID.
@@ -148,4 +152,48 @@ public interface IBucketStorageAdapter : ICloseable
     /// Invokes the `powersync_control` function for the sync client.
     /// </summary>
     Task<string> Control(string op, object? payload);
+}
+
+/// <summary>
+/// Provides type-safe wrappers for <see cref="IBucketStorageAdapter.ReadOrUpdateCheckpoint" />.
+/// <para />
+/// Default Interface Implementations would be preferred here, but <c>netstandard2.0</c> doesn't
+/// support them.
+/// </summary>
+public static class BucketStorageAdapterExtensions
+{
+    /// <summary>
+    /// Increments and returns the local checkpoint counter.
+    /// </summary>
+    public static Task<string> NextCheckpointRequestId(this IBucketStorageAdapter adapter)
+        => adapter.ReadOrUpdateCheckpoint("next")!;
+
+    /// <summary>
+    /// Returns the highest checkpoint request ID that has been requested on this device.
+    /// </summary>
+    public static Task<string?> CurrentCheckpointRequestId(this IBucketStorageAdapter adapter)
+        => adapter.ReadOrUpdateCheckpoint("current");
+
+    /// <summary>
+    /// Seeds the local checkpoint request ID counter using a response from the server.
+    ///
+    /// Seeding the local counter achieves two goals:
+    /// <list type="number">
+    ///     <item>
+    ///         <description>
+    ///             The service is allowed to forget our checkpoint counter, so we remind
+    ///             it whenever we connect.
+    ///         </description>
+    ///     </item>
+    ///     <item>
+    ///         <description>
+    ///             Checkpoint requests are scoped per user-and-device combo, but the
+    ///             local ID counter is scoped per-device. Seeding ensures we generate
+    ///             correctly incrementing IDs after switching user accounts.
+    ///         </description>
+    ///     </item>
+    /// </list>
+    /// </summary>
+    public static Task<string> SeedCheckpointRequestId(this IBucketStorageAdapter adapter, string serviceResponse)
+        => adapter.ReadOrUpdateCheckpoint("seed", serviceResponse)!;
 }

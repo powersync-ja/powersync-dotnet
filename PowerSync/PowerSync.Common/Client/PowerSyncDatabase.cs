@@ -50,6 +50,12 @@ public class PowerSyncDatabaseOptions() : BasePowerSyncDatabaseOptions()
     /// If not provided, a default Remote will be created.
     /// </summary>
     public Func<IPowerSyncBackendConnector, Remote>? RemoteFactory { get; set; }
+
+    /// <summary>
+    /// Used to calculate delays for the sync client (retry delays, upload throttling).
+    /// Used for testing to avoid waiting out some long delays (retry delay is minimum 10 seconds).
+    /// </summary>
+    internal TimeProvider? TimeProvider { get; set; }
 }
 
 public class PowerSyncDBEvents : EventManager
@@ -200,6 +206,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         SdkVersion = "";
 
         remoteFactory = options.RemoteFactory ?? (connector => new Remote(connector));
+        var timeProvider = options.TimeProvider ?? TimeProvider.System;
 
         watchManager = new WatchManager(this, masterCts.Token);
 
@@ -207,7 +214,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         subscriptions = new InternalSubscriptionManager(
             firstStatusMatching: WaitForStatus,
             resolveOfflineSyncStatus: ResolveOfflineSyncStatus,
-            subscriptionsCommand: async (payload) => await this.WriteTransaction(async tx =>
+            subscriptionsCommand: async (payload) => await WriteTransaction(async tx =>
                 {
                     await tx.Execute("SELECT powersync_control(?, ?) AS r", ["subscriptions", JsonConvert.SerializeObject(payload)]);
                 }));
@@ -226,9 +233,17 @@ public class PowerSyncDatabase : IPowerSyncDatabase
                         await WaitForReady();
                         await connector.UploadData(this);
                     },
+                    PostCheckpointRequest = connector is ICustomCheckpointRequestConnector checkpointConnector
+                        ? async (clientId, requestId, token) =>
+                        {
+                            await WaitForReady();
+                            return await checkpointConnector.PostCheckpointRequest(clientId, requestId, token);
+                        }
+                    : null,
                     RetryDelayMs = options.RetryDelayMs,
                     Subscriptions = options.Subscriptions,
                     CrudUploadThrottleMs = options.CrudUploadThrottleMs,
+                    TimeProvider = timeProvider,
                     Logger = Logger
                 });
 
@@ -449,16 +464,6 @@ public class PowerSyncDatabase : IPowerSyncDatabase
     public async Task Init()
     {
         await WaitForReady();
-    }
-
-    private RequiredAdditionalConnectionOptions resolveConnectionOptions(PowerSyncConnectionOptions? options)
-    {
-        var defaults = RequiredAdditionalConnectionOptions.DEFAULT_ADDITIONAL_CONNECTION_OPTIONS;
-        return new RequiredAdditionalConnectionOptions
-        {
-            RetryDelayMs = options?.RetryDelayMs ?? defaults.RetryDelayMs,
-            CrudUploadThrottleMs = options?.CrudUploadThrottleMs ?? defaults.CrudUploadThrottleMs,
-        };
     }
 
     public async Task Connect(IPowerSyncBackendConnector connector, PowerSyncConnectionOptions? options = null)
@@ -829,6 +834,9 @@ public class SQLWatchOptions
     /// </summary>
     public int? ThrottleMs { get; set; }
 
+    /// <summary>
+    /// If true, runs the query once when creating the watch. Defaults to false.
+    /// </summary>
     public bool TriggerImmediately { get; set; } = false;
 }
 

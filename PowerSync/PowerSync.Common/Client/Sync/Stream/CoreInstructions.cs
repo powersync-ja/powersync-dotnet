@@ -2,6 +2,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 using PowerSync.Common.DB.Crud;
+using PowerSync.Common.Utils.Converters;
 
 namespace PowerSync.Common.Client.Sync.Stream;
 
@@ -21,7 +22,7 @@ public abstract class Instruction
             instructions.Add(ParseInstruction(item));
         }
 
-        return instructions.ToArray();
+        return [.. instructions];
     }
 
     public static Instruction ParseInstruction(JObject json)
@@ -61,6 +62,9 @@ public class EstablishSyncStream : Instruction
 {
     [JsonProperty("request")]
     public StreamingSyncRequest Request { get; set; } = null!;
+
+    [JsonProperty("checkpoint_request", NullValueHandling = NullValueHandling.Ignore)]
+    public CheckpointRequestPayload? CheckpointRequest { get; set; } = null!;
 }
 
 public class UpdateSyncStatus : NonInterruptingInstruction
@@ -129,6 +133,9 @@ public class CoreSyncStatus
 
     [JsonProperty("streams")]
     public List<CoreStreamSubscription> Streams { get; set; } = [];
+
+    [JsonProperty("internal_last_applied_checkpoint_request_id")]
+    public string? LastAppliedCheckpointRequestId { get; set; }
 }
 
 public class SyncPriorityStatus

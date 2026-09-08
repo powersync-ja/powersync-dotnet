@@ -1,7 +1,5 @@
 namespace PowerSync.Common.DB.Crud;
 
-using Microsoft.Extensions.Options;
-
 using Newtonsoft.Json;
 
 using PowerSync.Common.Client.Sync.Stream;
