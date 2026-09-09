@@ -9,6 +9,10 @@
 
 - Accidental release (mirror of 0.1.2). Use 1.0.1 instead.
 
+## 0.1.5
+
+- Upstream PowerSync.Common version bump (See Powersync.Common changelog 0.1.5 for more information)
+
 ## 0.1.4
 
 - Upstream PowerSync.Common version bump (See Powersync.Common changelog 0.1.4 for more information)

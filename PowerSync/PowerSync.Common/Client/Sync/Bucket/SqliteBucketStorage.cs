@@ -10,14 +10,11 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 using Newtonsoft.Json;
 
-using PowerSync.Common.Client.Sync.Stream;
 using PowerSync.Common.DB;
 using PowerSync.Common.DB.Crud;
 
 public class SqliteBucketStorage : IBucketStorageAdapter
 {
-    public const long MAX_OP_ID = 9223372036854775807;
-
     public BucketStorageEvents Events { get; } = new();
 
     private readonly IDBAdapter db;
@@ -69,15 +66,24 @@ public class SqliteBucketStorage : IBucketStorageAdapter
     }
 
     /// <summary>
-    /// Reads the stored target checkpoint request id, or updates it when the update parameter is set.
+    /// Reads or updates the stored checkpoint request id.
     /// </summary>
-    /// <returns>The previous checkpoint request.</returns>
-    private static Task<long?> TargetCheckpointRequestId(ILockContext tx, long? update = null)
+    public Task<long?> ReadOrUpdateCheckpoint(string variant, long? update = null)
+        => db.WriteTransaction(tx => ReadOrUpdateCheckpoint(tx, variant, update));
+
+    /// <summary>
+    /// Reads or updates the stored checkpoint request id using the given transaction.
+    /// </summary>
+    public static Task<long?> ReadOrUpdateCheckpoint(ITransaction tx, string variant, long? payload = null)
     {
         return tx.Get<long?>(
             "SELECT powersync_control(?, ?) AS r",
-            [PowerSyncControlCommand.TARGET_CHECKPOINT_REQUEST_ID, update]);
+            [$"{variant}_checkpoint_request_id", payload]);
     }
+
+    // This is called within existing transactions, therefore accept an ITransaction instead of creating a new one
+    private static Task<long?> TargetCheckpointRequestId(ITransaction tx, long? update = null)
+        => ReadOrUpdateCheckpoint(tx, "target", update);
 
     private record ResultResult(object result);
 
@@ -97,7 +103,7 @@ public class SqliteBucketStorage : IBucketStorageAdapter
         var seqBeforeResult = await db.ReadTransaction(async tx =>
         {
             var currentTarget = await TargetCheckpointRequestId(tx);
-            if (currentTarget != MAX_OP_ID)
+            if (currentTarget != long.MaxValue)
             {
                 // Nothing to update
                 return (long?)null;
@@ -152,6 +158,7 @@ public class SqliteBucketStorage : IBucketStorageAdapter
             return true;
         });
     }
+
     public Task HandleCrudCheckpoint(long lastClientId, long? writeCheckpoint = null)
     {
         return db.WriteTransaction(async tx =>
@@ -163,7 +170,7 @@ public class SqliteBucketStorage : IBucketStorageAdapter
 
             await TargetCheckpointRequestId(
                 tx,
-                writeCheckpoint is not null && !crudRemaining ? writeCheckpoint : MAX_OP_ID);
+                writeCheckpoint is not null && !crudRemaining ? writeCheckpoint : long.MaxValue);
         });
     }
 

@@ -8,6 +8,17 @@ To run this demo, you need to have one of our Node.js self-host demos ([Postgres
 
 Changes made to the backend's source DB or to the self-hosted web UI will be synced to this client (and vice versa).
 
+## Pull-to-refresh with explicit checkpoints
+
+The lists and todos screens support pull-to-refresh. Swiping down asks the PowerSync service for a
+checkpoint via `PowerSyncDatabase.RequestCheckpoint()` and waits for the local database to apply
+everything up to it with `CheckpointRequest.WaitForSync()`, so the spinner only stops once the local
+view has actually caught up to the service.
+
+This requires connecting with `CheckpointMode.Requests()` (see `Data/PowerSyncData.cs`) and
+**PowerSync service version 1.24.0 or later**. Against an older service the refresh will report a
+sync error instead of completing. Checkpoint requests are currently an alpha API.
+
 In the repo root, run the following to download the PowerSync extension:
 
 ```bash
