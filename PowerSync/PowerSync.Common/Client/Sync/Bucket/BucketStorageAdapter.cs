@@ -19,8 +19,6 @@ public static class PowerSyncControlCommand
     public const string NOTIFY_CRUD_UPLOAD_COMPLETED = "completed_upload";
     public const string UPDATE_SUBSCRIPTIONS = "update_subscriptions";
 
-    public const string TARGET_CHECKPOINT_REQUEST_ID = "target_checkpoint_request_id";
-
     /// <summary>
     /// An `established` or `end` event for response streams.
     /// </summary>
@@ -136,8 +134,44 @@ public interface IBucketStorageAdapter : ICloseable
     Task<CrudBatch?> GetCrudBatch(int limit = 100);
 
     Task<bool> UpdateLocalTarget(Func<Task<long>> callback);
-
     Task HandleCrudCheckpoint(long lastClientId, long? writeCheckpoint = null);
+
+    /// <summary>
+    /// Reads or updates the local checkpoint request ID counter.
+    /// </summary>
+    Task<long?> ReadOrUpdateCheckpoint(string variant, long? update = null);
+
+    /// <summary>
+    /// Increments and returns the local checkpoint counter.
+    /// </summary>
+    public async Task<long> NextCheckpointRequestId() => (long)await ReadOrUpdateCheckpoint("next");
+
+    /// <summary>
+    /// Returns the highest checkpoint request ID that has been requested on this device.
+    /// </summary>
+    public Task<long?> CurrentCheckpointRequestId() => ReadOrUpdateCheckpoint("current");
+
+    /// <summary>
+    /// Seeds the local checkpoint request ID counter using a response from the server.
+    ///
+    /// Seeding the local counter achieves two goals:
+    /// <list type="number">
+    ///     <item>
+    ///         <description>
+    ///             The service is allowed to forget our checkpoint counter, so we remind
+    ///             it whenever we connect.
+    ///         </description>
+    ///     </item>
+    ///     <item>
+    ///         <description>
+    ///             Checkpoint requests are scoped per user-and-device combo, but the
+    ///             local ID counter is scoped per-device. Seeding ensures we generate
+    ///             correctly incrementing IDs after switching user accounts.
+    ///         </description>
+    ///     </item>
+    /// </list>
+    /// </summary>
+    public async Task<long> SeedCheckpointRequestId(long serviceResponse) => (long)await ReadOrUpdateCheckpoint("seed", serviceResponse);
 
     /// <summary>
     /// Get a unique client ID.
@@ -148,4 +182,6 @@ public interface IBucketStorageAdapter : ICloseable
     /// Invokes the `powersync_control` function for the sync client.
     /// </summary>
     Task<string> Control(string op, object? payload);
+
+
 }

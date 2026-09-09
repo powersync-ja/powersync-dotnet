@@ -2,6 +2,5 @@
 <Project>
     <PropertyGroup>
         <MSBuildWarningsAsMessages>$(MSBuildWarningsAsMessages);NETSDK1202</MSBuildWarningsAsMessages>
-        <NoWarn>NU1500</NoWarn>
     </PropertyGroup>
 </Project>

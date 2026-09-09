@@ -10,35 +10,38 @@
     </ContentPage.ToolbarItems>
 
     <Grid RowDefinitions="Auto,*">
-        <Button Text="New List" 
+        <Button Text="New List"
                 Clicked="OnAddClicked"
                 Margin="10"
                 HorizontalOptions="End"/>
-        
-        <CollectionView Grid.Row="1"
-                        x:Name="ListsCollection"
-                        SelectionMode="Single"
-                        SelectionChanged="OnListSelected">
-            <CollectionView.ItemTemplate>
-                <DataTemplate>
-                    <Grid Padding="10">
-                        <Grid Padding="10" 
-                              BackgroundColor="White"
-                              ColumnDefinitions="*,Auto">
-                            <Grid.Shadow>
-                                <Shadow Brush="Gray" Offset="1,1" Radius="3" Opacity="0.3"/>
-                            </Grid.Shadow>
-                            <Label Text="{Binding Name}"
-                                   FontSize="16"
-                                   VerticalOptions="Center"/>
-                            <Button Grid.Column="1"
-                                    Text="Delete"
-                                    Clicked="OnDeleteClicked"
-                                    CommandParameter="{Binding .}"/>
+
+        <RefreshView Grid.Row="1"
+                     x:Name="ListsRefreshView"
+                     Refreshing="OnRefreshing">
+            <CollectionView x:Name="ListsCollection"
+                            SelectionMode="Single"
+                            SelectionChanged="OnListSelected">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Padding="10">
+                            <Grid Padding="10"
+                                  BackgroundColor="White"
+                                  ColumnDefinitions="*,Auto">
+                                <Grid.Shadow>
+                                    <Shadow Brush="Gray" Offset="1,1" Radius="3" Opacity="0.3"/>
+                                </Grid.Shadow>
+                                <Label Text="{Binding Name}"
+                                       FontSize="16"
+                                       VerticalOptions="Center"/>
+                                <Button Grid.Column="1"
+                                        Text="Delete"
+                                        Clicked="OnDeleteClicked"
+                                        CommandParameter="{Binding .}"/>
+                            </Grid>
                         </Grid>
-                    </Grid>
-                </DataTemplate>
-            </CollectionView.ItemTemplate>
-        </CollectionView>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+        </RefreshView>
     </Grid>
-</ContentPage> 
+</ContentPage>

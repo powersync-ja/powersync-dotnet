@@ -11,6 +11,7 @@ using Newtonsoft.Json;
 using Nito.AsyncEx;
 
 using PowerSync.Common.Client.Connection;
+using PowerSync.Common.Client.Sync;
 using PowerSync.Common.Client.Sync.Bucket;
 using PowerSync.Common.Client.Sync.Stream;
 using PowerSync.Common.DB;
@@ -50,6 +51,12 @@ public class PowerSyncDatabaseOptions() : BasePowerSyncDatabaseOptions()
     /// If not provided, a default Remote will be created.
     /// </summary>
     public Func<IPowerSyncBackendConnector, Remote>? RemoteFactory { get; set; }
+
+    /// <summary>
+    /// Used to calculate delays for the sync client (retry delays, upload throttling).
+    /// Used for testing to avoid waiting out some long delays (retry delay is minimum 10 seconds).
+    /// </summary>
+    internal TimeProvider? TimeProvider { get; set; }
 }
 
 public class PowerSyncDBEvents : EventManager
@@ -200,6 +207,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         SdkVersion = "";
 
         remoteFactory = options.RemoteFactory ?? (connector => new Remote(connector));
+        var timeProvider = options.TimeProvider ?? TimeProvider.System;
 
         watchManager = new WatchManager(this, masterCts.Token);
 
@@ -207,7 +215,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         subscriptions = new InternalSubscriptionManager(
             firstStatusMatching: WaitForStatus,
             resolveOfflineSyncStatus: ResolveOfflineSyncStatus,
-            subscriptionsCommand: async (payload) => await this.WriteTransaction(async tx =>
+            subscriptionsCommand: async (payload) => await WriteTransaction(async tx =>
                 {
                     await tx.Execute("SELECT powersync_control(?, ?) AS r", ["subscriptions", JsonConvert.SerializeObject(payload)]);
                 }));
@@ -226,9 +234,17 @@ public class PowerSyncDatabase : IPowerSyncDatabase
                         await WaitForReady();
                         await connector.UploadData(this);
                     },
+                    PostCheckpointRequest = connector is ICustomCheckpointRequestConnector checkpointConnector
+                        ? async (clientId, requestId, token) =>
+                        {
+                            await WaitForReady();
+                            return await checkpointConnector.PostCheckpointRequest(clientId, requestId, token);
+                        }
+                    : null,
                     RetryDelayMs = options.RetryDelayMs,
                     Subscriptions = options.Subscriptions,
                     CrudUploadThrottleMs = options.CrudUploadThrottleMs,
+                    TimeProvider = timeProvider,
                     Logger = Logger
                 });
 
@@ -319,6 +335,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         }
 
         var tcs = new TaskCompletionSource<bool>();
+        var canceledRegistration = cts.Token.Register(() => tcs.TrySetCanceled(cts.Token));
 
         _ = Task.Run(async () =>
         {
@@ -334,9 +351,22 @@ public class PowerSyncDatabase : IPowerSyncDatabase
                 }
             }
             catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                tcs.TrySetException(ex);
+                cts.Cancel();
+            }
         });
 
-        await tcs.Task;
+        try
+        {
+            await tcs.Task;
+        }
+        finally
+        {
+            canceledRegistration.Dispose();
+            cts.Cancel();
+        }
     }
 
     protected async Task Initialize(PowerSyncDatabaseOptions options)
@@ -451,16 +481,6 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         await WaitForReady();
     }
 
-    private RequiredAdditionalConnectionOptions resolveConnectionOptions(PowerSyncConnectionOptions? options)
-    {
-        var defaults = RequiredAdditionalConnectionOptions.DEFAULT_ADDITIONAL_CONNECTION_OPTIONS;
-        return new RequiredAdditionalConnectionOptions
-        {
-            RetryDelayMs = options?.RetryDelayMs ?? defaults.RetryDelayMs,
-            CrudUploadThrottleMs = options?.CrudUploadThrottleMs ?? defaults.CrudUploadThrottleMs,
-        };
-    }
-
     public async Task Connect(IPowerSyncBackendConnector connector, PowerSyncConnectionOptions? options = null)
     {
         await WaitForReady();
@@ -504,6 +524,41 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         // The data has been deleted - reset the sync status
         CurrentStatus = new SyncStatus(new SyncStatusOptions());
         Events.Emit(new PowerSyncDBEvents.StatusChangedEvent(CurrentStatus));
+    }
+
+    /// <summary>
+    /// Requests a checkpoint from the PowerSync service.
+    ///
+    /// The returned request can be awaited using <see cref="CheckpointRequest.WaitForSync" />
+    /// to confirm that the local database has applied server-side changes up to
+    /// the checkpoint. This method requires an active or connecting sync client
+    /// connected with <see cref="CheckpointMode.Requests()" /> and PowerSync service version
+    /// 1.24.0 or later.
+    /// </summary>
+    /// <exception cref="CheckpointRequestException">
+    /// Thrown when requesting the checkpoint has failed, for example when the
+    /// database is disconnected.
+    /// </exception>
+    public async Task<CheckpointRequest> RequestCheckpoint(CancellationToken ct = default)
+    {
+        await WaitForReady();
+
+        // Important: `LockAsync(CancellationToken)` will still take the lock even if
+        // cancellation is requested, so long as the token is canceled before LockAsync
+        // is called and the lock is not in use; i.e. an already-canceled token will only
+        // prevent _waiting_ for the lock, not getting the lock. Therefore, we need to
+        // check for cancellation ourselves before entering the using block.
+        ct.ThrowIfCancellationRequested();
+        using (await runExclusive.LockAsync(ct))
+        {
+            var sync = SyncStreamImplementation;
+            if (sync == null)
+            {
+                throw new CheckpointRequestException(CheckpointRequestException.Disconnected);
+            }
+
+            return await sync.RequestCheckpoint(this, ct);
+        }
     }
 
     /// <summary>
@@ -829,6 +884,9 @@ public class SQLWatchOptions
     /// </summary>
     public int? ThrottleMs { get; set; }
 
+    /// <summary>
+    /// If true, runs the query once when creating the watch. Defaults to false.
+    /// </summary>
     public bool TriggerImmediately { get; set; } = false;
 }
 

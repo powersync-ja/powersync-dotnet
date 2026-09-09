@@ -1,14 +1,14 @@
-namespace PowerSync.Common.Client.Sync.Stream;
+using PowerSync.Common.Client.Sync.Bucket;
+using PowerSync.Common.DB.Crud;
 
 using Newtonsoft.Json;
 
-using PowerSync.Common.Client.Sync.Bucket;
-using PowerSync.Common.DB.Crud;
+namespace PowerSync.Common.Client.Sync.Stream;
 
 public class ContinueCheckpointRequest
 {
     [JsonProperty("buckets")]
-    public List<BucketRequest> Buckets { get; set; } = new();
+    public List<BucketRequest> Buckets { get; set; } = [];
 
     [JsonProperty("checkpoint_token")]
     public string CheckpointToken { get; set; } = "";
@@ -95,7 +95,7 @@ public class RequestStreamSubscription
     public string Stream { get; set; } = "";
 
     [JsonProperty("parameters")]
-    public Dictionary<string, object> Parameters { get; set; } = new();
+    public Dictionary<string, object> Parameters { get; set; } = [];
 
     [JsonProperty("override_priority")]
     public int? OverridePriority { get; set; }
@@ -128,16 +128,16 @@ public class StreamingSyncCheckpointDiff : StreamingSyncLine
 public class CheckpointDiff
 {
     [JsonProperty("last_op_id")]
-    public string LastOpId { get; set; } = "";
+    public long LastOpId { get; set; }
 
     [JsonProperty("updated_buckets")]
-    public List<BucketChecksum> UpdatedBuckets { get; set; } = new();
+    public List<BucketChecksum> UpdatedBuckets { get; set; } = [];
 
     [JsonProperty("removed_buckets")]
-    public List<string> RemovedBuckets { get; set; } = new();
+    public List<string> RemovedBuckets { get; set; } = [];
 
     [JsonProperty("write_checkpoint")]
-    public string WriteCheckpoint { get; set; } = "";
+    public long WriteCheckpoint { get; set; }
 }
 
 public class StreamingSyncDataJSON : StreamingSyncLine
@@ -182,11 +182,32 @@ public class StreamingSyncKeepalive : StreamingSyncLine
 public class CrudRequest
 {
     [JsonProperty("data")]
-    public List<CrudEntry> Data { get; set; } = new();
+    public List<CrudEntry> Data { get; set; } = [];
 }
 
 public class CrudResponse
 {
     [JsonProperty("checkpoint")]
     public string? Checkpoint { get; set; }
+}
+
+public class CheckpointRequestPayload
+{
+    [JsonProperty("client_id")]
+    public string ClientId { get; set; } = "";
+
+    [JsonProperty("checkpoint_request_id")]
+    public long CheckpointRequestId { get; set; }
+}
+
+public class CheckpointRequestResponse
+{
+    [JsonProperty("data")]
+    public CheckpointRequestResponseData Data { get; set; } = new();
+}
+
+public class CheckpointRequestResponseData
+{
+    [JsonProperty("checkpoint_request_id")]
+    public long CheckpointRequestId { get; set; }
 }

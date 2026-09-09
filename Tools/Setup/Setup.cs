@@ -1,12 +1,8 @@
-using System;
-using System.IO;
-using System.Linq;
-using System.Net.Http;
-using System.Threading.Tasks;
-using System.Collections.Generic;
 using System.IO.Compression;
 using System.Xml;
 using System.Xml.Linq;
+
+namespace Tools.Setup;
 
 /// <summary>
 /// Downloads the powersync-sqlite-core native libraries into PowerSync.Common/runtimes,
@@ -25,7 +21,7 @@ using System.Xml.Linq;
 /// </summary>
 public class PowerSyncSetup
 {
-    private const string VERSION = "0.5.2";
+    private const string VERSION = "0.5.3";
 
     private const string GITHUB_BASE_URL = $"https://github.com/powersync-ja/powersync-sqlite-core/releases/download/v{VERSION}";
 
@@ -203,7 +199,7 @@ public class PowerSyncSetup
     /// Drops the removed slices from the xcframework's AvailableLibraries list, so the Apple
     /// SDK does not go looking for slices that are no longer present in the archive.
     /// </summary>
-    private static Stream TrimInfoPlist(Stream plistStream, string[] keepSlices)
+    private static MemoryStream TrimInfoPlist(Stream plistStream, string[] keepSlices)
     {
         // XmlResolver is null so the Apple DTD named by the DOCTYPE is never fetched, while
         // DtdProcessing.Parse keeps the DOCTYPE itself in the output.
@@ -252,9 +248,10 @@ public class PowerSyncSetup
 
 public class Program
 {
-    static async Task Main(string[] args)
+    static async Task Main()
     {
         var setup = new PowerSyncSetup();
         await setup.RunSetup();
     }
 }
+
