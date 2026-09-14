@@ -25,8 +25,8 @@ jobs:
 
       - name: Restore Projects
         run: |
-          dotnet restore PowerSync/PowerSync.Common/PowerSync.Common.csproj -p:TargetFrameworks=net8.0
-          dotnet restore PowerSync/PowerSync.Maui/PowerSync.Maui.csproj -p:TargetFrameworks=net8.0
+          dotnet restore PowerSync/PowerSync.Common/PowerSync.Common.csproj -p:TargetFrameworks=net10.0
+          dotnet restore PowerSync/PowerSync.Maui/PowerSync.Maui.csproj -p:TargetFrameworks=net10.0
 
       - name: Generate API Metadata
         working-directory: docs
