@@ -5,14 +5,10 @@
       "src": [
         {
           "src": "../PowerSync",
-          "files": [
-            "PowerSync.Common/PowerSync.Common.csproj",
-            "PowerSync.Maui/PowerSync.Maui.csproj"
-          ]
+          "files": ["PowerSync.Common/PowerSync.Common.csproj"]
         }
       ],
       "dest": "api",
-      "filter": "filter.yml",
       "properties": {
         "TargetFramework": "net8.0",
         "TargetFrameworks": "net8.0"
@@ -27,13 +23,7 @@
     "content": [
       {
         "files": ["**/*.{md,yml}"],
-        "exclude": [
-          "_site/**",
-          "obj/**",
-          "template/**",
-          "README.md",
-          "filter.yml"
-        ]
+        "exclude": ["_site/**", "obj/**", "template/**", "README.md"]
       }
     ],
     "resource": [
