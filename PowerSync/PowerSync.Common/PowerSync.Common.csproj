@@ -39,29 +39,27 @@
     <PackageReference Include="Nito.AsyncEx" Version="5.1.2" />
   </ItemGroup>
 
-  <!-- For ProjectReference: copy the whole /runtimes/ directory. -->
+  <!-- Every runtime directory is packed: each platform SDK resolves its own natives out of
+       `runtimes/<rid>/native` in the restored package. -->
   <ItemGroup>
     <None Include="runtimes/**/*.*" Pack="true" PackagePath="runtimes/" />
   </ItemGroup>
 
-  <!-- For NuGet-published package: only include the runtime directories for the current target. -->
-  <!-- Desktop -->
+  <!-- For ProjectReference: copy the desktop runtime directories. `Update` rather than a second
+       `Include`, so these stay a single item and `Pack` cannot conflict with the group above. -->
   <ItemGroup Condition="'$(TargetPlatformIdentifier)' == ''">
-    <Content Include="runtimes/win-*/**/*.*;runtimes/linux-*/**/*.*;runtimes/osx-*/**/*.*" Pack="false">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
+    <None Update="runtimes/win-*/**/*.*;runtimes/linux-*/**/*.*;runtimes/osx-*/**/*.*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <!-- Apple -->
   <!-- The .xcframework files under `/runtimes/ios` and `/runtimes/maccatalyst` are not interchangeable. -->
+  <!-- `None`, not `Content`: the Apple SDKs embed every `Content` item into the assembly as a
+       `__monotouch_content_*` resource and then extract it into the app bundle, which would ship
+       the .zip twice over on top of the framework the SDK links out of it. -->
   <ItemGroup Condition="'$(TargetPlatformIdentifier)' == 'ios'">
-    <Content Include="runtimes/ios/native/*.xcframework.zip" Pack="false">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
+    <None Update="runtimes/ios/native/*.xcframework.zip" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup Condition="'$(TargetPlatformIdentifier)' == 'maccatalyst'">
-    <Content Include="runtimes/maccatalyst/native/*.xcframework.zip" Pack="false">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
+    <None Update="runtimes/maccatalyst/native/*.xcframework.zip" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <!-- Android -->
   <ItemGroup Condition="'$(TargetPlatformIdentifier)' == 'android'">
@@ -72,6 +70,7 @@
   </ItemGroup>
   
   <ItemGroup>
+    <None Include="buildTransitive/PowerSync.Common.targets" Pack="true" PackagePath="buildTransitive/" />
     <None Include="../../icon.png" Pack="true" PackagePath="" />
     <None Include="README.md" Pack="true" PackagePath="" />
   </ItemGroup>
