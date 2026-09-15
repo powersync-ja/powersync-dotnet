@@ -196,18 +196,7 @@ internal class WatchManager
     }
 
     private static HashSet<string> ExpandTableNames(IEnumerable<string> tables) =>
-        [.. tables.SelectMany(table => new[] { $"{PS_DATA_PREFIX}{table}", $"{PS_DATA_LOCAL_PREFIX}{table}" })];
-
-    private static string InternalToFriendlyTableName(string internalName)
-    {
-        if (internalName.StartsWith(PS_DATA_PREFIX))
-            return internalName.Substring(PS_DATA_PREFIX.Length);
-
-        if (internalName.StartsWith(PS_DATA_LOCAL_PREFIX))
-            return internalName.Substring(PS_DATA_LOCAL_PREFIX.Length);
-
-        return internalName;
-    }
+        [.. tables.SelectMany(table => new[] { $"{PS_DATA_PREFIX}{table}", $"{PS_DATA_LOCAL_PREFIX}{table}", $"{table}" })];
 }
 
 /// <summary>

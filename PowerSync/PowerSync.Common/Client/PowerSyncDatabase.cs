@@ -154,6 +154,10 @@ public class PowerSyncDatabase : IPowerSyncDatabase
 
     protected IBucketStorageAdapter BucketStorageAdapter;
 
+    private readonly object currentStatusLock = new();
+    /// <summary>
+    /// The latest published sync status.
+    /// </summary>
     public SyncStatus CurrentStatus { get; protected set; }
 
     protected CancellationTokenSource masterCts = new();
@@ -163,6 +167,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
     public ILogger Logger { get; protected set; }
 
     private readonly AsyncLock runExclusive = new();
+
     private readonly Func<IPowerSyncBackendConnector, Remote> remoteFactory;
 
     public StreamingSyncImplementation? SyncStreamImplementation => ConnectionManager.SyncStreamImplementation;
@@ -225,6 +230,8 @@ public class PowerSyncDatabase : IPowerSyncDatabase
             await WaitForReady();
             using (await runExclusive.LockAsync())
             {
+                var syncStreamStatusCts = CancellationTokenSource.CreateLinkedTokenSource(masterCts.Token);
+
                 syncStreamImplementation = new StreamingSyncImplementation(new StreamingSyncImplementationOptions
                 {
                     Adapter = BucketStorageAdapter,
@@ -245,20 +252,22 @@ public class PowerSyncDatabase : IPowerSyncDatabase
                     Subscriptions = options.Subscriptions,
                     CrudUploadThrottleMs = options.CrudUploadThrottleMs,
                     TimeProvider = timeProvider,
-                    Logger = Logger
-                });
-
-                var syncStreamStatusCts = CancellationTokenSource.CreateLinkedTokenSource(masterCts.Token);
-                var syncStreamStatusListener = syncStreamImplementation.Events.OnStatusChanged.ListenAsync(syncStreamStatusCts.Token);
-                var _ = Task.Run(async () =>
-                {
-                    await foreach (var update in syncStreamStatusListener)
+                    Logger = Logger,
+                    OnStatusChanged = status =>
                     {
-                        CurrentStatus = new SyncStatus(new SyncStatusOptions(update.Status.Options)
+                        if (syncStreamStatusCts.IsCancellationRequested)
                         {
-                            HasSynced = CurrentStatus?.HasSynced == true || update.Status.LastSyncedAt != null,
-                        });
-                        Events.Emit(new PowerSyncDBEvents.StatusChangedEvent(CurrentStatus));
+                            return;
+                        }
+
+                        lock (currentStatusLock)
+                        {
+                            CurrentStatus = new SyncStatus(new SyncStatusOptions(status.Options)
+                            {
+                                HasSynced = CurrentStatus?.HasSynced == true || status.LastSyncedAt != null,
+                            });
+                            Events.Emit(new PowerSyncDBEvents.StatusChangedEvent(CurrentStatus));
+                        }
                     }
                 });
 
@@ -431,12 +440,16 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         var parsed = JsonConvert.DeserializeObject<CoreSyncStatus>(result.r);
 
         var parsedSyncStatus = CoreInstructionHelpers.CoreStatusToSyncStatus(parsed!);
-        var updatedStatus = CurrentStatus.CreateUpdatedStatus(parsedSyncStatus);
 
-        if (!updatedStatus.IsEqual(CurrentStatus))
+        lock (currentStatusLock)
         {
-            CurrentStatus = updatedStatus;
-            Events.Emit(new PowerSyncDBEvents.StatusChangedEvent(CurrentStatus));
+            var updatedStatus = CurrentStatus.CreateUpdatedStatus(parsedSyncStatus);
+
+            if (!updatedStatus.IsEqual(CurrentStatus))
+            {
+                CurrentStatus = updatedStatus;
+                Events.Emit(new PowerSyncDBEvents.StatusChangedEvent(CurrentStatus));
+            }
         }
     }
 
@@ -522,8 +535,11 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         });
 
         // The data has been deleted - reset the sync status
-        CurrentStatus = new SyncStatus(new SyncStatusOptions());
-        Events.Emit(new PowerSyncDBEvents.StatusChangedEvent(CurrentStatus));
+        lock (currentStatusLock)
+        {
+            CurrentStatus = new SyncStatus(new SyncStatusOptions());
+            Events.Emit(new PowerSyncDBEvents.StatusChangedEvent(CurrentStatus));
+        }
     }
 
     /// <summary>

@@ -41,6 +41,21 @@ public class SyncTests : IAsyncLifetime
             """{ "checkpoint_complete":{ "last_op_id":"2"} }"""
         ];
 
+    /// <summary>
+    /// The status published on the database must be current by the time Connect returns, so that a
+    /// caller reading CurrentStatus - or subscribing to OnStatusChanged - right after connecting
+    /// doesn't observe a status from before the connection settled.
+    /// </summary>
+    [Fact(Timeout = 15000)]
+    public async Task ConnectPublishesStatusBeforeReturning()
+    {
+        await db.Init();
+        await db.Connect(new TestConnector());
+
+        Assert.True(db.CurrentStatus.Connected);
+        Assert.False(db.CurrentStatus.Connecting);
+    }
+
     [Fact]
     public async Task SyncCreateOperationTest()
     {
