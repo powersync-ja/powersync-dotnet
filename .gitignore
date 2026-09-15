@@ -53,6 +53,7 @@ TestResults/
 *.VSIXProjectLaunch
 .project
 .vsconfig
+.env
 
 *.db
 *.db-shm
