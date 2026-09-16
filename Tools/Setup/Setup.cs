@@ -83,7 +83,7 @@ public class PowerSyncSetup
         };
     }
 
-    private async Task<bool> ProcessRuntime(KeyValuePair<string, RuntimeConfig> runtimeConfig)
+    private async Task ProcessRuntime(KeyValuePair<string, RuntimeConfig> runtimeConfig)
     {
         var (rid, config) = runtimeConfig;
         var nativeDir = Path.Combine(_commonPath, "runtimes", rid, "native");
