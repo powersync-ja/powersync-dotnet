@@ -461,9 +461,10 @@ public class StreamingSyncImplementation : ICloseable
         var retryDelayMs = options.RetryDelayMs ?? DEFAULT_RETRY_DELAY_MS;
 
         crudUpdateCts = new CancellationTokenSource();
+        var crudUpdates = Options.Adapter.Events.OnCrudUpdate.ListenAsync(crudUpdateCts.Token);
         crudUpdateTask = Task.Run(async () =>
         {
-            await foreach (var _ in Options.Adapter.Events.OnCrudUpdate.ListenAsync(crudUpdateCts.Token))
+            await foreach (var _ in crudUpdates)
             {
                 TriggerCrudUpload();
             }

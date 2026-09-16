@@ -115,9 +115,10 @@ public class MDSQLiteAdapter : IDBAdapter
 
         // Register TablesUpdated listener
         tablesUpdatedCts = new CancellationTokenSource();
+        var notifications = writeConnection.ListenAsync(tablesUpdatedCts.Token);
         tablesUpdatedTask = Task.Run(async () =>
         {
-            await foreach (var notification in writeConnection.ListenAsync(tablesUpdatedCts.Token))
+            await foreach (var notification in notifications)
             {
                 if (notification.TablesUpdated != null)
                 {
