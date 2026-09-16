@@ -83,7 +83,7 @@ public class PowerSyncSetup
         };
     }
 
-    private async Task ProcessRuntime(KeyValuePair<string, RuntimeConfig> runtimeConfig)
+    private async Task<bool> ProcessRuntime(KeyValuePair<string, RuntimeConfig> runtimeConfig)
     {
         var (rid, config) = runtimeConfig;
         var nativeDir = Path.Combine(_commonPath, "runtimes", rid, "native");
@@ -105,6 +105,7 @@ public class PowerSyncSetup
         catch (Exception ex)
         {
             Console.Error.WriteLine($"✗ Failed to process {rid}: {ex.Message}");
+            throw;
         }
     }
 
@@ -130,6 +131,7 @@ public class PowerSyncSetup
         catch (Exception ex)
         {
             Console.Error.WriteLine($"✗ Failed to process Apple libraries: {ex.Message}");
+            throw;
         }
         finally
         {
