@@ -13,6 +13,7 @@ using Newtonsoft.Json;
 using PowerSync.Common.Client.Sync.Bucket;
 using PowerSync.Common.DB.Crud;
 using PowerSync.Common.Utils;
+using PowerSync.Common.Utils.Converters;
 
 public class AdditionalConnectionOptions(int? retryDelayMs = null, int? crudUploadThrottleMs = null)
 {
@@ -1358,7 +1359,7 @@ public class StreamingSyncImplementation : ICloseable
     }
 
     internal record LegacyWriteCheckpointResponseData(
-        [property: JsonProperty("write_checkpoint")] long WriteCheckpoint
+        [property: JsonProperty("write_checkpoint"), JsonConverter(typeof(StringLongConverter))] long WriteCheckpoint
     );
     internal record LegacyWriteCheckpointApiResponse(
         [property: JsonProperty("data")] LegacyWriteCheckpointResponseData Data

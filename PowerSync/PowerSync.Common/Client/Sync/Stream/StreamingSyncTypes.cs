@@ -1,5 +1,6 @@
 using PowerSync.Common.Client.Sync.Bucket;
 using PowerSync.Common.DB.Crud;
+using PowerSync.Common.Utils.Converters;
 
 using Newtonsoft.Json;
 
@@ -128,6 +129,7 @@ public class StreamingSyncCheckpointDiff : StreamingSyncLine
 public class CheckpointDiff
 {
     [JsonProperty("last_op_id")]
+    [JsonConverter(typeof(StringLongConverter))]
     public long LastOpId { get; set; }
 
     [JsonProperty("updated_buckets")]
@@ -137,6 +139,7 @@ public class CheckpointDiff
     public List<string> RemovedBuckets { get; set; } = [];
 
     [JsonProperty("write_checkpoint")]
+    [JsonConverter(typeof(StringLongConverter))]
     public long WriteCheckpoint { get; set; }
 }
 
@@ -197,6 +200,7 @@ public class CheckpointRequestPayload
     public string ClientId { get; set; } = "";
 
     [JsonProperty("checkpoint_request_id")]
+    [JsonConverter(typeof(StringLongConverter))]
     public long CheckpointRequestId { get; set; }
 }
 
@@ -209,5 +213,6 @@ public class CheckpointRequestResponse
 public class CheckpointRequestResponseData
 {
     [JsonProperty("checkpoint_request_id")]
+    [JsonConverter(typeof(StringLongConverter))]
     public long CheckpointRequestId { get; set; }
 }

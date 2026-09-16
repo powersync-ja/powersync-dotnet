@@ -143,7 +143,7 @@ public class MockDataFactory
         {
             Checkpoint = new Checkpoint
             {
-                LastOpId = $"{lastOpId}",
+                LastOpId = lastOpId,
                 Buckets = buckets?.ToArray() ?? [],
                 WriteCheckpoint = null,
                 Streams = streams?.ToArray() ?? []
