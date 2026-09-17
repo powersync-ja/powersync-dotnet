@@ -1,5 +1,9 @@
 # PowerSync.Common Changelog
 
+## unreleased
+
+- Add a `soft` parameter to `PowerSyncDatabase.DisconnectAndClear()` to clear data from public tables while keeping an internal sync checkpoint for a faster next sync.
+
 ## 0.1.5
 
 - Update the PowerSync SQLite core extension to 0.5.3.
