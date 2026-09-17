@@ -177,7 +177,12 @@ public class MDSQLiteAdapter : IDBAdapter
         extensionPath = PowerSyncDesktopPathResolver.GetNativeLibraryPath(AppContext.BaseDirectory);
 #endif
 
-        db.LoadExtension(extensionPath, "sqlite3_powersync_init");
+        // Use manual command instead of db.LoadExtension(), since that has issues on iOS
+        using var loadExtension = db.CreateCommand();
+        loadExtension.CommandText = "SELECT load_extension(@path, @entryPoint)";
+        loadExtension.Parameters.AddWithValue("@path", extensionPath);
+        loadExtension.Parameters.AddWithValue("@entryPoint", "sqlite3_powersync_init");
+        loadExtension.ExecuteNonQuery();
     }
 
     public async Task Close()
