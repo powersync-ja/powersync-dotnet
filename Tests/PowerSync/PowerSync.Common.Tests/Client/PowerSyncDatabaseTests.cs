@@ -1165,4 +1165,21 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
 
         Assert.Equal(1, eventCount);
     }
+
+    [Fact]
+    public async Task DisconnectAndClear_Soft()
+    {
+        await db.Execute("INSERT INTO customers (id, name) VALUES (?, ?)", [Guid.NewGuid().ToString(), "customer"]);
+        await db.Execute("INSERT INTO ps_buckets (name, last_applied_op) VALUES (?, ?)", ["bkt", 10]);
+
+        // Doing a soft-clear should delete data but keep the bucket around.
+        await db.DisconnectAndClear(soft: true);
+        var bucket = await db.Get("SELECT name FROM ps_buckets");
+        Assert.Equal("bkt", bucket.name);
+
+        // Doing a default clear also deletes buckets.
+        await db.DisconnectAndClear();
+        var buckets = await db.GetAll("SELECT name FROM ps_buckets");
+        Assert.Empty(buckets);
+    }
 }

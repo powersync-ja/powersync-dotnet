@@ -1,6 +1,6 @@
 # PowerSync.Common Changelog
 
-## 1.0.1
+## 1.0.1 (unreleased)
 
 - Full release.
 - `PowerSyncDatabase.OnChange` now returns the underlying raw table name instead of the view name to mirror PowerSync JS.
@@ -10,6 +10,10 @@
 ## 1.0.0 (unlisted)
 
 - Accidental release (mirror of 0.1.2). Use 1.0.1 instead.
+
+## 0.1.6
+
+- Add a `soft` parameter to `PowerSyncDatabase.DisconnectAndClear()` to clear data from public tables while keeping an internal sync checkpoint for a faster next sync.
 
 ## 0.1.5
 
