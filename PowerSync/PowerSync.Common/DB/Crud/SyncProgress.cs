@@ -20,11 +20,11 @@ namespace PowerSync.Common.DB.Crud;
 public class SyncProgress : ProgressWithOperations
 {
     public static readonly int FULL_SYNC_PRIORITY = 2147483647;
-    protected Dictionary<string, BucketProgress> InternalProgress { get; }
+    private Dictionary<string, BucketProgress> InternalProgress { get; }
 
-    public SyncProgress(Dictionary<string, BucketProgress> progress)
+    internal SyncProgress(Dictionary<string, BucketProgress> progress)
     {
-        this.InternalProgress = progress;
+        InternalProgress = progress;
         var untilCompletion = UntilPriority(FULL_SYNC_PRIORITY);
 
         TotalOperations = untilCompletion.TotalOperations;

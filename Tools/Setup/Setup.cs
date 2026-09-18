@@ -10,7 +10,7 @@ using System.IO.Compression;
 /// </summary>
 public class PowerSyncSetup
 {
-    private const string VERSION = "0.5.2";
+    private const string VERSION = "0.5.3";
 
     private const string GITHUB_BASE_URL = $"https://github.com/powersync-ja/powersync-sqlite-core/releases/download/v{VERSION}";
 
@@ -113,7 +113,7 @@ public class PowerSyncSetup
             Directory.CreateDirectory(nativeDir);
 
             await Task.WhenAll(
-                DownloadAndroidLibrary("libpowersync_aarch64.android.so ", nativeDir,"arm64-v8a"),
+                DownloadAndroidLibrary("libpowersync_aarch64.android.so ", nativeDir, "arm64-v8a"),
                 DownloadAndroidLibrary("libpowersync_armv7.android.so ", nativeDir, "armeabi-v7a"),
                 DownloadAndroidLibrary("libpowersync_x86.android.so ", nativeDir, "x86"),
                 DownloadAndroidLibrary("libpowersync_x64.android.so ", nativeDir, "x86_64")
@@ -130,7 +130,7 @@ public class PowerSyncSetup
     private async Task DownloadAndroidLibrary(string filename, string jniLibsDir, string arch)
     {
         var targetDir = Path.Combine(jniLibsDir, arch);
-		Directory.CreateDirectory(targetDir);
+        Directory.CreateDirectory(targetDir);
         var targetFile = Path.Combine(targetDir, "libpowersync.so");
         await DownloadFile($"{GITHUB_BASE_URL}/{filename}", targetFile);
     }

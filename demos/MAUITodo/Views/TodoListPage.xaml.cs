@@ -2,6 +2,7 @@ using MAUITodo.Data;
 using MAUITodo.Models;
 
 using PowerSync.Common.Client;
+using PowerSync.Common.Client.Sync;
 
 namespace MAUITodo.Views;
 
@@ -52,6 +53,25 @@ public partial class TodoListPage
     {
         base.OnDisappearing();
         _watchCts?.Cancel();
+    }
+
+    /// <summary>
+    /// Pull-to-refresh: request a checkpoint and wait for this list's todos to catch up to it.
+    /// </summary>
+    private async void OnRefreshing(object sender, EventArgs e)
+    {
+        try
+        {
+            await database.RefreshAsync();
+        }
+        catch (CheckpointRequestException ex)
+        {
+            await DisplayAlert("Refresh failed", ex.Message, "OK");
+        }
+        finally
+        {
+            TodoItemsRefreshView.IsRefreshing = false;
+        }
     }
 
     private async void OnAddClicked(object sender, EventArgs e)

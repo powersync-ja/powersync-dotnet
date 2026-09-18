@@ -1,7 +1,5 @@
 namespace PowerSync.Common.DB.Crud;
 
-using Microsoft.Extensions.Options;
-
 using Newtonsoft.Json;
 
 using PowerSync.Common.Client.Sync.Stream;
@@ -47,9 +45,7 @@ public class SyncPriorityStatus
 
 public class SyncStatusOptions
 {
-    public SyncStatusOptions()
-    {
-    }
+    public SyncStatusOptions() { }
 
     public SyncStatusOptions(SyncStatusOptions options)
     {
@@ -220,7 +216,6 @@ public class SyncStatus(SyncStatusOptions options)
 
         return raw != null ? new SyncStreamStatusView(this, raw) : null;
     }
-
 
     private string SerializeObject()
     {
