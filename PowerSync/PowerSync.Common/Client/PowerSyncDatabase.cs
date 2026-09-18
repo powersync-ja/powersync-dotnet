@@ -507,18 +507,27 @@ public class PowerSyncDatabase : IPowerSyncDatabase
     /// Use this when logging out.
     /// The database can still be queried after this is called, but the tables
     /// would be empty.
-    /// 
+    ///
     /// To preserve data in local-only tables, set clearLocal to false.
+    ///
+    /// A "soft" clear deletes publicly visible tables, but keeps internal copies of data synced in the database.
+    /// This usually means that if <see cref="Connect"/> is later called again with a JWT from the same user, the
+    /// first sync is very fast because all internal data is still available. When a different user logs in, no old
+    /// data would be visible at any point. Using soft deletes is recommended where it's not a security issue that
+    /// old data could be reconstructed from internal database tables.
     /// </summary>
-    public async Task DisconnectAndClear(bool clearLocal = true)
+    public async Task DisconnectAndClear(bool clearLocal = true, bool soft = false)
     {
         await Disconnect();
         await WaitForReady();
 
+        var flags = 0;
+        if (clearLocal) flags |= 1;
+        if (soft) flags |= 2;
 
         await Database.WriteTransaction(async tx =>
         {
-            await tx.Execute("SELECT powersync_clear(?)", [clearLocal ? 1 : 0]);
+            await tx.Execute("SELECT powersync_clear(?)", [flags]);
         });
 
         // The data has been deleted - reset the sync status
