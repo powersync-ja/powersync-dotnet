@@ -1,10 +1,9 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-
 	<PropertyGroup>
 	    <ApplicationId>com.companyname.todo</ApplicationId>
 
 		<TargetFrameworks>net9.0-android;net10.0-android</TargetFrameworks>
-		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('Windows'))">$(TargetFrameworks);net9.0-windows;net10.0-windows</TargetFrameworks>
+		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('Windows'))">$(TargetFrameworks);net9.0-windows10.0.19041.0;net10.0-windows10.0.19041.0</TargetFrameworks>
 		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('OSX'))">$(TargetFrameworks);net9.0-ios;net9.0-maccatalyst;net10.0-ios;net10.0-maccatalyst</TargetFrameworks>
 		
 		<OutputType>Exe</OutputType>
@@ -64,6 +63,5 @@
 
 	<ItemGroup>
     	<ProjectReference Include="..\..\PowerSync\PowerSync.Common\PowerSync.Common.csproj" />
-		<ProjectReference Include="..\..\PowerSync\PowerSync.Maui\PowerSync.Maui.csproj" />
   	</ItemGroup>
 </Project>

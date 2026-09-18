@@ -8,6 +8,7 @@ using Newtonsoft.Json;
 
 using PowerSync.Common.DB.Crud;
 using PowerSync.Common.Utils;
+using PowerSync.Common.Utils.Converters;
 
 public static class PowerSyncControlCommand
 {
@@ -34,13 +35,15 @@ public static class PowerSyncControlConnectionState
 public class Checkpoint
 {
     [JsonProperty("last_op_id")]
-    public string LastOpId { get; set; } = null!;
+    [JsonConverter(typeof(StringLongConverter))]
+    public long LastOpId { get; set; }
 
     [JsonProperty("buckets")]
     public BucketChecksum[] Buckets { get; set; } = [];
 
     [JsonProperty("write_checkpoint")]
-    public string? WriteCheckpoint { get; set; } = null;
+    [JsonConverter(typeof(StringLongConverter))]
+    public long? WriteCheckpoint { get; set; } = null;
 
     [JsonProperty("streams")]
     public object[]? Streams { get; set; } = [];

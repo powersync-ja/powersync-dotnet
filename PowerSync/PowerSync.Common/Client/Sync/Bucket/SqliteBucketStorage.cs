@@ -33,9 +33,10 @@ public class SqliteBucketStorage : IBucketStorageAdapter
 
         updateCts = new CancellationTokenSource();
 
+        var updates = db.Events.OnTablesUpdated.Listen(updateCts.Token);
         updateTask = Task.Run(() =>
         {
-            foreach (var update in db.Events.OnTablesUpdated.Listen(updateCts.Token))
+            foreach (var update in updates)
             {
                 var tables = DBAdapterUtils.ExtractTableUpdates(update.TablesUpdated);
                 if (tables.Contains(PSInternalTable.CRUD))

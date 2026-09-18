@@ -12,6 +12,10 @@ using Nito.AsyncEx;
 using PowerSync.Common.DB;
 using PowerSync.Common.Utils;
 
+#if IOS || MACCATALYST
+using Foundation;
+#endif
+
 public class MDSQLiteAdapterOptions()
 {
     public string Name { get; set; } = null!;
@@ -111,9 +115,10 @@ public class MDSQLiteAdapter : IDBAdapter
 
         // Register TablesUpdated listener
         tablesUpdatedCts = new CancellationTokenSource();
+        var notifications = writeConnection.ListenAsync(tablesUpdatedCts.Token);
         tablesUpdatedTask = Task.Run(async () =>
         {
-            await foreach (var notification in writeConnection.ListenAsync(tablesUpdatedCts.Token))
+            await foreach (var notification in notifications)
             {
                 if (notification.TablesUpdated != null)
                 {
@@ -154,13 +159,30 @@ public class MDSQLiteAdapter : IDBAdapter
 
     /// <summary>
     /// Loads the bundled PowerSync core SQLite extension. Override on
-    /// platform-specific adapters (e.g. MAUI iOS/Android) where the native library
-    /// lives outside the desktop runtime path.
+    /// platform-specific adapters where the native library lives
+    /// outside the standard runtimes path.
     /// </summary>
     protected virtual void LoadDefaultPowerSyncExtension(SqliteConnection db)
     {
-        var path = PowerSyncPathResolver.GetNativeLibraryPath(AppContext.BaseDirectory);
-        db.LoadExtension(path, "sqlite3_powersync_init");
+        string extensionPath;
+
+#if IOS || MACCATALYST
+        var bundlePath =
+            NSBundle.FromIdentifier("co.powersync.sqlitecore")?.BundlePath
+            ?? throw new Exception("Could not find PowerSync SQLite extension bundle path");
+        extensionPath = Path.Combine(bundlePath, "powersync-sqlite-core");
+#elif ANDROID
+        extensionPath = "libpowersync";
+#else
+        extensionPath = PowerSyncDesktopPathResolver.GetNativeLibraryPath(AppContext.BaseDirectory);
+#endif
+
+        // Use manual command instead of db.LoadExtension(), since that has issues on iOS
+        using var loadExtension = db.CreateCommand();
+        loadExtension.CommandText = "SELECT load_extension(@path, @entryPoint)";
+        loadExtension.Parameters.AddWithValue("@path", extensionPath);
+        loadExtension.Parameters.AddWithValue("@entryPoint", "sqlite3_powersync_init");
+        loadExtension.ExecuteNonQuery();
     }
 
     public async Task Close()
