@@ -1,6 +1,6 @@
 # PowerSync.Common Changelog
 
-## 1.0.1 (unreleased)
+## 1.0.1-dev.1
 
 - Full release.
 - `PowerSyncDatabase.OnChange` now returns the underlying raw table name instead of the view name to mirror PowerSync JS.
