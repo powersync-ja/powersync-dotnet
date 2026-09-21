@@ -1,6 +1,6 @@
 # PowerSync.Maui Changelog
 
-## 1.0.1-dev.1
+## 1.0.1-dev.2
 
 - ⚠️ Deprecate `PowerSync.Maui`. Use `PowerSync.Common` and `MDSQLiteAdapter` / `MDSQLiteDBOpenFactory` instead.
 

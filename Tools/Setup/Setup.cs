@@ -17,6 +17,14 @@ namespace Tools.Setup;
 /// codesign fail with "bundle format is ambiguous". The Apple SDK unzips these itself
 /// and embeds the framework into App.app/Frameworks.
 ///
+/// The CI "sign" step is an ordinary extract/rebuild too: `dotnet sign` unconditionally
+/// unzips every nested .zip it finds inside a .nupkg (even without --recurse-containers)
+/// and rewrites it from the extracted files, which drops symlinks *and* the executable
+/// bit on every entry - the exact corruption this class avoids at pack time. The sign
+/// steps in dev-packages.yml/release.yml pass --file-list Tools/Setup/sign-file-list.txt
+/// to exclude the two xcframework.zip files from that rebuild so they reach NuGet byte
+/// for byte.
+///
 /// Execute with `dotnet run --project Tools/Setup`
 /// </summary>
 public class PowerSyncSetup
