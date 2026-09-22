@@ -185,6 +185,4 @@ public interface IBucketStorageAdapter : ICloseable
     /// Invokes the `powersync_control` function for the sync client.
     /// </summary>
     Task<string> Control(string op, object? payload);
-
-
 }
