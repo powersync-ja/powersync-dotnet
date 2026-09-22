@@ -13,6 +13,7 @@ using Newtonsoft.Json;
 using PowerSync.Common.Client.Sync.Bucket;
 using PowerSync.Common.DB.Crud;
 using PowerSync.Common.Utils;
+using PowerSync.Common.Utils.Converters;
 
 public class AdditionalConnectionOptions(int? retryDelayMs = null, int? crudUploadThrottleMs = null)
 {
@@ -60,6 +61,13 @@ public class StreamingSyncImplementationOptions : AdditionalConnectionOptions
     public Remote Remote { get; init; } = null!;
 
     public ILogger? Logger { get; init; }
+
+    /// <summary>
+    /// Called synchronously whenever the sync status changes, before the change is published on
+    /// <see cref="StreamingSyncImplementation.Events"/>. It runs while the status lock is held, so it
+    /// must not block or call back into the sync implementation.
+    /// </summary>
+    internal Action<SyncStatus>? OnStatusChanged { get; init; }
 
     /// <summary>
     /// Source of the delays in the sync loops. Tests substitute a fake clock so they don't have to
@@ -193,8 +201,10 @@ public class StreamingSyncImplementation : ICloseable
 
     /// <summary>
     /// The highest checkpoint request id the core extension has reported as applied, if any.
+    /// Updated in the download loop and read in the repost loop.
     /// </summary>
-    internal long? LastAppliedCheckpointRequestId;
+    internal long? _lastAppliedCheckpointRequestId;
+    private readonly object _lastAppliedCheckpointLock = new();
 
     private readonly ILogger logger;
     private SubscribedStream[] activeStreams;
@@ -215,7 +225,7 @@ public class StreamingSyncImplementation : ICloseable
     public StreamingSyncImplementation(StreamingSyncImplementationOptions options)
     {
         Options = options;
-        SyncStatus = new SyncStatus(new SyncStatusOptions
+        _syncStatus = new SyncStatus(new SyncStatusOptions
         {
             Connected = false,
             Connecting = false,
@@ -234,6 +244,23 @@ public class StreamingSyncImplementation : ICloseable
         CancellationTokenSource = null;
     }
 
+    private SyncStatus _syncStatus;
+    private readonly object _syncStatusLock = new();
+
+    /// <summary>
+    /// The current synchronization status.
+    /// </summary>
+    public SyncStatus SyncStatus
+    {
+        get
+        {
+            lock (_syncStatusLock)
+            {
+                return _syncStatus;
+            }
+        }
+    }
+
     /// <summary>
     /// Indicates if the sync service is connected.
     /// </summary>
@@ -243,11 +270,6 @@ public class StreamingSyncImplementation : ICloseable
     /// The timestamp of the last successful sync.
     /// </summary>
     public DateTime? LastSyncedAt => SyncStatus.LastSyncedAt;
-
-    /// <summary>
-    /// The current synchronization status.
-    /// </summary>
-    public SyncStatus SyncStatus { get; protected set; }
 
     public async Task Connect(PowerSyncConnectionOptions? options = null)
     {
@@ -260,25 +282,41 @@ public class StreamingSyncImplementation : ICloseable
         var tcs = new TaskCompletionSource<bool>();
         var cts = new CancellationTokenSource();
 
-        // Subscribe to events before starting StreamingSync to not miss the Connected == true event
+        // Subscribe to events before starting StreamingSync to not miss the first status change
         var listener = Events.OnStatusChanged.ListenAsync(cts.Token);
 
         streamingSyncTask = StreamingSync(CancellationTokenSource.Token, options);
 
+        // Resolves once the connection attempt has settled, which is when `Connecting` has been seen
+        // as true and became false again. A download error settles the attempt too: the download loop
+        // keeps retrying after one, and connecting shouldn't block for the whole retry loop.
         var _ = Task.Run(async () =>
         {
+            var sawStartOfConnection = false;
+
             await foreach (var status in listener)
             {
-                if (status.Status.Connected == true)
+                if (status.Status.Connecting)
                 {
-                    tcs.TrySetResult(true);
-                    cts.Cancel();
-                    return;
+                    sawStartOfConnection = true;
                 }
+
+                if (status.Status.DataFlowStatus.DownloadError != null)
+                {
+                    logger.LogWarning("Initial connect attempt did not successfully connect to server");
+                }
+                else if (!sawStartOfConnection || status.Status.Connecting)
+                {
+                    // Still connecting.
+                    continue;
+                }
+
+                tcs.TrySetResult(true);
+                cts.Cancel();
+                return;
             }
 
             // Connection closed prematurely
-            logger.LogWarning("Initial connect attempt did not successfully connect to server");
             tcs.TrySetResult(true);
         });
 
@@ -423,9 +461,10 @@ public class StreamingSyncImplementation : ICloseable
         var retryDelayMs = options.RetryDelayMs ?? DEFAULT_RETRY_DELAY_MS;
 
         crudUpdateCts = new CancellationTokenSource();
+        var crudUpdates = Options.Adapter.Events.OnCrudUpdate.ListenAsync(crudUpdateCts.Token);
         crudUpdateTask = Task.Run(async () =>
         {
-            await foreach (var _ in Options.Adapter.Events.OnCrudUpdate.ListenAsync(crudUpdateCts.Token))
+            await foreach (var _ in crudUpdates)
             {
                 TriggerCrudUpload();
             }
@@ -655,7 +694,10 @@ public class StreamingSyncImplementation : ICloseable
     /// </summary>
     internal bool IsCheckpointRequestApplied(long requestId)
     {
-        return LastAppliedCheckpointRequestId is not null && LastAppliedCheckpointRequestId >= requestId;
+        lock (_lastAppliedCheckpointLock)
+        {
+            return _lastAppliedCheckpointRequestId is not null && _lastAppliedCheckpointRequestId >= requestId;
+        }
     }
 
     protected record StreamingSyncIterationResult
@@ -838,7 +880,10 @@ public class StreamingSyncImplementation : ICloseable
                     }
                     break;
                 case UpdateSyncStatus syncStatus:
-                    LastAppliedCheckpointRequestId = syncStatus.Status.LastAppliedCheckpointRequestId;
+                    lock (_lastAppliedCheckpointLock)
+                    {
+                        _lastAppliedCheckpointRequestId = syncStatus.Status.LastAppliedCheckpointRequestId;
+                    }
                     UpdateSyncStatus(CoreInstructionHelpers.CoreStatusToSyncStatusOptions(syncStatus.Status));
                     break;
                 case FetchCredentials fetchCredentials:
@@ -1197,40 +1242,50 @@ public class StreamingSyncImplementation : ICloseable
     {
         try
         {
-            var updatedStatus = new SyncStatus(new SyncStatusOptions
+            lock (_syncStatusLock)
             {
-                Connected = options.Connected ?? SyncStatus.Connected,
-                Connecting = !options.Connected.GetValueOrDefault() && (options.Connecting ?? SyncStatus.Connecting),
-                LastSyncedAt = options.LastSyncedAt ?? SyncStatus.LastSyncedAt,
-                PriorityStatusEntries = options.PriorityStatusEntries ?? SyncStatus.PriorityStatusEntries,
-                DataFlow = new SyncDataFlowStatus
+                var updatedStatus = new SyncStatus(new SyncStatusOptions
                 {
-                    Uploading = options.DataFlow?.Uploading ?? SyncStatus.DataFlowStatus.Uploading,
-                    Downloading = options.DataFlow?.Downloading ?? SyncStatus.DataFlowStatus.Downloading,
-                    DownloadProgress = options.DataFlow?.DownloadProgress ?? SyncStatus.DataFlowStatus.DownloadProgress,
-                    DownloadError = updateOptions?.ClearDownloadError == true ? null : options.DataFlow?.DownloadError ?? SyncStatus.DataFlowStatus.DownloadError,
-                    UploadError = updateOptions?.ClearUploadError == true ? null : options.DataFlow?.UploadError ?? SyncStatus.DataFlowStatus.UploadError,
-                    InternalStreamSubscriptions = options.DataFlow?.InternalStreamSubscriptions ?? SyncStatus.DataFlowStatus.InternalStreamSubscriptions
+                    Connected = options.Connected ?? _syncStatus.Connected,
+                    Connecting = !options.Connected.GetValueOrDefault() && (options.Connecting ?? _syncStatus.Connecting),
+                    LastSyncedAt = options.LastSyncedAt ?? _syncStatus.LastSyncedAt,
+                    PriorityStatusEntries = options.PriorityStatusEntries ?? _syncStatus.PriorityStatusEntries,
+                    DataFlow = new SyncDataFlowStatus
+                    {
+                        Uploading = options.DataFlow?.Uploading ?? _syncStatus.DataFlowStatus.Uploading,
+                        Downloading = options.DataFlow?.Downloading ?? _syncStatus.DataFlowStatus.Downloading,
+                        DownloadProgress = options.DataFlow?.DownloadProgress ?? _syncStatus.DataFlowStatus.DownloadProgress,
+                        DownloadError = updateOptions?.ClearDownloadError == true ? null : options.DataFlow?.DownloadError ?? _syncStatus.DataFlowStatus.DownloadError,
+                        UploadError = updateOptions?.ClearUploadError == true ? null : options.DataFlow?.UploadError ?? _syncStatus.DataFlowStatus.UploadError,
+                        InternalStreamSubscriptions = options.DataFlow?.InternalStreamSubscriptions ?? _syncStatus.DataFlowStatus.InternalStreamSubscriptions
+                    }
+                });
+
+                // TODO: Always false because Equals is reference equality.
+                //       A SyncStatus.IsEqual method exists, but is very inefficient.
+                if (!_syncStatus.Equals(updatedStatus))
+                {
+                    _syncStatus = updatedStatus;
+
+                    // Suppress CA1873 (expensive arguments to logging function)
+                    if (logger.IsEnabled(LogLevel.Debug))
+                        logger.LogDebug("[Sync status changed]: {message}", updatedStatus.ToJSON());
+
+                    // Emit events using new _syncStatus objects to prevent local modifications propagating to StreamingSyncImplementation
+
+                    Options.OnStatusChanged?.Invoke(new SyncStatus(updatedStatus.Options));
+
+                    // Only trigger this if there was a change
+                    Events.Emit(new StreamingSyncImplementationEvents.StatusChangedEvent(new SyncStatus(updatedStatus.Options)));
+
+                    // Emit StatusUpdated event wrapping a new SyncStatus object (prevents race conditions)
+                    Events.Emit(new StreamingSyncImplementationEvents.StatusUpdatedEvent(new SyncStatus(updatedStatus.Options)));
                 }
-            });
-
-            if (!SyncStatus.Equals(updatedStatus))
-            {
-                SyncStatus = updatedStatus;
-                logger.LogDebug("[Sync status changed]: {message}", updatedStatus.ToJSON());
-
-                // Emit events using new SyncStatus objects to prevent local modifications propagating to StreamingSyncImplementation
-
-                // Only trigger this if there was a change
-                Events.Emit(new StreamingSyncImplementationEvents.StatusChangedEvent(new SyncStatus(updatedStatus.Options)));
-
-                // Emit StatusUpdated event wrapping a new SyncStatus object (prevents race conditions)
-                Events.Emit(new StreamingSyncImplementationEvents.StatusUpdatedEvent(new SyncStatus(updatedStatus.Options)));
-            }
-            else
-            {
-                // Emit StatusUpdated event directly wrapping `updatedStatus` (not exposed elsewhere)
-                Events.Emit(new StreamingSyncImplementationEvents.StatusUpdatedEvent(updatedStatus));
+                else
+                {
+                    // Emit StatusUpdated event directly wrapping `updatedStatus` (not exposed elsewhere)
+                    Events.Emit(new StreamingSyncImplementationEvents.StatusUpdatedEvent(updatedStatus));
+                }
             }
         }
         catch (Exception ex)
@@ -1305,7 +1360,7 @@ public class StreamingSyncImplementation : ICloseable
     }
 
     internal record LegacyWriteCheckpointResponseData(
-        [property: JsonProperty("write_checkpoint")] long WriteCheckpoint
+        [property: JsonProperty("write_checkpoint"), JsonConverter(typeof(StringLongConverter))] long WriteCheckpoint
     );
     internal record LegacyWriteCheckpointApiResponse(
         [property: JsonProperty("data")] LegacyWriteCheckpointResponseData Data

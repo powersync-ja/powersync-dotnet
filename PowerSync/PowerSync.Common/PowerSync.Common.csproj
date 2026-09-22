@@ -39,26 +39,39 @@
     <PackageReference Include="Nito.AsyncEx" Version="5.1.2" />
   </ItemGroup>
 
+  <!-- Every runtime directory is packed: each platform SDK resolves its own natives out of
+       `runtimes/<rid>/native` in the restored package. -->
   <ItemGroup>
-    <None Include="PowerSync.Common.targets" Pack="true" PackagePath="build\" />
-    <None Include="PowerSync.Common.targets" Pack="true" PackagePath="buildTransitive\" />
+    <None Include="runtimes/**/*.*" Pack="true" PackagePath="runtimes/" />
   </ItemGroup>
 
-  <!-- Check allows us to skip for all MAUI targets-->
-  <!-- For monorepo-->
-  <ItemGroup Condition="!$(TargetFramework.EndsWith('-android')) AND !$(TargetFramework.EndsWith('-ios')) AND !$(TargetFramework.EndsWith('-maccatalyst'))">
-    <Content Include="runtimes\**\*.*">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
+  <!-- For ProjectReference: copy the desktop runtime directories. `Update` rather than a second
+       `Include`, so these stay a single item and `Pack` cannot conflict with the group above. -->
+  <ItemGroup Condition="'$(TargetPlatformIdentifier)' == ''">
+    <None Update="runtimes/win-*/**/*.*;runtimes/linux-*/**/*.*;runtimes/osx-*/**/*.*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
-
-  <!-- For releasing runtimes  -->
-  <ItemGroup Condition="!$(TargetFramework.EndsWith('-android')) AND !$(TargetFramework.EndsWith('-ios')) AND !$(TargetFramework.EndsWith('-maccatalyst'))">
-    <None Include="runtimes\**\*.*" Pack="true" PackagePath="runtimes\" />
+  <!-- Apple -->
+  <!-- The .xcframework files under `/runtimes/ios` and `/runtimes/maccatalyst` are not interchangeable. -->
+  <!-- `None`, not `Content`: the Apple SDKs embed every `Content` item into the assembly as a
+       `__monotouch_content_*` resource and then extract it into the app bundle, which would ship
+       the .zip twice over on top of the framework the SDK links out of it. -->
+  <ItemGroup Condition="'$(TargetPlatformIdentifier)' == 'ios'">
+    <None Update="runtimes/ios/native/*.xcframework.zip" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetPlatformIdentifier)' == 'maccatalyst'">
+    <None Update="runtimes/maccatalyst/native/*.xcframework.zip" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <!-- Android -->
+  <ItemGroup Condition="'$(TargetPlatformIdentifier)' == 'android'">
+    <AndroidNativeLibrary Include="runtimes/android-arm64/native/libpowersync.so" Abi="arm64-v8a" />
+    <AndroidNativeLibrary Include="runtimes/android-x64/native/libpowersync.so" Abi="x86_64" />
+    <AndroidNativeLibrary Include="runtimes/android-arm/native/libpowersync.so" Abi="armeabi-v7a" />
+    <AndroidNativeLibrary Include="runtimes/android-x86/native/libpowersync.so" Abi="x86" />
   </ItemGroup>
   
   <ItemGroup>
-    <None Include="..\..\icon.png" Pack="true" PackagePath="" />
+    <None Include="buildTransitive/PowerSync.Common.targets" Pack="true" PackagePath="buildTransitive/" />
+    <None Include="../../icon.png" Pack="true" PackagePath="" />
     <None Include="README.md" Pack="true" PackagePath="" />
   </ItemGroup>
 </Project>

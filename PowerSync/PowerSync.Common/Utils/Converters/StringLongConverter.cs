@@ -6,10 +6,6 @@ namespace PowerSync.Common.Utils.Converters;
 /// Converts a long to and from a string when converting JSON values. Used
 /// for converting checkpoint request IDs from a long to a string before being
 /// passed to the core extension.
-///
-/// TODO: This is not currently in use because checkpoint request IDs are
-///       currently represented as strings, however this is going to change
-///       in the 1.0 release.
 /// </summary>
 internal class StringLongConverter : JsonConverter
 {
@@ -42,6 +38,6 @@ internal class StringLongConverter : JsonConverter
             return result;
         }
 
-        throw new JsonSerializationException($"Cannot convert value {val} to long.");
+        throw new JsonSerializationException($"Cannot convert value '{val}' to long.");
     }
 }
