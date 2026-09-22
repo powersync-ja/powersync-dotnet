@@ -73,11 +73,9 @@ internal class WatchManager
             refreshOnSchemaChange: false
         );
 
-        // TODO: powersync-js onChange returns table names in `ps_data__{table}` format.
-        //       We should make a decision on whether or not to mirror that before v1.
         return Stream(subscription, changed => Task.FromResult(new WatchOnChangeEvent
         {
-            ChangedTables = [.. changed.Select(InternalToFriendlyTableName)]
+            ChangedTables = [.. changed]
         }));
     }
 

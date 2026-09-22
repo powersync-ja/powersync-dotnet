@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 
 using Newtonsoft.Json;
 
-using PowerSync.Common.DB;
 using PowerSync.Common.DB.Crud;
 using PowerSync.Common.Utils;
 
@@ -134,14 +133,13 @@ public interface IBucketStorageAdapter : ICloseable
     Task<bool> HasCrud();
     Task<CrudBatch?> GetCrudBatch(int limit = 100);
 
-    Task<bool> UpdateLocalTarget(Func<Task<string>> callback);
-    Task HandleCrudCheckpoint(long lastClientId, string? writeCheckpoint = null);
+    Task<bool> UpdateLocalTarget(Func<Task<long>> callback);
+    Task HandleCrudCheckpoint(long lastClientId, long? writeCheckpoint = null);
 
-    // TODO Return int64 from this in future release
     /// <summary>
     /// Reads or updates the local checkpoint request ID counter.
     /// </summary>
-    Task<string?> ReadOrUpdateCheckpoint(string variant, string? update = null);
+    Task<long?> ReadOrUpdateCheckpoint(string variant, long? update = null);
 
     /// <summary>
     /// Get a unique client ID.
@@ -165,13 +163,13 @@ public static class BucketStorageAdapterExtensions
     /// <summary>
     /// Increments and returns the local checkpoint counter.
     /// </summary>
-    public static Task<string> NextCheckpointRequestId(this IBucketStorageAdapter adapter)
-        => adapter.ReadOrUpdateCheckpoint("next")!;
+    public static async Task<long> NextCheckpointRequestId(this IBucketStorageAdapter adapter)
+        => (long)await adapter.ReadOrUpdateCheckpoint("next");
 
     /// <summary>
     /// Returns the highest checkpoint request ID that has been requested on this device.
     /// </summary>
-    public static Task<string?> CurrentCheckpointRequestId(this IBucketStorageAdapter adapter)
+    public static Task<long?> CurrentCheckpointRequestId(this IBucketStorageAdapter adapter)
         => adapter.ReadOrUpdateCheckpoint("current");
 
     /// <summary>
@@ -194,6 +192,6 @@ public static class BucketStorageAdapterExtensions
     ///     </item>
     /// </list>
     /// </summary>
-    public static Task<string> SeedCheckpointRequestId(this IBucketStorageAdapter adapter, string serviceResponse)
-        => adapter.ReadOrUpdateCheckpoint("seed", serviceResponse)!;
+    public static async Task<long> SeedCheckpointRequestId(this IBucketStorageAdapter adapter, long serviceResponse)
+        => (long)await adapter.ReadOrUpdateCheckpoint("seed", serviceResponse);
 }

@@ -99,7 +99,7 @@ internal sealed class ThrowingRemote : Remote
     public override Task<T> FetchJson<T>(string path, HttpMethod? method = null, object? data = null, Dictionary<string, string>? headers = null, CancellationToken ct = default)
     {
         var response = new StreamingSyncImplementation.LegacyWriteCheckpointApiResponse(
-            new StreamingSyncImplementation.LegacyWriteCheckpointResponseData("1")
+            new StreamingSyncImplementation.LegacyWriteCheckpointResponseData(1)
         );
         return Task.FromResult((T)(object)response);
     }

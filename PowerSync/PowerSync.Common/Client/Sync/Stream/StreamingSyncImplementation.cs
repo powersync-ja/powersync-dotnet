@@ -13,6 +13,7 @@ using Newtonsoft.Json;
 using PowerSync.Common.Client.Sync.Bucket;
 using PowerSync.Common.DB.Crud;
 using PowerSync.Common.Utils;
+using PowerSync.Common.Utils.Converters;
 
 public class AdditionalConnectionOptions(int? retryDelayMs = null, int? crudUploadThrottleMs = null)
 {
@@ -55,7 +56,7 @@ public class StreamingSyncImplementationOptions : AdditionalConnectionOptions
     /// Posts a checkpoint request with the connector. Null when the connector doesn't support that,
     /// in which case the request is posted to the PowerSync service directly.
     /// </summary>
-    public Func<string, string, CancellationToken, Task<string>>? PostCheckpointRequest { get; init; }
+    public Func<string, long, CancellationToken, Task<long>>? PostCheckpointRequest { get; init; }
 
     public Remote Remote { get; init; } = null!;
 
@@ -194,7 +195,7 @@ public class StreamingSyncImplementation : ICloseable
     /// <summary>
     /// The highest checkpoint request id the core extension has reported as applied, if any.
     /// </summary>
-    internal volatile string? LastAppliedCheckpointRequestId;
+    internal long? LastAppliedCheckpointRequestId;
 
     private readonly ILogger logger;
     private SubscribedStream[] activeStreams;
@@ -332,7 +333,7 @@ public class StreamingSyncImplementation : ICloseable
             throw new CheckpointRequestException(CheckpointRequestException.Disabled);
         }
 
-        string requestId = await RequestNextCheckpointFromService(ct);
+        var requestId = await RequestNextCheckpointFromService(ct);
         return new CheckpointRequest(requestId, db);
     }
 
@@ -340,12 +341,11 @@ public class StreamingSyncImplementation : ICloseable
     /// Allocates the next checkpoint request id and posts it, waiting for the active download
     /// iteration to have reconciled checkpoint state with the service first.
     /// </summary>
-    private async Task<string> RequestNextCheckpointFromService(CancellationToken signal)
+    private async Task<long> RequestNextCheckpointFromService(CancellationToken signal)
     {
         await checkpointState.WaitForCheckpointRequestsReady(signal);
 
-        var nextCheckpointRequestId = await Options.Adapter.NextCheckpointRequestId()
-            ?? throw new InvalidOperationException("The core extension did not return a checkpoint request id.");
+        var nextCheckpointRequestId = await Options.Adapter.NextCheckpointRequestId();
         var clientId = await Options.Adapter.GetClientId();
         return await RequestCheckpointFromService(signal, new CheckpointRequestPayload
         {
@@ -354,7 +354,7 @@ public class StreamingSyncImplementation : ICloseable
         });
     }
 
-    private async Task<string> RequestCheckpointFromService(CancellationToken signal, CheckpointRequestPayload request)
+    private async Task<long> RequestCheckpointFromService(CancellationToken signal, CheckpointRequestPayload request)
     {
         // First, check if we can use a custom checkpoint request implementation.
         if (Options.PostCheckpointRequest != null)
@@ -381,8 +381,7 @@ public class StreamingSyncImplementation : ICloseable
         await Options.Adapter.SeedCheckpointRequestId(seed);
     }
 
-    // TODO convert write checkpoint data type to long in a future release
-    private async Task<string> GetLegacyWriteCheckpoint(CancellationToken signal)
+    private async Task<long> GetLegacyWriteCheckpoint(CancellationToken signal)
     {
         var clientId = await Options.Adapter.GetClientId();
         var path = $"/write-checkpoint2.json?client_id={clientId}";
@@ -615,7 +614,7 @@ public class StreamingSyncImplementation : ICloseable
                 }
 
                 // If the request was applied, we don't need to retry.
-                if (requestId == null || IsCheckpointRequestApplied(requestId))
+                if (requestId == null || IsCheckpointRequestApplied(requestId.Value))
                 {
                     continue;
                 }
@@ -624,11 +623,11 @@ public class StreamingSyncImplementation : ICloseable
                 await checkpointState.WaitForCheckpointRequestsReady(signal, wakeDownloadLoop: false);
 
                 // It's safe if this request races with a new one, the service will reject it.
-                logger.LogDebug("Retry checkpoint request {requestId}", requestId);
+                logger.LogDebug("Retry checkpoint request {requestId}", requestId.Value);
                 await RequestCheckpointFromService(signal, new CheckpointRequestPayload
                 {
                     ClientId = await Options.Adapter.GetClientId(),
-                    CheckpointRequestId = requestId,
+                    CheckpointRequestId = requestId.Value,
                 });
             }
             catch (OperationCanceledException) when (signal.IsCancellationRequested)
@@ -655,12 +654,9 @@ public class StreamingSyncImplementation : ICloseable
     /// Whether the core extension has reported <paramref name="requestId"/> (or a later request) as
     /// applied.
     /// </summary>
-    internal bool IsCheckpointRequestApplied(string requestId)
+    internal bool IsCheckpointRequestApplied(long requestId)
     {
-        return LastAppliedCheckpointRequestId is { } applied
-            && long.TryParse(applied, out var appliedId)
-            && long.TryParse(requestId, out var required)
-            && appliedId >= required;
+        return LastAppliedCheckpointRequestId is not null && LastAppliedCheckpointRequestId >= requestId;
     }
 
     protected record StreamingSyncIterationResult
@@ -1310,7 +1306,7 @@ public class StreamingSyncImplementation : ICloseable
     }
 
     internal record LegacyWriteCheckpointResponseData(
-        [property: JsonProperty("write_checkpoint")] string WriteCheckpoint
+        [property: JsonProperty("write_checkpoint")][property: JsonConverter(typeof(StringLongConverter))] long WriteCheckpoint
     );
     internal record LegacyWriteCheckpointApiResponse(
         [property: JsonProperty("data")] LegacyWriteCheckpointResponseData Data

@@ -239,7 +239,7 @@ public class CheckpointRequestsTests : IAsyncLifetime
     [Fact(Timeout = 15000)]
     public async Task CheckpointRequests_CanUseCheckpointMethodFromConnector()
     {
-        var didRequestCheckpoint = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var didRequestCheckpoint = new TaskCompletionSource<long>(TaskCreationOptions.RunContinuationsAsynchronously);
         var connector = new TestCustomCheckpointsConnector((_, requestId, _) =>
         {
             didRequestCheckpoint.TrySetResult(requestId);
@@ -248,7 +248,7 @@ public class CheckpointRequestsTests : IAsyncLifetime
 
         await _db.Connect(connector, WithRequests());
 
-        Assert.Equal("1", await didRequestCheckpoint.Task);
+        Assert.Equal(1, await didRequestCheckpoint.Task);
 
         // The custom implementation replaces the request to the service.
         Assert.Empty(_syncService.CheckpointRequests);
@@ -607,7 +607,7 @@ public class CheckpointRequestsTests : IAsyncLifetime
 
 class CheckpointRequestConnector : TestConnector, ICustomCheckpointRequestConnector
 {
-    public Task<string> PostCheckpointRequest(string clientId, string requestId, CancellationToken token)
+    public Task<long> PostCheckpointRequest(string clientId, long requestId, CancellationToken token)
     {
         return Task.FromResult(requestId);
     }
@@ -664,7 +664,7 @@ class StagedCheckpointRequestConnector(bool enableConsole = false) : TestConnect
             Console.WriteLine($"[CheckpointRequestConnector] {message}");
     }
 
-    public async Task<string> PostCheckpointRequest(string clientId, string requestId, CancellationToken token)
+    public async Task<long> PostCheckpointRequest(string clientId, long requestId, CancellationToken token)
     {
         Launched = true;
         Debug("Launched.");

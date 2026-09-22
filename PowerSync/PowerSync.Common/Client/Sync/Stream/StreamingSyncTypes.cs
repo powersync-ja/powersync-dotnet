@@ -198,7 +198,8 @@ public class CheckpointRequestPayload
     public string ClientId { get; set; } = "";
 
     [JsonProperty("checkpoint_request_id")]
-    public string CheckpointRequestId { get; set; } = "";
+    [JsonConverter(typeof(StringLongConverter))]
+    public long CheckpointRequestId { get; set; }
 }
 
 public class CheckpointRequestResponse
@@ -210,5 +211,6 @@ public class CheckpointRequestResponse
 public class CheckpointRequestResponseData
 {
     [JsonProperty("checkpoint_request_id")]
-    public string CheckpointRequestId { get; set; } = "";
+    [JsonConverter(typeof(StringLongConverter))]
+    public long CheckpointRequestId { get; set; }
 }
