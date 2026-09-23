@@ -1261,13 +1261,13 @@ public class StreamingSyncImplementation : ICloseable
                     }
                 });
 
-                // TODO: Always false because Equals is reference equality.
-                //       A SyncStatus.IsEqual method exists, but is very inefficient.
+                // TODO: Always false because SyncStatus.Equals checks reference equality.
+                //       There is a SyncStatus.IsEqual method, but it's slow enough that
+                //       it's probably cheaper to just update the status unconditionally.
                 if (!_syncStatus.Equals(updatedStatus))
                 {
                     _syncStatus = updatedStatus;
 
-                    // Suppress CA1873 (expensive arguments to logging function)
                     if (logger.IsEnabled(LogLevel.Debug))
                         logger.LogDebug("[Sync status changed]: {message}", updatedStatus.ToJSON());
 
