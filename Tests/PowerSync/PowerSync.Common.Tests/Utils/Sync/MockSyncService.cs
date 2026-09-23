@@ -120,10 +120,11 @@ public class MockSyncService : EventStream<string>
     {
         var tcs = new TaskCompletionSource<SyncStatus>();
         var cts = new CancellationTokenSource();
+        var listener = db.Events.OnStatusChanged.ListenAsync(cts.Token);
 
         _ = Task.Run(async () =>
         {
-            await foreach (var update in db.Events.OnStatusChanged.ListenAsync(cts.Token))
+            await foreach (var update in listener)
             {
                 tcs.TrySetResult(update.Status);
                 cts?.Cancel();
@@ -142,7 +143,7 @@ public class MockDataFactory
         {
             Checkpoint = new Checkpoint
             {
-                LastOpId = $"{lastOpId}",
+                LastOpId = lastOpId,
                 Buckets = buckets?.ToArray() ?? [],
                 WriteCheckpoint = null,
                 Streams = streams?.ToArray() ?? []

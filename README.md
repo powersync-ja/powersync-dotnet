@@ -14,8 +14,6 @@ Packages are published to [NuGet](https://www.nuget.org/profiles/PowerSync).
 
 - [PowerSync.Common](./PowerSync/PowerSync.Common/README.md)
   - Core package: .NET implementation of a PowerSync database connector and streaming sync bucket implementation. Packages meant for specific platforms will extend functionality of `Common`.
-- [PowerSync.Maui](./PowerSync/PowerSync.Maui/README.md)
-  - Extends the PowerSync.Common package to provide the .NET Multi-platform App UI (MAUI) integration for PowerSync for cross-platform mobile and desktop applications.
 
 ## Demo Apps / Example Projects
 
@@ -31,41 +29,9 @@ Demo applications are located in the [`demos/`](./demos/) directory. Also see ou
 
 This PowerSync SDK supports the following target frameworks:
 
-- **.NET 9** - [Latest version](https://dotnet.microsoft.com/en-us/download/dotnet/9.0)
-- **.NET 8** - [Current LTS Version, used for development of this project](https://dotnet.microsoft.com/en-us/download/dotnet/8.0)
-- **.NET 6** - supported for compatibility with older projects
-- **.NET Standard 2.0** - for compatibility with older libraries and frameworks, tested/verified older versions will be listed below.
-
-- .NET Framework 4.8:
-
-  To get a .NET Framework 4.8 working with this SDK add the following to your `.csproj` file:
-
-  ```xml
-  <PropertyGroup>
-    ...
-    <!-- Ensures the correct SQLite DLL is available -->
-    <RuntimeIdentifiers>win-x86;win-x64</RuntimeIdentifiers>
-    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-  </PropertyGroup>
-
-  <ItemGroup>
-    ...
-    <!-- Ensures the HTTP client resolves in the SDK -->
-    <PackageReference Include="System.Net.Http" Version="4.3.4" />
-  </ItemGroup>
-  ```
-
-  and create a `IsExternalInit.cs` file in your project with the following contents:
-
-  ```cs
-  using System.ComponentModel;
-
-  namespace System.Runtime.CompilerServices
-  {
-      [EditorBrowsable(EditorBrowsableState.Never)]
-      internal class IsExternalInit { }
-  }
-  ```
+- **.NET 10** - [Current LTS Version, used for development of this project](https://dotnet.microsoft.com/en-us/download/dotnet/10.0)
+- **.NET 9** - [Current STS Version](https://dotnet.microsoft.com/en-us/download/dotnet/9.0)
+- **.NET 8** - [Previous LTS Version, supported until November 10, 2026](https://dotnet.microsoft.com/en-us/download/dotnet/8.0)
 
 ---
 
@@ -110,13 +76,13 @@ dotnet restore
 Run all tests
 
 ```bash
-dotnet test -v n --framework net8.0
+dotnet test -v n --framework net10.0
 ```
 
 Run a specific test
 
 ```bash
-dotnet test -v n --framework net8.0 --filter "test-file-pattern"
+dotnet test -v n --framework net10.0 --filter "test-file-pattern"
 ```
 
 ### Integration Tests
@@ -125,13 +91,13 @@ Integration tests in `PowerSync.Common.IntegrationTests` are intended to run aga
 The integration tests are disabled by default, define the following environment variable when running the tests.
 
 ```bash
-RUN_INTEGRATION_TESTS=true dotnet test -v n --framework net8.0
+RUN_INTEGRATION_TESTS=true dotnet test -v n --framework net10.0
 ```
 
 Only run integration tests, without any unit tests.
 
 ```bash
-RUN_INTEGRATION_TESTS=true dotnet test -v n --framework net8.0 --filter "Category=Integration"
+RUN_INTEGRATION_TESTS=true dotnet test -v n --framework net10.0 --filter "Category=Integration"
 ```
 
 ### Performance Tests
@@ -139,13 +105,13 @@ RUN_INTEGRATION_TESTS=true dotnet test -v n --framework net8.0 --filter "Categor
 Performance tests in `PowerSync.Common.PerformanceTests` are disabled by default, define the following environment variable when running the tests.
 
 ```bash
-RUN_PERFORMANCE_TESTS=true dotnet test -v n --framework net8.0
+RUN_PERFORMANCE_TESTS=true dotnet test -v n --framework net10.0
 ```
 
 Only run performance tests, without any unit tests.
 
 ```bash
-RUN_PERFORMANCE_TESTS=true dotnet test -v n --framework net8.0 --filter "Category=Performance"
+RUN_PERFORMANCE_TESTS=true dotnet test -v n --framework net10.0 --filter "Category=Performance"
 ```
 
 ## Using the PowerSync.Common package in your project

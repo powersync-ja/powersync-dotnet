@@ -3,7 +3,4 @@
     <PropertyGroup>
         <MSBuildWarningsAsMessages>$(MSBuildWarningsAsMessages);NETSDK1202</MSBuildWarningsAsMessages>
     </PropertyGroup>
-    <ItemGroup>
-        <Compile Include="$(MSBuildThisFileDirectory)IsExternalInit.cs" Visible="false" />
-    </ItemGroup>
 </Project>

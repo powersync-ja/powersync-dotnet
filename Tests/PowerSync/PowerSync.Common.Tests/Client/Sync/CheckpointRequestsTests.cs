@@ -68,9 +68,9 @@ public class CheckpointRequestsTests : IAsyncLifetime
         {
             Checkpoint = new()
             {
-                LastOpId = "1",
+                LastOpId = 1,
                 Buckets = [MockDataFactory.Bucket("a", 1, subscriptions: Array.Empty<object>())],
-                WriteCheckpoint = _syncService.LastWriteCheckpoint.ToString(),
+                WriteCheckpoint = _syncService.LastWriteCheckpoint,
             }
         });
         _syncService.PushLine(new StreamingSyncDataJSON
@@ -82,7 +82,7 @@ public class CheckpointRequestsTests : IAsyncLifetime
                     new OplogEntryJSON
                     {
                         Checksum = 0,
-                        OpId = "1",
+                        OpId = 1,
                         ObjectId = "id",
                         ObjectType = "lists",
                         Op = "REMOVE",
@@ -143,9 +143,9 @@ public class CheckpointRequestsTests : IAsyncLifetime
         {
             Checkpoint = new()
             {
-                LastOpId = "0",
+                LastOpId = 0,
                 Buckets = [],
-                WriteCheckpoint = _syncService.LastWriteCheckpoint.ToString(),
+                WriteCheckpoint = _syncService.LastWriteCheckpoint,
             }
         });
         _syncService.PushLine(new StreamingSyncCheckpointComplete { CheckpointComplete = new() { LastOpId = "0" } });
@@ -217,10 +217,7 @@ public class CheckpointRequestsTests : IAsyncLifetime
         var iterationsBefore = _syncService.Requests.Count;
 
         // Destroy the connection by sending a bogus line.
-        _syncService.PushLine(new StreamingSyncCheckpoint
-        {
-            Checkpoint = new() { LastOpId = "invalid line", Buckets = [] }
-        });
+        _syncService.PushLine("""{"checkpoint":{"last_op_id":"invalid line","buckets":[]}}""");
         await TestUtils.WaitForAsync(() => _db.CurrentStatus.DataFlowStatus.DownloadError != null);
 
         var start = DateTime.UtcNow;
@@ -295,7 +292,7 @@ public class CheckpointRequestsTests : IAsyncLifetime
 
         _syncService.PushLine(new StreamingSyncCheckpoint
         {
-            Checkpoint = new() { LastOpId = "0", Buckets = [], WriteCheckpoint = "1" }
+            Checkpoint = new() { LastOpId = 0, Buckets = [], WriteCheckpoint = 1 }
         });
 
         await TestUtils.WaitForAsync(() => _db.CurrentStatus.DataFlowStatus.Downloading);
@@ -326,7 +323,7 @@ public class CheckpointRequestsTests : IAsyncLifetime
         var checkpoint = await _db.RequestCheckpoint();
         _syncService.PushLine(new StreamingSyncCheckpoint
         {
-            Checkpoint = new Checkpoint { LastOpId = "0", WriteCheckpoint = "2", },
+            Checkpoint = new Checkpoint { LastOpId = 0, WriteCheckpoint = 2, },
         });
         Assert.False(checkpoint.HasSynced);
         _syncService.PushLine(MockDataFactory.CheckpointComplete("0"));
@@ -367,7 +364,7 @@ public class CheckpointRequestsTests : IAsyncLifetime
         await _db.Connect(new TestConnector(), new() { CheckpointMode = new CheckpointMode.Requests() });
         _syncService.PushLine(new StreamingSyncCheckpoint
         {
-            Checkpoint = new Checkpoint { LastOpId = "0", WriteCheckpoint = "2", },
+            Checkpoint = new Checkpoint { LastOpId = 0, WriteCheckpoint = 2, },
         });
         _syncService.PushLine(MockDataFactory.CheckpointComplete("0"));
         await checkpoint.WaitForSync();
@@ -515,10 +512,7 @@ public class CheckpointRequestsTests : IAsyncLifetime
         };
 
         // Destroy the connection with a bogus line: checkpoint requests are no longer ready.
-        _syncService.PushLine(new StreamingSyncCheckpoint
-        {
-            Checkpoint = new() { LastOpId = "invalid line", Buckets = [] }
-        });
+        _syncService.PushLine("""{"checkpoint":{"last_op_id":"invalid line","buckets":[]}}""");
         await TestUtils.WaitForAsync(() => _db.CurrentStatus.DataFlowStatus.DownloadError != null);
 
         using var cts = new CancellationTokenSource();
@@ -557,7 +551,7 @@ public class CheckpointRequestsTests : IAsyncLifetime
         // Abandoning a wait doesn't invalidate the request, it can still be awaited again.
         _syncService.PushLine(new StreamingSyncCheckpoint
         {
-            Checkpoint = new Checkpoint { LastOpId = "0", WriteCheckpoint = "2", },
+            Checkpoint = new Checkpoint { LastOpId = 0, WriteCheckpoint = 2, },
         });
         _syncService.PushLine(MockDataFactory.CheckpointComplete("0"));
 
@@ -589,7 +583,7 @@ public class CheckpointRequestsTests : IAsyncLifetime
 
         _syncService.PushLine(new StreamingSyncCheckpoint
         {
-            Checkpoint = new Checkpoint { LastOpId = "0", WriteCheckpoint = "2", },
+            Checkpoint = new Checkpoint { LastOpId = 0, WriteCheckpoint = 2, },
         });
         _syncService.PushLine(MockDataFactory.CheckpointComplete("0"));
 

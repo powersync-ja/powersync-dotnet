@@ -1,7 +1,9 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.0;net6.0;net8.0;net9.0;net8.0-ios;net8.0-android;net8.0-maccatalyst;net9.0-ios;net9.0-android;net9.0-maccatalyst</TargetFrameworks>
+    <TargetFrameworks>net8.0;net9.0;net10.0;net9.0-android;net10.0-android</TargetFrameworks>
+    <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('OSX'))">$(TargetFrameworks);net9.0-ios;net10.0-ios;net9.0-maccatalyst;net10.0-maccatalyst</TargetFrameworks>
+
     <LangVersion>12</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -17,7 +19,8 @@
     <PackageReleaseNotes>https://github.com/powersync-ja/powersync-dotnet/PowerSync/PowerSync.Common/CHANGELOG.md</PackageReleaseNotes>
     <PackageTags>powersync local-first local-storage state-management offline sql db persistence sqlite sync </PackageTags>
     <PackageIcon>icon.png</PackageIcon>
-    <NoWarn>NU5100</NoWarn>
+    <NoWarn>NU5100;1591</NoWarn>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <DefaultItemExcludes>$(DefaultItemExcludes);runtimes/**/*.*;</DefaultItemExcludes>
@@ -28,37 +31,47 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Dapper" Version="2.1.66" />
-    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="9.0.1" />
-    <PackageReference Include="Microsoft.Bcl.TimeProvider" Version="9.0.1" />
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.1" />
-    <PackageReference Include="Microsoft.Extensions.Logging" Version="6.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="6.0.0" />
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="Dapper" Version="2.1.79" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.11" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.11" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.11" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageReference Include="Nito.AsyncEx" Version="5.1.2" />
-    <PackageReference Include="System.Threading.Channels" Version="8.0.0" />
   </ItemGroup>
 
+  <!-- Every runtime directory is packed: each platform SDK resolves its own natives out of
+       `runtimes/<rid>/native` in the restored package. -->
   <ItemGroup>
-    <None Include="PowerSync.Common.targets" Pack="true" PackagePath="build\" />
-    <None Include="PowerSync.Common.targets" Pack="true" PackagePath="buildTransitive\" />
-  </ItemGroup>
-  
-  <!-- Check allows us to skip for all MAUI targets-->
-  <!-- For monorepo-->
-  <ItemGroup Condition="!$(TargetFramework.EndsWith('-android')) AND !$(TargetFramework.EndsWith('-ios')) AND !$(TargetFramework.EndsWith('-maccatalyst'))">
-    <Content Include="runtimes\**\*.*">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
+    <None Include="runtimes/**/*.*" Pack="true" PackagePath="runtimes/" />
   </ItemGroup>
 
-  <!-- For releasing runtimes  -->
-  <ItemGroup Condition="!$(TargetFramework.EndsWith('-android')) AND !$(TargetFramework.EndsWith('-ios')) AND !$(TargetFramework.EndsWith('-maccatalyst'))">
-    <None Include="runtimes\**\*.*" Pack="true" PackagePath="runtimes\" />
+  <!-- For ProjectReference: copy the desktop runtime directories. `Update` rather than a second
+       `Include`, so these stay a single item and `Pack` cannot conflict with the group above. -->
+  <ItemGroup Condition="'$(TargetPlatformIdentifier)' == ''">
+    <None Update="runtimes/win-*/**/*.*;runtimes/linux-*/**/*.*;runtimes/osx-*/**/*.*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <!-- Apple -->
+  <!-- The .xcframework files under `/runtimes/ios` and `/runtimes/maccatalyst` are not interchangeable. -->
+  <!-- `None`, not `Content`: the Apple SDKs embed every `Content` item into the assembly as a
+       `__monotouch_content_*` resource and then extract it into the app bundle, which would ship
+       the .zip twice over on top of the framework the SDK links out of it. -->
+  <ItemGroup Condition="'$(TargetPlatformIdentifier)' == 'ios'">
+    <None Update="runtimes/ios/native/*.xcframework.zip" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetPlatformIdentifier)' == 'maccatalyst'">
+    <None Update="runtimes/maccatalyst/native/*.xcframework.zip" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <!-- Android -->
+  <ItemGroup Condition="'$(TargetPlatformIdentifier)' == 'android'">
+    <AndroidNativeLibrary Include="runtimes/android-arm64/native/libpowersync.so" Abi="arm64-v8a" />
+    <AndroidNativeLibrary Include="runtimes/android-x64/native/libpowersync.so" Abi="x86_64" />
+    <AndroidNativeLibrary Include="runtimes/android-arm/native/libpowersync.so" Abi="armeabi-v7a" />
+    <AndroidNativeLibrary Include="runtimes/android-x86/native/libpowersync.so" Abi="x86" />
   </ItemGroup>
   
   <ItemGroup>
-    <None Include="..\..\icon.png" Pack="true" PackagePath="" />
+    <None Include="buildTransitive/PowerSync.Common.targets" Pack="true" PackagePath="buildTransitive/" />
+    <None Include="../../icon.png" Pack="true" PackagePath="" />
     <None Include="README.md" Pack="true" PackagePath="" />
   </ItemGroup>
 </Project>
