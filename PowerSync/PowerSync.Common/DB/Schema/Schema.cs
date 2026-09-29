@@ -8,17 +8,34 @@ using PowerSync.Common.DB.Schema.Attributes;
 public class Schema
 {
     private readonly List<Table> _tables;
+    private readonly List<RawTable> _rawTables;
 
     public IReadOnlyList<Table> Tables => _tables;
+    public IReadOnlyList<RawTable> RawTables => _rawTables;
 
     public Schema(params Table[] tables)
     {
         _tables = [.. tables];
+        _rawTables = [];
+    }
+
+    public Schema(params RawTable[] rawTables)
+    {
+        _tables = [];
+        _rawTables = [.. rawTables];
+    }
+
+    public Schema(List<Table> tables, List<RawTable> rawTables)
+    {
+        _tables = tables;
+        _rawTables = rawTables;
     }
 
     public Schema(params Type[] types)
     {
         _tables = [];
+        _rawTables = [];
+        // TODO: Should there be a mechanism for creating raw tables from types?
         foreach (Type type in types)
         {
             var parser = new AttributeParser(type);
@@ -32,6 +49,10 @@ public class Schema
         foreach (var table in _tables)
         {
             table.Validate();
+        }
+        foreach (var rawTable in _rawTables)
+        {
+            rawTable.Validate();
         }
     }
 }

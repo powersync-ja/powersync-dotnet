@@ -1,10 +1,11 @@
-namespace PowerSync.Common.DB.Schema;
-
 using System.Text.RegularExpressions;
 
 using Newtonsoft.Json;
 
 using PowerSync.Common.DB.Schema.Attributes;
+using PowerSync.Common.Utils.Converters;
+
+namespace PowerSync.Common.DB.Schema;
 
 public class TableOptions(
     Dictionary<string, List<string>>? indexes = null,
@@ -238,7 +239,7 @@ public class Table
 /// Serializes a <see cref="Table" /> into the JSON format expected by the
 /// `powersync_replace_schema` SQLite function.
 /// </summary>
-public class TableJsonConverter : JsonConverter<Table>
+internal class TableJsonConverter : JsonConverter<Table>
 {
     public override bool CanRead => false;
 
