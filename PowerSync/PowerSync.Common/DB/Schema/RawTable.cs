@@ -1,11 +1,12 @@
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace PowerSync.Common.DB.Schema;
 
-public class RawTable(string name, PendingStatement put, PendingStatement delete)
+public class RawTable(string name, PendingStatement put, PendingStatement delete) : BaseTable
 {
     [JsonProperty("name")]
-    public string Name { get; private set; } = name;
+    public override string Name { get; set; } = name;
 
     [JsonProperty("put")]
     public PendingStatement Put { get; private set; } = put;
@@ -13,23 +14,25 @@ public class RawTable(string name, PendingStatement put, PendingStatement delete
     [JsonProperty("delete")]
     public PendingStatement Delete { get; private set; } = delete;
 
-    public void Validate()
+    public override void Validate()
+
+
     {
-        // TODO
+        // We don't currently have any validation for raw tables
     }
 }
 
-public class PendingStatement
+public class PendingStatement(string sql, IReadOnlyList<PendingStatementParameter> parameters)
 {
     [JsonProperty("sql")]
-    public string SQL { get; set; }
+    public string SQL { get; set; } = sql;
 
     [JsonProperty("params")]
-    public IReadOnlyList<PendingStatementParameter> Parameters { get; set; }
+    public IReadOnlyList<PendingStatementParameter> Parameters { get; set; } = parameters;
 }
 
-[JsonConverter(PendingStatementParameterJsonConverter)]
-public abstract record PendingStatementParameter
+[JsonConverter(typeof(PendingStatementParameterJsonConverter))]
+public record PendingStatementParameter
 {
     private PendingStatementParameter() { }
 
@@ -59,9 +62,9 @@ public abstract record PendingStatementParameter
 internal class PendingStatementParameterJsonConverter : JsonConverter<PendingStatementParameter>
 {
     // We never need to deserialize pending stamements.
-    public override PendingStatementParameter ReadJson()
+    public override PendingStatementParameter ReadJson(JsonReader reader, Type objectType, PendingStatementParameter? existingValue, bool hasExistingValue, JsonSerializer serializer)
     {
-        throw new NotImplementedException("Deserializing PendingStatementParameter is not supported.");
+        throw new NotSupportedException("Deserializing PendingStatementParameter is not supported.");
     }
 
     public override void WriteJson(JsonWriter writer, PendingStatementParameter value, JsonSerializer _serializer)
@@ -75,7 +78,7 @@ internal class PendingStatementParameterJsonConverter : JsonConverter<PendingSta
             JObject json = new JObject(new JProperty("Column", column.Name));
             writer.WriteValue(json);
         }
-        else if (value is PendingStatementParameter.Rest)
+        else if (value == PendingStatementParameter.Rest)
         {
             writer.WriteValue("Rest");
         }

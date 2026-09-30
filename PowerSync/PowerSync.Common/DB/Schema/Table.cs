@@ -64,13 +64,13 @@ public class TrackPreviousOptions
 }
 
 [JsonConverter(typeof(TableJsonConverter))]
-public class Table
+public class Table : BaseTable
 {
     public static readonly Regex InvalidSQLCharacters = new Regex(@"[""'%,.#\s\[\]]", RegexOptions.Compiled);
 
     public const int MAX_AMOUNT_OF_COLUMNS = 1999;
 
-    public string Name { get; set; }
+    public override string Name { get; set; }
 
     public Dictionary<string, ColumnType> Columns { get; set; }
     public TableOptions Options { get; set; }
@@ -153,7 +153,7 @@ public class Table
         Options = options ?? new TableOptions();
     }
 
-    public void Validate()
+    public override void Validate()
     {
         if (string.IsNullOrWhiteSpace(Name))
         {
