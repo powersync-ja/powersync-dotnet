@@ -62,6 +62,8 @@ public class StreamingSyncImplementationOptions : AdditionalConnectionOptions
 
     public ILogger? Logger { get; init; }
 
+    public Schema Schema { get; init; } = null!;
+
     /// <summary>
     /// Called synchronously whenever the sync status changes, before the change is published on
     /// <see cref="StreamingSyncImplementation.Events"/>. It runs while the status lock is held, so it
@@ -927,6 +929,7 @@ public class StreamingSyncImplementation : ICloseable
             var options = new
             {
                 parameters = resolvedOptions.Params,
+                schema = resolvedOptions.Schema,
                 active_streams = activeStreams,
                 include_defaults = resolvedOptions.IncludeDefaultStreams,
                 app_metadata = resolvedOptions.AppMetadata,
