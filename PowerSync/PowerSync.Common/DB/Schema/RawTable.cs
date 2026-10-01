@@ -138,28 +138,68 @@ internal class RawTableJsonConverter : JsonConverter<RawTable>
 
         writer.WriteStartObject();
 
-        // TODO: Should we include null properties or strip them?
-        // TODO: Clean this up with a better implementation probably
         writer.WritePropertyName("name");
         writer.WriteValue(value.Name);
 
-        writer.WritePropertyName("put");
-        serializer.Serialize(writer, value.Put);
+        if (value.Put is not null)
+        {
+            writer.WritePropertyName("put");
+            serializer.Serialize(writer, value.Put);
+        }
 
-        writer.WritePropertyName("delete");
-        serializer.Serialize(writer, value.Delete);
+        if (value.Delete is not null)
+        {
+            writer.WritePropertyName("delete");
+            serializer.Serialize(writer, value.Delete);
+        }
 
-        writer.WritePropertyName("clear");
-        writer.WriteValue(value.Name);
+        if (value.Clear is not null)
+        {
+            writer.WritePropertyName("clear");
+            writer.WriteValue(value.Clear);
+        }
 
-        writer.WritePropertyName("table_name");
-        writer.WriteValue(value.Schema?.TableName ?? value.Name);
+        if (value.Schema is { } schema)
+        {
+            writer.WritePropertyName("table_name");
+            writer.WriteValue(schema.TableName ?? value.Name);
 
-        writer.WritePropertyName("synced_columns");
-        serializer.Serialize(writer, value.Schema?.SyncedColumns);
+            if (schema.SyncedColumns is not null)
+            {
+                writer.WritePropertyName("synced_columns");
+                serializer.Serialize(writer, schema.SyncedColumns);
+            }
 
-        writer.WritePropertyName("options");
-        serializer.Serialize(writer, value.Schema?.Options);
+            var options = schema.Options;
+
+            writer.WritePropertyName("local_only");
+            writer.WriteValue(options.LocalOnly);
+
+            writer.WritePropertyName("insert_only");
+            writer.WriteValue(options.InsertOnly);
+
+            writer.WritePropertyName("ignore_empty_update");
+            writer.WriteValue(options.IgnoreEmptyUpdates);
+
+            writer.WritePropertyName("include_metadata");
+            writer.WriteValue(options.TrackMetadata);
+
+            if (options.TrackPreviousValues is { } trackPrevious)
+            {
+                writer.WritePropertyName("include_old");
+                if (trackPrevious.Columns is null)
+                {
+                    writer.WriteValue(true);
+                }
+                else
+                {
+                    serializer.Serialize(writer, trackPrevious.Columns);
+                }
+
+                writer.WritePropertyName("include_old_only_when_changed");
+                writer.WriteValue(trackPrevious.OnlyWhenChanged);
+            }
+        }
 
         writer.WriteEndObject();
     }

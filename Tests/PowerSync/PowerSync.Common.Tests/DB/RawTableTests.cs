@@ -8,73 +8,109 @@ using PowerSync.Common.Tests.Utils;
 namespace PowerSync.Common.Tests.DB;
 
 /// <summary>
-/// dotnet test -v n --framework net10.0 --filter "SchemaTests"
+/// dotnet test -v n --framework net10.0 --filter "RawTableTests"
 /// </summary>
-public class RawTableTests
+public class RawTableTests : IAsyncLifetime
 {
-    [Fact(Timeout = 5000)]
-    public async Task RawTablesDoesNotCreateViews()
+    private string _dbName = "";
+    private PowerSyncDatabase _db = null!;
+
+    public async Task InitializeAsync()
     {
-        // TODO Move assets table out of just this function
-        var assets = new RawTable(
-            name: "assets",
-            schema: new RawTableSchema()
-        );
-        var schema = new Common.DB.Schema.Schema(assets);
+        _dbName = DatabaseUtils.NewDbName();
+    }
 
-        var dbName = DatabaseUtils.NewDbName();
-        var db = NewDatabase(dbName, schema);
-
-        try
+    public async Task DisposeAsync()
+    {
+        if (_db != null)
         {
-            await db.Execute(@"
-                CREATE TABLE assets (
-                    id            TEXT PRIMARY KEY,
-                    created_at    TEXT,
-                    make          TEXT,
-                    model         TEXT,
-                    serial_number TEXT,
-                    quantity      INTEGER,
-                    user_id       TEXT,
-                    customer_id   TEXT,
-                    description   TEXT,
-                );
-            ");
-
-            foreach (string action in new string[] { "INSERT", "UPDATE", "DELETE" })
-            {
-                await db.Execute(
-                    "SELECT powersync_create_raw_table_crud_trigger(?, ?, ?)",
-                    [JsonConvert.SerializeObject(assets), $"assets_{action}", action]
-              );
-            }
-
-            string tableType = await db.Get("SELECT type as r FROM sqlite_master WHERE name = 'assets'");
-            Assert.Equal("table", tableType);
-            Assert.NotEqual("view", tableType);
-
-            int powerSyncTableCount = await db.Get(@"
-                SELECT count(*) as r
-                FROM sqlite_master
-                WHERE name = 'ps_data__assets'
-                   OR name = 'ps_data_local__assets'");
-            Assert.Equal(0, powerSyncTableCount);
+            await _db.DisconnectAndClear();
+            await _db.Close();
+            _db = null!;
         }
-        finally
+        if (_dbName != null)
         {
-            await db.DisconnectAndClear();
-            await db.Close();
-            DatabaseUtils.CleanDb(dbName);
+            DatabaseUtils.CleanDb(_dbName);
+            _dbName = "";
         }
     }
 
-    private static PowerSyncDatabase NewDatabase(string name, Common.DB.Schema.Schema schema)
+    [Fact(Timeout = 5000)]
+    public async Task RawTableDoesNotCreateViews()
     {
-        return new PowerSyncDatabase(new PowerSyncDatabaseOptions()
+        var assets = CreateAssetsSchema();
+        var schema = new Common.DB.Schema.Schema(assets);
+        NewDatabase(schema);
+        await CreateAssetsTable(assets);
+
+        string tableType = (await _db.Get("SELECT type as r FROM sqlite_master WHERE name = 'assets'")).r;
+        Assert.Equal("table", tableType);
+        Assert.NotEqual("view", tableType);
+
+        long powerSyncTableCount = await _db.Get<long>(@"
+            SELECT count(*)
+            FROM sqlite_master
+            WHERE name = 'ps_data__assets'
+               OR name = 'ps_data_local__assets'");
+        Assert.Equal(0L, powerSyncTableCount);
+    }
+
+    [Fact(Timeout = 5000)]
+    public async Task RawTableCreatesRowsInInternalTables()
+    {
+        var assets = CreateAssetsSchema();
+        var schema = new Common.DB.Schema.Schema(assets);
+        NewDatabase(schema);
+        await CreateAssetsTable(assets);
+
+        Assert.Equal(0L, await _db.Get<long>("SELECT count(*) FROM ps_crud"));
+        await _db.Execute(
+            "INSERT INTO assets (id, make, model) VALUES (uuid(), ?, ?)",
+            ["test make", "test model"]
+        );
+        Assert.Equal(1L, await _db.Get<long>("SELECT count(*) FROM ps_crud"));
+    }
+
+    private static RawTable CreateAssetsSchema(RawTableSchema? customSchema = null)
+    {
+        return new RawTable(
+            name: "assets",
+            schema: customSchema ?? new RawTableSchema()
+        );
+    }
+
+    private async Task CreateAssetsTable(RawTable assetsSchema)
+    {
+        await _db.Execute(@"
+            CREATE TABLE assets (
+                id            TEXT PRIMARY KEY,
+                created_at    TEXT,
+                make          TEXT,
+                model         TEXT,
+                serial_number TEXT,
+                quantity      INTEGER,
+                user_id       TEXT,
+                customer_id   TEXT,
+                description   TEXT
+            );
+        ");
+
+        foreach (string action in new string[] { "INSERT", "UPDATE", "DELETE" })
+        {
+            await _db.Execute(
+                "SELECT powersync_create_raw_table_crud_trigger(?, ?, ?)",
+                [JsonConvert.SerializeObject(assetsSchema), $"assets_{action}", action]
+          );
+        }
+    }
+
+    private void NewDatabase(Common.DB.Schema.Schema schema)
+    {
+        _db = new PowerSyncDatabase(new PowerSyncDatabaseOptions()
         {
             Database = new SQLOpenOptions()
             {
-                DbFilename = name,
+                DbFilename = _dbName,
             },
             Schema = schema,
         });
