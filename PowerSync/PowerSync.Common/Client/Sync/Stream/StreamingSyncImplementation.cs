@@ -930,7 +930,7 @@ public class StreamingSyncImplementation : ICloseable
             var options = new
             {
                 parameters = resolvedOptions.Params,
-                schema = resolvedOptions.Schema,
+                schema = Options.Schema,
                 active_streams = activeStreams,
                 include_defaults = resolvedOptions.IncludeDefaultStreams,
                 app_metadata = resolvedOptions.AppMetadata,
