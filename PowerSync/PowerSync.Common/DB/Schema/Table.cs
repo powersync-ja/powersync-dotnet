@@ -41,6 +41,19 @@ public class TableOptions(
     /// CRUD entries.
     /// </summary>
     public bool IgnoreEmptyUpdates { get; set; } = ignoreEmptyUpdates ?? false;
+
+    public void Validate()
+    {
+        if (TrackMetadata && LocalOnly)
+        {
+            throw new Exception("Can't include metadata for local-only tables.");
+        }
+
+        if (TrackPreviousValues != null && LocalOnly)
+        {
+            throw new Exception("Can't include old values for local-only tables.");
+        }
+    }
 }
 
 /// <summary>
@@ -176,15 +189,7 @@ public class Table : BaseTable
                 $"Table has too many columns. The maximum number of columns is {MAX_AMOUNT_OF_COLUMNS}.");
         }
 
-        if (Options.TrackMetadata && Options.LocalOnly)
-        {
-            throw new Exception("Can't include metadata for local-only tables.");
-        }
-
-        if (Options.TrackPreviousValues != null && Options.LocalOnly)
-        {
-            throw new Exception("Can't include old values for local-only tables.");
-        }
+        Options.Validate();
 
         var columnNames = new HashSet<string> { "id" };
 

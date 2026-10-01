@@ -12,6 +12,7 @@ using Newtonsoft.Json;
 
 using PowerSync.Common.Client.Sync.Bucket;
 using PowerSync.Common.DB.Crud;
+using PowerSync.Common.DB.Schema;
 using PowerSync.Common.Utils;
 using PowerSync.Common.Utils.Converters;
 
