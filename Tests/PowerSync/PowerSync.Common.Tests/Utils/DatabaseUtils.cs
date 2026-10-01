@@ -36,4 +36,9 @@ public static class DatabaseUtils
 
         Console.Error.WriteLine($"Failed to delete file after {retryCount} attempts: {filePath}");
     }
+
+    public static string NewDbName(string? dbIdentifier = null)
+    {
+        return $"test-{dbIdentifier ?? "database"}-{Guid.NewGuid()}.db";
+    }
 }
