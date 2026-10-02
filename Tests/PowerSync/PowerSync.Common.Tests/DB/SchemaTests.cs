@@ -379,7 +379,8 @@ public class SchemaTests
                     include_old = false,
                     include_old_only_when_changed = false
                 },
-            }
+            },
+            raw_tables = new List<object>()
         };
         Assert.Equal(JsonConvert.SerializeObject(expectedJson), JsonConvert.SerializeObject(TestSchemaTodoList.AppSchema));
     }
@@ -419,7 +420,8 @@ public class SchemaTests
                     include_old = false,
                     include_old_only_when_changed = false
                 },
-            }
+            },
+            raw_tables = new List<object>()
         };
 
         var schema = new Schema(new Table
