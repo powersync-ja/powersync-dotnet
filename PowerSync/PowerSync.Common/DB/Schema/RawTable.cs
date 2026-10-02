@@ -100,7 +100,7 @@ public record PendingStatementParameter
     /// <summary>
     /// Resolves to the ID of the affected row.
     /// </summary>
-    public static readonly PendingStatementParameter Id = new();
+    public static readonly PendingStatementParameter Id = new ValueId();
 
     /// <summary>
     /// Resolves to the value of a column in the added row.
@@ -114,10 +114,16 @@ public record PendingStatementParameter
     /// Resolves to a JSON object containing all columns from the synced row that haven't been
     /// matched by a <see cref="Column" /> value in the same statement.
     /// </summary>
-    public static readonly PendingStatementParameter Rest = new();
+    public static readonly PendingStatementParameter Rest = new ValueRest();
 
     /// <inheritdoc cref="Column" />
-    public sealed record ValueColumn(string Name) : PendingStatementParameter;
+    internal sealed record ValueColumn(string Name) : PendingStatementParameter;
+
+    /// <inheritdoc cref="Id" />
+    internal sealed record ValueId : PendingStatementParameter;
+
+    /// <inheritdoc cref="Rest" />
+    internal sealed record ValueRest : PendingStatementParameter;
 }
 
 internal class RawTableJsonConverter : JsonConverter<RawTable>
@@ -197,7 +203,7 @@ internal class RawTableJsonConverter : JsonConverter<RawTable>
                 }
 
                 writer.WritePropertyName("include_old_only_when_changed");
-                writer.WriteValue(trackPrevious.OnlyWhenChanged);
+                writer.WriteValue(trackPrevious.OnlyWhenChanged ?? false);
             }
         }
 
@@ -220,22 +226,23 @@ internal class PendingStatementParameterJsonConverter : JsonConverter<PendingSta
             return;
         }
 
-        if (value == PendingStatementParameter.Id)
+        switch (value)
         {
-            writer.WriteValue("Id");
-        }
-        else if (value is PendingStatementParameter.ValueColumn column)
-        {
-            var json = new JObject(new JProperty("Column", column.Name));
-            json.WriteTo(writer);
-        }
-        else if (value == PendingStatementParameter.Rest)
-        {
-            writer.WriteValue("Rest");
-        }
-        else
-        {
-            throw new InvalidOperationException("Incorrect type for given PendingStatementParameter.");
+            case PendingStatementParameter.ValueId:
+                writer.WriteValue("Id");
+                break;
+
+            case PendingStatementParameter.ValueColumn column:
+                var json = new JObject(new JProperty("Column", column.Name));
+                json.WriteTo(writer);
+                break;
+
+            case PendingStatementParameter.ValueRest:
+                writer.WriteValue("Rest");
+                break;
+
+            default:
+                throw new InvalidOperationException("Incorrect type for given PendingStatementParameter.");
         }
     }
 }
