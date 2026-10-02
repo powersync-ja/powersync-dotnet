@@ -8,7 +8,7 @@ using PowerSync.Common.Tests.Utils;
 using PowerSync.Common.Utils;
 
 /// <summary>
-/// dotnet test -v n --framework net8.0 --filter "MDSQLiteAdapterTests"
+/// dotnet test -v n --framework net10.0 --filter "MDSQLiteAdapterTests"
 /// </summary>
 [Collection("MDSQLiteAdapterTests")]
 public class MDSQLiteAdapterTests
@@ -53,7 +53,7 @@ public class MDSQLiteAdapterTests
     public async Task LoadsCustomPowerSyncExtensionFromOverriddenPath()
     {
         var dbName = $"MDSQLiteAdapter-{Guid.NewGuid():N}.db";
-        var sourcePath = PowerSyncPathResolver.GetNativeLibraryPath(AppContext.BaseDirectory);
+        var sourcePath = PowerSyncDesktopPathResolver.GetNativeLibraryPath(AppContext.BaseDirectory);
         var customPath = Path.Combine(
             Path.GetTempPath(),
             $"powersync-ext-copy-{Guid.NewGuid():N}{Path.GetExtension(sourcePath)}"

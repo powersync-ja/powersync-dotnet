@@ -9,7 +9,7 @@ using PowerSync.Common.Tests.Utils;
 using PowerSync.Common.Tests.Utils.Sync;
 
 /// <summary>
-/// dotnet test -v n --framework net8.0 --filter "StreamingSyncRetryTests"
+/// dotnet test -v n --framework net10.0 --filter "StreamingSyncRetryTests"
 /// </summary>
 public class StreamingSyncRetryTests
 {

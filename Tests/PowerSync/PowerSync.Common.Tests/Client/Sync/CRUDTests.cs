@@ -11,7 +11,7 @@ using PowerSync.Common.Tests.Utils;
 
 
 /// <summary>
-/// dotnet test -v n --framework net8.0 --filter "CRUDTests"
+/// dotnet test -v n --framework net10.0 --filter "CRUDTests"
 /// </summary>
 public class CRUDTests : IAsyncLifetime
 {

@@ -38,6 +38,6 @@ internal class StringLongConverter : JsonConverter
             return result;
         }
 
-        throw new JsonSerializationException($"Cannot convert value {val} to long.");
+        throw new JsonSerializationException($"Cannot convert value '{val}' to long.");
     }
 }

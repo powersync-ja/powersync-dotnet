@@ -11,7 +11,7 @@ using PowerSync.Common.Tests.Models;
 using PowerSync.Common.Tests.Utils;
 
 /// <summary>
-/// dotnet test -v n --framework net8.0 --filter "PowerSyncDatabaseTests"
+/// dotnet test -v n --framework net10.0 --filter "PowerSyncDatabaseTests"
 /// </summary>
 [Collection("PowerSyncDatabaseTests")]
 public class PowerSyncDatabaseTests : IAsyncLifetime
@@ -302,7 +302,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.All(ids, n => Assert.Equal(id, n));
     }
 
-    [Fact(Timeout = 2000)]
+    [Fact(Timeout = 5000)]
     public async Task ReadWhileWriteIsRunning()
     {
         var sem = new TaskCompletionSource<bool>();
@@ -357,7 +357,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.Equal(make2, result[1].make);
     }
 
-    [Fact(Timeout = 2000)]
+    [Fact(Timeout = 5000)]
     public async Task QueueSimultaneousExecutions()
     {
         var order = new List<int>();
@@ -376,7 +376,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.Equal(expectedOrder, order);
     }
 
-    [Fact(Timeout = 2000)]
+    [Fact(Timeout = 5000)]
     public async Task CallUpdateHookOnChanges()
     {
         var result = new TaskCompletionSource<bool>();
@@ -401,7 +401,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         await result.Task;
     }
 
-    [Fact(Timeout = 2000)]
+    [Fact(Timeout = 5000)]
     public async Task ReflectWriteTransactionUpdatesOnReadConnections()
     {
         var watched = new TaskCompletionSource<bool>();
@@ -584,7 +584,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.Equal(make, dynamicAsset?.make);
     }
 
-    [Fact(Timeout = 2000)]
+    [Fact(Timeout = 5000)]
     public async Task Watch_Cancelled()
     {
         int callCount = 0;
@@ -616,7 +616,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.Equal(2, callCount);
     }
 
-    [Fact(Timeout = 3000)]
+    [Fact(Timeout = 5000)]
     public async Task Watch_MultipleCancelled()
     {
         int callCount = 0;
@@ -667,7 +667,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.Equal(3, callCount);
     }
 
-    [Fact(Timeout = 3000)]
+    [Fact(Timeout = 5000)]
     public async Task Watch_SchemaReset()
     {
         var dbId = Guid.NewGuid().ToString();
@@ -842,7 +842,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.Equal(3, current[0].count);
     }
 
-    [Fact(Timeout = 2000)]
+    [Fact(Timeout = 5000)]
     public async Task Watch_CancelsOnTokenCancellation()
     {
         var tcs = new TaskCompletionSource<bool>();

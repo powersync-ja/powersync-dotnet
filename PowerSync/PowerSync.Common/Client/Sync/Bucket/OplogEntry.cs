@@ -2,6 +2,8 @@ namespace PowerSync.Common.Client.Sync.Bucket;
 
 using Newtonsoft.Json;
 
+using PowerSync.Common.Utils.Converters;
+
 public class OplogEntryJSON
 {
     [JsonProperty("checksum")]
@@ -17,7 +19,8 @@ public class OplogEntryJSON
     public string? ObjectType { get; set; }
 
     [JsonProperty("op_id")]
-    public string OpId { get; set; } = null!;
+    [JsonConverter(typeof(StringLongConverter))]
+    public long OpId { get; set; }
 
     [JsonProperty("op")]
     public string Op { get; set; } = null!;
@@ -27,7 +30,7 @@ public class OplogEntryJSON
 }
 
 public class OplogEntry(
-    string opId,
+    long opId,
     OpType op,
     long checksum,
     string subkey,
@@ -36,7 +39,7 @@ public class OplogEntry(
     object? data = null
     )
 {
-    public string OpId { get; private set; } = opId;
+    public long OpId { get; private set; } = opId;
     public OpType Op { get; private set; } = op;
     public long Checksum { get; private set; } = checksum;
     public string Subkey { get; private set; } = subkey;
