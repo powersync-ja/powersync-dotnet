@@ -322,6 +322,30 @@ public class SchemaTests
     }
 
     [Fact]
+    public void Schema_Validate_RejectsDuplicateTableNames()
+    {
+        var schema = new Schema(
+            new Table("lists", new Dictionary<string, ColumnType> { ["name"] = ColumnType.Text }),
+            new Table("lists", new Dictionary<string, ColumnType> { ["title"] = ColumnType.Text })
+        );
+
+        var ex = Assert.Throws<InvalidOperationException>(schema.Validate);
+        Assert.Contains("Duplicate table name: lists", ex.Message);
+    }
+
+    [Fact]
+    public void Schema_Validate_RejectsDuplicateRawTableNames()
+    {
+        var schema = new Schema(
+            new Table("lists", new Dictionary<string, ColumnType> { ["name"] = ColumnType.Text }),
+            new RawTable("lists", new RawTableSchema())
+        );
+
+        var ex = Assert.Throws<InvalidOperationException>(schema.Validate);
+        Assert.Contains("Duplicate table name: lists", ex.Message);
+    }
+
+    [Fact]
     public void Schema_SerializesToJSON()
     {
         object expectedJson = new
