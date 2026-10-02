@@ -130,12 +130,14 @@ public record PendingStatementParameter
 
 internal class RawTableJsonConverter : JsonConverter<RawTable>
 {
+    public override bool CanRead => false;
+
     public override RawTable ReadJson(JsonReader reader, Type objectType, RawTable? existingValue, bool hasExistingValue, JsonSerializer serializer)
     {
         throw new NotSupportedException("Deserializing RawTable is not supported.");
     }
 
-    // Flattens RawTable into { name, put, delete, clear, table_name, synced_columns, options }.
+    // Flattens RawTable into { name, put, delete, clear, table_name, synced_columns, ...table_options }.
     public override void WriteJson(JsonWriter writer, RawTable? value, JsonSerializer serializer)
     {
         if (value is null)
@@ -178,35 +180,7 @@ internal class RawTableJsonConverter : JsonConverter<RawTable>
                 serializer.Serialize(writer, schema.SyncedColumns);
             }
 
-            var options = schema.Options;
-
-            writer.WritePropertyName("local_only");
-            writer.WriteValue(options.LocalOnly);
-
-            writer.WritePropertyName("insert_only");
-            writer.WriteValue(options.InsertOnly);
-
-            writer.WritePropertyName("ignore_empty_update");
-            writer.WriteValue(options.IgnoreEmptyUpdates);
-
-            writer.WritePropertyName("include_metadata");
-            writer.WriteValue(options.TrackMetadata);
-
-            if (options.TrackPreviousValues is { } trackPrevious)
-            {
-                writer.WritePropertyName("include_old");
-                if (trackPrevious.Columns is null)
-                {
-                    writer.WriteValue(true);
-                }
-                else
-                {
-                    serializer.Serialize(writer, trackPrevious.Columns);
-                }
-
-                writer.WritePropertyName("include_old_only_when_changed");
-                writer.WriteValue(trackPrevious.OnlyWhenChanged ?? false);
-            }
+            schema.Options.WriteJsonSharedProperties(writer, serializer);
         }
 
         writer.WriteEndObject();
@@ -215,6 +189,8 @@ internal class RawTableJsonConverter : JsonConverter<RawTable>
 
 internal class PendingStatementParameterJsonConverter : JsonConverter<PendingStatementParameter>
 {
+    public override bool CanRead => false;
+
     public override PendingStatementParameter ReadJson(JsonReader reader, Type objectType, PendingStatementParameter? existingValue, bool hasExistingValue, JsonSerializer serializer)
     {
         throw new NotSupportedException("Deserializing PendingStatementParameter is not supported.");
