@@ -51,13 +51,14 @@ public class Schema
 
     public void Validate()
     {
-        foreach (var table in _tables)
+        var tableNames = new HashSet<string>();
+        foreach (var table in AllTables)
         {
+            if (!tableNames.Add(table.Name))
+            {
+                throw new InvalidOperationException($"Duplicate table name: {table.Name}");
+            }
             table.Validate();
-        }
-        foreach (var rawTable in _rawTables)
-        {
-            rawTable.Validate();
         }
     }
 }

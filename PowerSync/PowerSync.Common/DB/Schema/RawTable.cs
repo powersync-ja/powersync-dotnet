@@ -12,10 +12,12 @@ public class RawTable : BaseTable
     public PendingStatement? Delete { get; set; }
     public string? Clear { get; set; }
 
-    public RawTable(string name, RawTableSchema schema, string? clear = null)
+    public RawTable(string name, RawTableSchema schema, PendingStatement? put = null, PendingStatement? delete = null, string? clear = null)
     {
         Name = name;
         Schema = schema;
+        Put = put;
+        Delete = delete;
         Clear = clear;
     }
 
