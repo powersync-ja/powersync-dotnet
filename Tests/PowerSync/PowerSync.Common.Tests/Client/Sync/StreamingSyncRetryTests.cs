@@ -9,7 +9,7 @@ using PowerSync.Common.Tests.Utils;
 using PowerSync.Common.Tests.Utils.Sync;
 
 /// <summary>
-/// dotnet test -v n --framework net8.0 --filter "StreamingSyncRetryTests"
+/// dotnet test -v n --framework net10.0 --filter "StreamingSyncRetryTests"
 /// </summary>
 public class StreamingSyncRetryTests
 {
@@ -99,7 +99,7 @@ internal sealed class ThrowingRemote : Remote
     public override Task<T> FetchJson<T>(string path, HttpMethod? method = null, object? data = null, Dictionary<string, string>? headers = null, CancellationToken ct = default)
     {
         var response = new StreamingSyncImplementation.LegacyWriteCheckpointApiResponse(
-            new StreamingSyncImplementation.LegacyWriteCheckpointResponseData("1")
+            new StreamingSyncImplementation.LegacyWriteCheckpointResponseData(1)
         );
         return Task.FromResult((T)(object)response);
     }

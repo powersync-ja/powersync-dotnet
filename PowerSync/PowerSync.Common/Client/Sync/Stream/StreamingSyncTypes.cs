@@ -129,7 +129,8 @@ public class StreamingSyncCheckpointDiff : StreamingSyncLine
 public class CheckpointDiff
 {
     [JsonProperty("last_op_id")]
-    public string LastOpId { get; set; } = "";
+    [JsonConverter(typeof(StringLongConverter))]
+    public long LastOpId { get; set; }
 
     [JsonProperty("updated_buckets")]
     public List<BucketChecksum> UpdatedBuckets { get; set; } = [];
@@ -138,7 +139,8 @@ public class CheckpointDiff
     public List<string> RemovedBuckets { get; set; } = [];
 
     [JsonProperty("write_checkpoint")]
-    public string WriteCheckpoint { get; set; } = "";
+    [JsonConverter(typeof(StringLongConverter))]
+    public long WriteCheckpoint { get; set; }
 }
 
 public class StreamingSyncDataJSON : StreamingSyncLine
@@ -198,7 +200,8 @@ public class CheckpointRequestPayload
     public string ClientId { get; set; } = "";
 
     [JsonProperty("checkpoint_request_id")]
-    public string CheckpointRequestId { get; set; } = "";
+    [JsonConverter(typeof(StringLongConverter))]
+    public long CheckpointRequestId { get; set; }
 }
 
 public class CheckpointRequestResponse
@@ -210,5 +213,6 @@ public class CheckpointRequestResponse
 public class CheckpointRequestResponseData
 {
     [JsonProperty("checkpoint_request_id")]
-    public string CheckpointRequestId { get; set; } = "";
+    [JsonConverter(typeof(StringLongConverter))]
+    public long CheckpointRequestId { get; set; }
 }

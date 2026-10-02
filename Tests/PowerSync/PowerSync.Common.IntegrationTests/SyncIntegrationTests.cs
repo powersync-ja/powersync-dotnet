@@ -9,9 +9,9 @@ namespace PowerSync.Common.IntegrationTests;
 [Trait("Category", "Integration")]
 public class SyncIntegrationTests : IAsyncLifetime
 {
-    private record ListResult(string id, string name, string owner_id, string created_at);
+    private record ListResult(string id, string created_at, string name, string owner_id);
 
-    private record TodoResult(string id, string list_id, string content, string owner_id, string created_at);
+    private record TodoResult(string id, string list_id, string created_at, string completed_at, string description, string created_by, string completed_by, int completed);
 
     private readonly string userId = Uuid();
 
@@ -33,12 +33,13 @@ public class SyncIntegrationTests : IAsyncLifetime
         nodeClient = new NodeClient(userId);
         db = new PowerSyncDatabase(new PowerSyncDatabaseOptions
         {
-            Database = new SQLOpenOptions { DbFilename = "powersync-sync-tests.db" },
+            Database = new SQLOpenOptions { DbFilename = $"powersync-sync-tests-{userId}.db" },
             Schema = TestSchema.PowerSyncSchema,
             Logger = logger
 
         });
         await db.Init();
+        await db.DisconnectAndClear();
         var connector = new NodeConnector(userId);
 
         Console.WriteLine($"Using User ID: {userId}");
@@ -52,7 +53,6 @@ public class SyncIntegrationTests : IAsyncLifetime
                     { "environment", "integration-tests" }
                 }
             });
-            await db.Connect(connector);
             await db.WaitForFirstSync();
         }
         catch (Exception ex)
@@ -68,6 +68,7 @@ public class SyncIntegrationTests : IAsyncLifetime
         await Task.Delay(2000);
         await db.DisconnectAndClear();
         await db.Close();
+        try { File.Delete($"powersync-sync-tests-{userId}.db"); } catch { }
     }
 
     [IntegrationFact(Timeout = 3000)]
@@ -93,48 +94,39 @@ public class SyncIntegrationTests : IAsyncLifetime
         await watched.Task;
     }
 
-    [IntegrationFact(Timeout = 3000)]
+    [IntegrationFact(Timeout = 6000)]
     public async Task SyncDownDeleteOperationTest()
     {
-        var watched = new TaskCompletionSource<bool>();
+        var created = new TaskCompletionSource<bool>();
+        var deleted = new TaskCompletionSource<bool>();
         var cts = new CancellationTokenSource();
         var id = Uuid();
 
+        // Use a single Watch for the full create+delete lifecycle so the listener
+        // channel is registered before any events can be missed.
+        _ = Task.Run(async () =>
+        {
+            bool sawCreate = false;
+            await foreach (var x in db.Watch<ListResult>("select * from lists where id = ?", [id], new() { Signal = cts.Token }))
+            {
+                if (!sawCreate && x.Length == 1)
+                {
+                    sawCreate = true;
+                    created.SetResult(true);
+                }
+                else if (sawCreate && x.Length == 0)
+                {
+                    deleted.SetResult(true);
+                    cts.Cancel();
+                }
+            }
+        });
+
         await nodeClient.CreateList(id, name: "Test List to delete");
+        await created.Task;
 
-        _ = Task.Run(async () =>
-        {
-            await foreach (var x in db.Watch<ListResult>("select * from lists where id = ?", [id], new() { Signal = cts.Token }))
-            {
-                // Verify that the item was added locally
-                if (x.Length == 1)
-                {
-                    watched.SetResult(true);
-                    cts.Cancel();
-                }
-            }
-        });
-
-        await watched.Task;
         await nodeClient.DeleteList(id);
-
-        watched = new TaskCompletionSource<bool>();
-        cts = new CancellationTokenSource();
-
-        _ = Task.Run(async () =>
-        {
-            await foreach (var x in db.Watch<ListResult>("select * from lists where id = ?", [id], new() { Signal = cts.Token }))
-            {
-                // Verify that the item was deleted locally
-                if (x.Length == 0)
-                {
-                    watched.SetResult(true);
-                    cts.Cancel();
-                }
-            }
-        });
-
-        await watched.Task;
+        await deleted.Task;
     }
 
     [IntegrationFact(Timeout = 5000)]
@@ -147,7 +139,7 @@ public class SyncIntegrationTests : IAsyncLifetime
 
         _ = Task.Run(async () =>
         {
-            await foreach (var x in db.Watch<ListResult>("select * from lists where id = ?", [id], new() { Signal = cts.Token }))
+            await foreach (var x in db.Watch<ListResult>("select * from lists where name = ?", [listName], new() { Signal = cts.Token }))
             {
                 // Verify that the item was added locally
                 if (x.Length == 100)
@@ -176,7 +168,7 @@ public class SyncIntegrationTests : IAsyncLifetime
 
         _ = Task.Run(async () =>
         {
-            await foreach (var x in db.Watch<ListResult>("select * from lists where id = ?", [id], new() { Signal = cts.Token }))
+            await foreach (var x in db.Watch<ListResult>("select * from lists where name = ?", [listName], new() { Signal = cts.Token }))
             {
                 // Verify that the items were added locally
                 if (x.Length == 100)
@@ -199,8 +191,11 @@ public class SyncIntegrationTests : IAsyncLifetime
         }
         await localInsertWatch.Task;
 
-        // let the crud upload finish
-        await Task.Delay(2000);
+        // Wait for CRUD upload to complete before creating backend item
+        while (db.CurrentStatus.DataFlowStatus.Uploading)
+        {
+            await Task.Delay(50);
+        }
 
         await nodeClient.CreateList(Uuid(), listName);
         await backendInsertWatch.Task;

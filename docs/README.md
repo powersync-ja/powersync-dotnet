@@ -27,4 +27,4 @@ dotnet docfx docfx.json --serve
 
 ## Notes
 
-Projects are built with only the `net8.0` target present (see the `properties` field in `docfx.json`) so that the MAUI workloads and the native `powersync-sqlite-core` binaries are not required to build the docs.
+Projects are built with only the `net10.0` target present (see the `properties` field in `docfx.json`) so that the MAUI workloads and the native `powersync-sqlite-core` binaries are not required to build the docs.

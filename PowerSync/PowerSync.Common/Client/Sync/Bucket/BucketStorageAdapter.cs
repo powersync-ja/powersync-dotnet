@@ -6,9 +6,9 @@ using System.Threading.Tasks;
 
 using Newtonsoft.Json;
 
-using PowerSync.Common.DB;
 using PowerSync.Common.DB.Crud;
 using PowerSync.Common.Utils;
+using PowerSync.Common.Utils.Converters;
 
 public static class PowerSyncControlCommand
 {
@@ -35,13 +35,15 @@ public static class PowerSyncControlConnectionState
 public class Checkpoint
 {
     [JsonProperty("last_op_id")]
-    public string LastOpId { get; set; } = null!;
+    [JsonConverter(typeof(StringLongConverter))]
+    public long LastOpId { get; set; }
 
     [JsonProperty("buckets")]
     public BucketChecksum[] Buckets { get; set; } = [];
 
     [JsonProperty("write_checkpoint")]
-    public string? WriteCheckpoint { get; set; } = null;
+    [JsonConverter(typeof(StringLongConverter))]
+    public long? WriteCheckpoint { get; set; } = null;
 
     [JsonProperty("streams")]
     public object[]? Streams { get; set; } = [];
@@ -134,45 +136,23 @@ public interface IBucketStorageAdapter : ICloseable
     Task<bool> HasCrud();
     Task<CrudBatch?> GetCrudBatch(int limit = 100);
 
-    Task<bool> UpdateLocalTarget(Func<Task<string>> callback);
-    Task HandleCrudCheckpoint(long lastClientId, string? writeCheckpoint = null);
+    Task<bool> UpdateLocalTarget(Func<Task<long>> callback);
+    Task HandleCrudCheckpoint(long lastClientId, long? writeCheckpoint = null);
 
-    // TODO Return int64 from this in future release
     /// <summary>
     /// Reads or updates the local checkpoint request ID counter.
     /// </summary>
-    Task<string?> ReadOrUpdateCheckpoint(string variant, string? update = null);
+    Task<long?> ReadOrUpdateCheckpoint(string variant, long? update = null);
 
-    /// <summary>
-    /// Get a unique client ID.
-    /// </summary>
-    Task<string> GetClientId();
-
-    /// <summary>
-    /// Invokes the `powersync_control` function for the sync client.
-    /// </summary>
-    Task<string> Control(string op, object? payload);
-}
-
-/// <summary>
-/// Provides type-safe wrappers for <see cref="IBucketStorageAdapter.ReadOrUpdateCheckpoint" />.
-/// <para />
-/// Default Interface Implementations would be preferred here, but <c>netstandard2.0</c> doesn't
-/// support them.
-/// </summary>
-public static class BucketStorageAdapterExtensions
-{
     /// <summary>
     /// Increments and returns the local checkpoint counter.
     /// </summary>
-    public static Task<string> NextCheckpointRequestId(this IBucketStorageAdapter adapter)
-        => adapter.ReadOrUpdateCheckpoint("next")!;
+    public async Task<long> NextCheckpointRequestId() => (long)await ReadOrUpdateCheckpoint("next");
 
     /// <summary>
     /// Returns the highest checkpoint request ID that has been requested on this device.
     /// </summary>
-    public static Task<string?> CurrentCheckpointRequestId(this IBucketStorageAdapter adapter)
-        => adapter.ReadOrUpdateCheckpoint("current");
+    public Task<long?> CurrentCheckpointRequestId() => ReadOrUpdateCheckpoint("current");
 
     /// <summary>
     /// Seeds the local checkpoint request ID counter using a response from the server.
@@ -194,6 +174,15 @@ public static class BucketStorageAdapterExtensions
     ///     </item>
     /// </list>
     /// </summary>
-    public static Task<string> SeedCheckpointRequestId(this IBucketStorageAdapter adapter, string serviceResponse)
-        => adapter.ReadOrUpdateCheckpoint("seed", serviceResponse)!;
+    public async Task<long> SeedCheckpointRequestId(long serviceResponse) => (long)await ReadOrUpdateCheckpoint("seed", serviceResponse);
+
+    /// <summary>
+    /// Get a unique client ID.
+    /// </summary>
+    Task<string> GetClientId();
+
+    /// <summary>
+    /// Invokes the `powersync_control` function for the sync client.
+    /// </summary>
+    Task<string> Control(string op, object? payload);
 }
