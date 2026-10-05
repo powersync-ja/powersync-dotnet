@@ -329,7 +329,7 @@ public class RawTableTests : IAsyncLifetime
     {
         await _db.Execute(
             "SELECT powersync_create_raw_table_crud_trigger(?, ?, ?)",
-            [JsonConvert.SerializeObject(table), name, write]
+            [table.JsonDescription(), name, write]
         );
     }
 

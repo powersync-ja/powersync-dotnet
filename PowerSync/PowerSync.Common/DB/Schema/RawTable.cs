@@ -43,6 +43,18 @@ public class RawTable : BaseTable
             }
         }
     }
+
+    /// <summary>
+    /// Serializes the table to the JSON format expected by the core extension.
+    /// Identical to `JsonConvert.SerializeObject(this)`.
+    /// <para />
+    /// We provide this method so that callers don't need to include <see cref="Newtonsoft.Json" /> in
+    /// their project if they use another serialization library (e.g. <see cref="System.Text.Json" />).
+    /// </summary>
+    public string JsonDescription()
+    {
+        return JsonConvert.SerializeObject(this);
+    }
 }
 
 /// <summary>
