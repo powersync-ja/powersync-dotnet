@@ -322,6 +322,30 @@ public class SchemaTests
     }
 
     [Fact]
+    public void Schema_Validate_RejectsDuplicateTableNames()
+    {
+        var schema = new Schema(
+            new Table("lists", new Dictionary<string, ColumnType> { ["name"] = ColumnType.Text }),
+            new Table("lists", new Dictionary<string, ColumnType> { ["title"] = ColumnType.Text })
+        );
+
+        var ex = Assert.Throws<InvalidOperationException>(schema.Validate);
+        Assert.Contains("Duplicate table name: lists", ex.Message);
+    }
+
+    [Fact]
+    public void Schema_Validate_RejectsDuplicateRawTableNames()
+    {
+        var schema = new Schema(
+            new Table("lists", new Dictionary<string, ColumnType> { ["name"] = ColumnType.Text }),
+            new RawTable("lists", new RawTableSchema())
+        );
+
+        var ex = Assert.Throws<InvalidOperationException>(schema.Validate);
+        Assert.Contains("Duplicate table name: lists", ex.Message);
+    }
+
+    [Fact]
     public void Schema_SerializesToJSON()
     {
         object expectedJson = new
@@ -331,9 +355,6 @@ public class SchemaTests
                 new
                 {
                     name = "todos",
-                    view_name = "todos",
-                    local_only = false,
-                    insert_only = false,
                     columns = new List<object> {
                         new { name = "list_id", type = "Text" },
                         new { name = "created_at", type = "Text" },
@@ -343,6 +364,7 @@ public class SchemaTests
                         new { name = "completed_by", type = "Text" },
                         new { name = "completed", type = "Integer" },
                     },
+                    view_name = "todos",
                     indexes = new List<object> {
                         new {
                             name = "list",
@@ -357,29 +379,28 @@ public class SchemaTests
                             }
                         }
                     },
-                    include_metadata = false,
+                    local_only = false,
+                    insert_only = false,
                     ignore_empty_update = false,
-                    include_old = false,
-                    include_old_only_when_changed = false
+                    include_metadata = false,
                 },
                 new
                 {
                     name = "lists",
-                    view_name = "lists",
-                    local_only = false,
-                    insert_only = false,
                     columns = new List<object> {
                         new { name = "created_at", type = "Text" },
                         new { name = "name", type = "Text" },
                         new { name = "owner_id", type = "Text" }
                     },
+                    view_name = "lists",
                     indexes = new List<object>(),
-                    include_metadata = false,
+                    local_only = false,
+                    insert_only = false,
                     ignore_empty_update = false,
-                    include_old = false,
-                    include_old_only_when_changed = false
+                    include_metadata = false,
                 },
-            }
+            },
+            raw_tables = new List<object>()
         };
         Assert.Equal(JsonConvert.SerializeObject(expectedJson), JsonConvert.SerializeObject(TestSchemaTodoList.AppSchema));
     }
@@ -394,12 +415,10 @@ public class SchemaTests
                 new
                 {
                     name = "events",
-                    view_name = "events",
-                    local_only = false,
-                    insert_only = false,
                     columns = new List<object> {
                         new { name = "created-at", type = "Text" },
                     },
+                    view_name = "events",
                     indexes = new List<object> {
                         new {
                             name = "created",
@@ -414,12 +433,13 @@ public class SchemaTests
                             }
                         }
                     },
-                    include_metadata = false,
+                    local_only = false,
+                    insert_only = false,
                     ignore_empty_update = false,
-                    include_old = false,
-                    include_old_only_when_changed = false
+                    include_metadata = false,
                 },
-            }
+            },
+            raw_tables = new List<object>()
         };
 
         var schema = new Schema(new Table

@@ -12,6 +12,7 @@ using Newtonsoft.Json;
 
 using PowerSync.Common.Client.Sync.Bucket;
 using PowerSync.Common.DB.Crud;
+using PowerSync.Common.DB.Schema;
 using PowerSync.Common.Utils;
 using PowerSync.Common.Utils.Converters;
 
@@ -61,6 +62,8 @@ public class StreamingSyncImplementationOptions : AdditionalConnectionOptions
     public Remote Remote { get; init; } = null!;
 
     public ILogger? Logger { get; init; }
+
+    public Schema Schema { get; init; } = null!;
 
     /// <summary>
     /// Called synchronously whenever the sync status changes, before the change is published on
@@ -927,6 +930,7 @@ public class StreamingSyncImplementation : ICloseable
             var options = new
             {
                 parameters = resolvedOptions.Params,
+                schema = Options.Schema,
                 active_streams = activeStreams,
                 include_defaults = resolvedOptions.IncludeDefaultStreams,
                 app_metadata = resolvedOptions.AppMetadata,

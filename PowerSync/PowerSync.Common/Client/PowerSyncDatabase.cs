@@ -250,6 +250,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
                     : null,
                     RetryDelayMs = options.RetryDelayMs,
                     Subscriptions = options.Subscriptions,
+                    Schema = schema,
                     CrudUploadThrottleMs = options.CrudUploadThrottleMs,
                     TimeProvider = timeProvider,
                     Logger = Logger,
