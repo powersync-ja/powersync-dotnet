@@ -32,9 +32,12 @@ internal class WatchManager
         this.db = db;
         this.masterToken = masterToken;
 
+        var tableUpdates = db.Database.Events.OnTablesUpdated.ListenAsync(masterToken);
+        var schemaChanges = db.Events.OnSchemaChanged.ListenAsync(masterToken);
+
         // Dispatch two tasks, one for TableUpdated events and one for SchemaChanged events
-        _ = Task.Run(RunTableUpdateLoop);
-        _ = Task.Run(RunSchemaChangeLoop);
+        _ = Task.Run(() => RunTableUpdateLoop(tableUpdates));
+        _ = Task.Run(() => RunSchemaChangeLoop(schemaChanges));
     }
 
     public IAsyncEnumerable<T[]> Watch<T>(string sql, object?[]? parameters, SQLWatchOptions? options)
@@ -73,11 +76,9 @@ internal class WatchManager
             refreshOnSchemaChange: false
         );
 
-        // TODO: powersync-js onChange returns table names in `ps_data__{table}` format.
-        //       We should make a decision on whether or not to mirror that before v1.
         return Stream(subscription, changed => Task.FromResult(new WatchOnChangeEvent
         {
-            ChangedTables = [.. changed.Select(InternalToFriendlyTableName)]
+            ChangedTables = [.. changed]
         }));
     }
 
@@ -140,11 +141,11 @@ internal class WatchManager
         }
     }
 
-    private async Task RunTableUpdateLoop()
+    private async Task RunTableUpdateLoop(IAsyncEnumerable<DBAdapterEvents.TablesUpdatedEvent> updates)
     {
         try
         {
-            await foreach (var update in db.Database.Events.OnTablesUpdated.ListenAsync(masterToken))
+            await foreach (var update in updates)
             {
                 // Prevent a single bad notification from taking down the entire TablesUpdated loop
                 try
@@ -178,11 +179,11 @@ internal class WatchManager
         }
     }
 
-    private async Task RunSchemaChangeLoop()
+    private async Task RunSchemaChangeLoop(IAsyncEnumerable<PowerSyncDBEvents.SchemaChangedEvent> schemaChanges)
     {
         try
         {
-            await foreach (var _ in db.Events.OnSchemaChanged.ListenAsync(masterToken))
+            await foreach (var _ in schemaChanges)
             {
                 foreach (var entry in watches)
                 {
@@ -198,18 +199,7 @@ internal class WatchManager
     }
 
     private static HashSet<string> ExpandTableNames(IEnumerable<string> tables) =>
-        [.. tables.SelectMany(table => new[] { $"{PS_DATA_PREFIX}{table}", $"{PS_DATA_LOCAL_PREFIX}{table}" })];
-
-    private static string InternalToFriendlyTableName(string internalName)
-    {
-        if (internalName.StartsWith(PS_DATA_PREFIX))
-            return internalName.Substring(PS_DATA_PREFIX.Length);
-
-        if (internalName.StartsWith(PS_DATA_LOCAL_PREFIX))
-            return internalName.Substring(PS_DATA_LOCAL_PREFIX.Length);
-
-        return internalName;
-    }
+        [.. tables.SelectMany(table => new[] { $"{PS_DATA_PREFIX}{table}", $"{PS_DATA_LOCAL_PREFIX}{table}", $"{table}" })];
 }
 
 /// <summary>

@@ -11,6 +11,7 @@ using PowerSync.Common.Client.Connection;
 using PowerSync.Common.Client.Sync.Bucket;
 using PowerSync.Common.Client.Sync.Stream;
 using PowerSync.Common.DB.Crud;
+using PowerSync.Common.DB.Schema;
 using PowerSync.Common.Utils;
 
 
@@ -26,7 +27,7 @@ public class MockSyncService : EventStream<string>
     public IReadOnlyList<LogRecord> Logs => _listLoggerProvider.Logs;
 
     private readonly object checkpointGate = new();
-    private readonly List<string> checkpointRequests = [];
+    private readonly List<long> checkpointRequests = [];
     private long lastWriteCheckpoint;
 
     /// <summary>
@@ -40,7 +41,7 @@ public class MockSyncService : EventStream<string>
     }
 
     /// <summary>Every checkpoint request id received on `/sync/checkpoint-request`, in order.</summary>
-    public IReadOnlyList<string> CheckpointRequests
+    public IReadOnlyList<long> CheckpointRequests
     {
         get { lock (checkpointGate) { return [.. checkpointRequests]; } }
     }
@@ -67,7 +68,7 @@ public class MockSyncService : EventStream<string>
         lock (checkpointGate)
         {
             checkpointRequests.Add(request.CheckpointRequestId);
-            resolved = Math.Max(lastWriteCheckpoint, long.Parse(request.CheckpointRequestId));
+            resolved = Math.Max(lastWriteCheckpoint, request.CheckpointRequestId);
             lastWriteCheckpoint = resolved;
         }
 
@@ -75,7 +76,7 @@ public class MockSyncService : EventStream<string>
 
         return new CheckpointRequestResponse
         {
-            Data = new CheckpointRequestResponseData { CheckpointRequestId = resolved.ToString() }
+            Data = new CheckpointRequestResponseData { CheckpointRequestId = resolved }
         };
     }
 
@@ -89,7 +90,7 @@ public class MockSyncService : EventStream<string>
         Emit(line);
     }
 
-    public PowerSyncDatabase CreateDatabase(string? dbFilename = null, TimeProvider? timeProvider = null)
+    public PowerSyncDatabase CreateDatabase(string? dbFilename = null, TimeProvider? timeProvider = null, Schema? schema = null)
     {
         dbFilename ??= $"sync-stream-{Guid.NewGuid():N}.db";
         var connector = new TestConnector();
@@ -98,7 +99,7 @@ public class MockSyncService : EventStream<string>
         return new PowerSyncDatabase(new PowerSyncDatabaseOptions
         {
             Database = new SQLOpenOptions { DbFilename = dbFilename },
-            Schema = TestSchemaTodoList.AppSchema,
+            Schema = schema ?? TestSchemaTodoList.AppSchema,
             RemoteFactory = _ => mockRemote,
             TimeProvider = timeProvider,
             Logger = CreateLogger()
@@ -120,10 +121,11 @@ public class MockSyncService : EventStream<string>
     {
         var tcs = new TaskCompletionSource<SyncStatus>();
         var cts = new CancellationTokenSource();
+        var listener = db.Events.OnStatusChanged.ListenAsync(cts.Token);
 
         _ = Task.Run(async () =>
         {
-            await foreach (var update in db.Events.OnStatusChanged.ListenAsync(cts.Token))
+            await foreach (var update in listener)
             {
                 tcs.TrySetResult(update.Status);
                 cts?.Cancel();
@@ -142,7 +144,7 @@ public class MockDataFactory
         {
             Checkpoint = new Checkpoint
             {
-                LastOpId = $"{lastOpId}",
+                LastOpId = lastOpId,
                 Buckets = buckets?.ToArray() ?? [],
                 WriteCheckpoint = null,
                 Streams = streams?.ToArray() ?? []
@@ -258,7 +260,7 @@ public class MockRemote : Remote
         if (path.Contains("write-checkpoint2.json"))
         {
             return (T)(object)new StreamingSyncImplementation.LegacyWriteCheckpointApiResponse(
-                new StreamingSyncImplementation.LegacyWriteCheckpointResponseData("1")
+                new StreamingSyncImplementation.LegacyWriteCheckpointResponseData(1)
             );
         }
 
@@ -286,11 +288,11 @@ public class TestConnector : IPowerSyncBackendConnector
     }
 }
 
-public class TestCustomCheckpointsConnector(Func<string, string, CancellationToken, Task<string>> postCheckpointRequest) : TestConnector, ICustomCheckpointRequestConnector
+public class TestCustomCheckpointsConnector(Func<string, long, CancellationToken, Task<long>> postCheckpointRequest) : TestConnector, ICustomCheckpointRequestConnector
 {
-    private readonly Func<string, string, CancellationToken, Task<string>> _postCheckpointRequest = postCheckpointRequest;
+    private readonly Func<string, long, CancellationToken, Task<long>> _postCheckpointRequest = postCheckpointRequest;
 
-    public Task<string> PostCheckpointRequest(string clientId, string requestId, CancellationToken ct)
+    public Task<long> PostCheckpointRequest(string clientId, long requestId, CancellationToken ct)
         => _postCheckpointRequest(clientId, requestId, ct);
 }
 
@@ -306,7 +308,7 @@ public class ListLogger(string categoryName, ConcurrentQueue<LogRecord> drain) :
         _drain.Enqueue(new(logLevel, _categoryName, formatter(state, exception), exception));
     }
 
-    public IDisposable BeginScope<TState>(TState state) => null!;
+    public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
     public bool IsEnabled(LogLevel logLevel) => true;
 }
 

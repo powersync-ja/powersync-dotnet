@@ -7,7 +7,7 @@ using PowerSync.Common.Tests.Utils;
 using PowerSync.Common.Tests.Utils.Sync;
 
 /// <summary>
-/// dotnet test -v n --framework net8.0 --filter "SyncStreamsTests"
+/// dotnet test -v n --framework net10.0 --filter "SyncStreamsTests"
 /// </summary>
 public class SyncStreamsTests : IAsyncLifetime
 {

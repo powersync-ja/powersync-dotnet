@@ -311,14 +311,14 @@ public class SyncIterationControlFlowTests
         public Task<bool> HasCrud() => Task.FromResult(false);
         public Task<CrudBatch?> GetCrudBatch(int limit = 100) => Task.FromResult<CrudBatch?>(null);
 
-        public Task<bool> UpdateLocalTarget(Func<Task<string>> callback)
+        public Task<bool> UpdateLocalTarget(Func<Task<long>> callback)
         {
             onUpdateLocalTarget?.Invoke();
             return Task.FromResult(false);
         }
 
-        public Task HandleCrudCheckpoint(long lastClientId, string? writeCheckpoint = null) => Task.CompletedTask;
-        public Task<string?> ReadOrUpdateCheckpoint(string variant, string? update = null) => Task.FromResult<string?>("1");
+        public Task HandleCrudCheckpoint(long lastClientId, long? writeCheckpoint = null) => Task.CompletedTask;
+        public Task<long?> ReadOrUpdateCheckpoint(string variant, long? update = null) => Task.FromResult<long?>(1);
         public Task<string> GetClientId() => Task.FromResult("test-client");
         public void Close() { }
     }

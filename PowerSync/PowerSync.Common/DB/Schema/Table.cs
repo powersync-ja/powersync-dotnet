@@ -1,10 +1,11 @@
-namespace PowerSync.Common.DB.Schema;
-
 using System.Text.RegularExpressions;
 
 using Newtonsoft.Json;
 
 using PowerSync.Common.DB.Schema.Attributes;
+using PowerSync.Common.Utils.Converters;
+
+namespace PowerSync.Common.DB.Schema;
 
 public class TableOptions(
     Dictionary<string, List<string>>? indexes = null,
@@ -40,6 +41,56 @@ public class TableOptions(
     /// CRUD entries.
     /// </summary>
     public bool IgnoreEmptyUpdates { get; set; } = ignoreEmptyUpdates ?? false;
+
+    public void Validate()
+    {
+        if (TrackMetadata && LocalOnly)
+        {
+            throw new Exception("Can't include metadata for local-only tables.");
+        }
+
+        if (TrackPreviousValues != null && LocalOnly)
+        {
+            throw new Exception("Can't include old values for local-only tables.");
+        }
+    }
+
+    /// <summary>
+    /// Serializes properties to a JsonWriter without wrapping in an object.
+    ///
+    /// Does not write the view name or indexes, since this method is used
+    /// with both regular tables and raw tables.
+    /// </summary>
+    internal void WriteJsonSharedProperties(JsonWriter writer, JsonSerializer serializer)
+    {
+        writer.WritePropertyName("local_only");
+        writer.WriteValue(LocalOnly);
+
+        writer.WritePropertyName("insert_only");
+        writer.WriteValue(InsertOnly);
+
+        writer.WritePropertyName("ignore_empty_update");
+        writer.WriteValue(IgnoreEmptyUpdates);
+
+        writer.WritePropertyName("include_metadata");
+        writer.WriteValue(TrackMetadata);
+
+        if (TrackPreviousValues is { } trackPrevious)
+        {
+            writer.WritePropertyName("include_old");
+            if (trackPrevious.Columns is null)
+            {
+                writer.WriteValue(true);
+            }
+            else
+            {
+                serializer.Serialize(writer, trackPrevious.Columns);
+            }
+
+            writer.WritePropertyName("include_old_only_when_changed");
+            writer.WriteValue(trackPrevious.OnlyWhenChanged ?? false);
+        }
+    }
 }
 
 /// <summary>
@@ -63,13 +114,13 @@ public class TrackPreviousOptions
 }
 
 [JsonConverter(typeof(TableJsonConverter))]
-public class Table
+public class Table : BaseTable
 {
     public static readonly Regex InvalidSQLCharacters = new Regex(@"[""'%,.#\s\[\]]", RegexOptions.Compiled);
 
     public const int MAX_AMOUNT_OF_COLUMNS = 1999;
 
-    public string Name { get; set; }
+    public override string Name { get; set; }
 
     public Dictionary<string, ColumnType> Columns { get; set; }
     public TableOptions Options { get; set; }
@@ -152,7 +203,7 @@ public class Table
         Options = options ?? new TableOptions();
     }
 
-    public void Validate()
+    public override void Validate()
     {
         if (string.IsNullOrWhiteSpace(Name))
         {
@@ -175,15 +226,7 @@ public class Table
                 $"Table has too many columns. The maximum number of columns is {MAX_AMOUNT_OF_COLUMNS}.");
         }
 
-        if (Options.TrackMetadata && Options.LocalOnly)
-        {
-            throw new Exception("Can't include metadata for local-only tables.");
-        }
-
-        if (Options.TrackPreviousValues != null && Options.LocalOnly)
-        {
-            throw new Exception("Can't include old values for local-only tables.");
-        }
+        Options.Validate();
 
         var columnNames = new HashSet<string> { "id" };
 
@@ -238,55 +281,107 @@ public class Table
 /// Serializes a <see cref="Table" /> into the JSON format expected by the
 /// `powersync_replace_schema` SQLite function.
 /// </summary>
-public class TableJsonConverter : JsonConverter<Table>
+internal class TableJsonConverter : JsonConverter<Table>
 {
     public override bool CanRead => false;
 
     public override Table ReadJson(JsonReader reader, Type objectType, Table? existingValue, bool hasExistingValue, JsonSerializer serializer)
-        => throw new NotSupportedException("Deserializing a Table from JSON is not supported.");
+        => throw new NotSupportedException("Deserializing Table is not supported.");
 
     public override void WriteJson(JsonWriter writer, Table? value, JsonSerializer serializer)
     {
-        if (value == null) throw new ArgumentNullException(nameof(value));
-
-        var trackPrevious = value.TrackPreviousValues;
-
-        serializer.Serialize(writer, new
+        if (value is null)
         {
-            name = value.Name,
-            view_name = value.ViewName ?? value.Name,
-            local_only = value.LocalOnly,
-            insert_only = value.InsertOnly,
-            columns = value.Columns.Select(column => column.Value == ColumnType.Inferred
-                ? throw new InvalidOperationException($"Attempted to serialise Inferred column {column.Key}. ColumnType.Inferred is only valid as an argument to ColumnAttribute.")
-                : new { name = column.Key, type = column.Value.ToString() }),
-            indexes = value.Indexes.Select(index => new
+            writer.WriteNull();
+            return;
+        }
+
+        writer.WriteStartObject();
+
+        writer.WritePropertyName("name");
+        writer.WriteValue(value.Name);
+
+        writer.WritePropertyName("columns");
+        WriteColumns(writer, value!);
+
+        writer.WritePropertyName("view_name");
+        writer.WriteValue(value.Options.ViewName ?? value.Name);
+
+        writer.WritePropertyName("indexes");
+        WriteIndexes(writer, value!);
+
+        value.Options.WriteJsonSharedProperties(writer, serializer);
+
+        writer.WriteEndObject();
+    }
+
+    private static void WriteColumns(JsonWriter writer, Table value)
+    {
+        writer.WriteStartArray();
+        foreach (var (name, type) in value.Columns)
+        {
+            writer.WriteStartObject();
+
+            writer.WritePropertyName("name");
+            writer.WriteValue(name);
+
+            writer.WritePropertyName("type");
+            writer.WriteValue(type.ToString());
+
+            writer.WriteEndObject();
+        }
+        writer.WriteEndArray();
+    }
+
+    internal void WriteIndexes(JsonWriter writer, Table value)
+    {
+        writer.WriteStartArray();
+        foreach (var (name, columns) in value.Options.Indexes)
+        {
+            writer.WriteStartObject();
+
+            writer.WritePropertyName("name");
+            writer.WriteValue(name);
+
+            writer.WritePropertyName("columns");
+            writer.WriteStartArray();
+            foreach (var column in columns)
             {
-                name = index.Key,
-                columns = index.Value.Select(column =>
+                string columnName;
+                bool asc;
+                string columnType;
+
+                try
                 {
-                    // A leading "-" denotes a descending index on the column.
-                    var descending = column.StartsWith("-");
-                    var columnName = descending ? column.Substring(1) : column;
-                    return new
-                    {
-                        name = columnName,
-                        ascending = !descending,
-                        type = (value.Columns.TryGetValue(columnName, out var columnType) ? columnType : default).ToString()
-                    };
-                })
-            }),
-            include_metadata = value.TrackMetadata,
-            ignore_empty_update = value.IgnoreEmptyUpdates,
-            // false when disabled, true when tracking all columns, or a list of tracked column names.
-            include_old = (object)(trackPrevious switch
-            {
-                null => false,
-                { Columns: null } => true,
-                { Columns: var columns } => columns
-            }),
-            include_old_only_when_changed = trackPrevious?.OnlyWhenChanged ?? false
-        });
+                    // Strip leading '-' from descending columns
+                    asc = column[0] != '-';
+                    columnName = asc
+                        ? column
+                        : column[1..];
+                    columnType = value.Columns[columnName].ToString();
+                }
+                catch (Exception e)
+                {
+                    throw new Exception($"Failed to parse indexes for table \"{value.Name}\" during serialization. Check that all your tables' indexes are correct.", e);
+                }
+
+                writer.WriteStartObject();
+
+                writer.WritePropertyName("name");
+                writer.WriteValue(columnName);
+
+                writer.WritePropertyName("ascending");
+                writer.WriteValue(asc);
+
+                writer.WritePropertyName("type");
+                writer.WriteValue(columnType);
+
+                writer.WriteEndObject();
+            }
+            writer.WriteEndArray();
+
+            writer.WriteEndObject();
+        }
+        writer.WriteEndArray();
     }
 }
-

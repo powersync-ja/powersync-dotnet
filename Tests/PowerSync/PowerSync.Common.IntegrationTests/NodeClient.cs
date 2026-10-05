@@ -1,4 +1,4 @@
-﻿namespace PowerSync.Common.IntegrationTests;
+namespace PowerSync.Common.IntegrationTests;
 
 using System;
 using System.Collections.Generic;

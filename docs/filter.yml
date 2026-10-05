@@ -1,5 +1,0 @@
-apiRules:
-  # Ignore the `build/ApiDefinition.cs` file in PowerSync.Maui (required to build for Apple targets)
-  - exclude:
-      uidRegex: ^PowerSync\.Maui\.build$
-      type: Namespace

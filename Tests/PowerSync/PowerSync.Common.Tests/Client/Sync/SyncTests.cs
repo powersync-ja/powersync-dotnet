@@ -6,7 +6,7 @@ using PowerSync.Common.Tests.Utils.Sync;
 
 
 /// <summary>
-/// dotnet test -v n --framework net8.0 --filter "SyncTests"
+/// dotnet test -v n --framework net10.0 --filter "SyncTests"
 /// </summary>
 public class SyncTests : IAsyncLifetime
 {
@@ -40,6 +40,21 @@ public class SyncTests : IAsyncLifetime
             """{"data":{"bucket":"global[]","after":"1","has_more":false,"data":[{"op_id":"2","op":"REMOVE","object_type":"lists","object_id":"03eeea1d-e395-4380-b047-113266239d46","checksum":4186081537,"subkey":"6979f7218c196e459f53b5be/af847f09-fe3b-50d3-b8e7-8c9ae65abebb","data":null}],"next_after":"2"}}""",
             """{ "checkpoint_complete":{ "last_op_id":"2"} }"""
         ];
+
+    /// <summary>
+    /// The status published on the database must be current by the time Connect returns, so that a
+    /// caller reading CurrentStatus - or subscribing to OnStatusChanged - right after connecting
+    /// doesn't observe a status from before the connection settled.
+    /// </summary>
+    [Fact(Timeout = 15000)]
+    public async Task ConnectPublishesStatusBeforeReturning()
+    {
+        await db.Init();
+        await db.Connect(new TestConnector());
+
+        Assert.True(db.CurrentStatus.Connected);
+        Assert.False(db.CurrentStatus.Connecting);
+    }
 
     [Fact]
     public async Task SyncCreateOperationTest()

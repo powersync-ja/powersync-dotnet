@@ -1,6 +1,18 @@
 # PowerSync.Common Changelog
 
-## unreleased
+## 1.0.1
+
+- Full release.
+- `PowerSyncDatabase.OnChange` now returns the underlying raw table name instead of the view name to mirror PowerSync JS.
+- Use `long` for op IDs instead of `string`. This affects the types returned by some methods used in `PowerSyncBackendConnector.UploadData`, namely `PowerSyncDatabase.GetNextCrudTransaction()` and `PowerSyncDatabase.GetCrudBatch()`, as well as `ICustomCheckpointRequestConnector.PostCheckpointRequest`.
+- Bundle and load native libraries on Android, iOS, and MacCatalyst. This allows `PowerSync.Common` to fully replace `PowerSync.Maui`.
+- Support tables created outside of PowerSync via `RawTable`. For more information, see [Raw Tables](https://docs.powersync.com/usage/use-case-examples/raw-tables).
+
+## 1.0.0 (unlisted)
+
+- Accidental release (mirror of 0.1.2). Use 1.0.1 instead.
+
+## 0.1.6 (unreleased)
 
 - Add a `soft` parameter to `PowerSyncDatabase.DisconnectAndClear()` to clear data from public tables while keeping an internal sync checkpoint for a faster next sync.
 

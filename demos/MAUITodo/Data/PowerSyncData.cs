@@ -10,7 +10,6 @@ using PowerSync.Common.Client;
 using PowerSync.Common.Client.Sync;
 using PowerSync.Common.Client.Sync.Stream;
 using PowerSync.Common.MDSQLite;
-using PowerSync.Maui.SQLite;
 
 namespace MAUITodo.Data;
 
@@ -31,7 +30,7 @@ public class PowerSyncData
         var logger = loggerFactory.CreateLogger("PowerSyncLogger");
 
         var dbPath = Path.Combine(FileSystem.AppDataDirectory, "example.db");
-        var factory = new MAUISQLiteDBOpenFactory(new MDSQLiteOpenFactoryOptions()
+        var factory = new MDSQLiteDBOpenFactory(new MDSQLiteOpenFactoryOptions()
         {
             DbFilename = dbPath
         });
