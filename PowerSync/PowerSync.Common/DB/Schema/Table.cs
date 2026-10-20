@@ -3,6 +3,7 @@ namespace PowerSync.Common.DB.Schema;
 using System.Text.RegularExpressions;
 
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 using PowerSync.Common.DB.Schema.Attributes;
 
@@ -13,7 +14,8 @@ public class TableOptions(
     string? viewName = null,
     bool? trackMetadata = null,
     TrackPreviousOptions? trackPreviousValues = null,
-    bool? ignoreEmptyUpdates = null
+    bool? ignoreEmptyUpdates = null,
+    bool? direct = null
 )
 {
     public Dictionary<string, List<string>> Indexes { get; set; } = indexes ?? [];
@@ -40,6 +42,22 @@ public class TableOptions(
     /// CRUD entries.
     /// </summary>
     public bool IgnoreEmptyUpdates { get; set; } = ignoreEmptyUpdates ?? false;
+
+    /// <summary>
+    /// Marks this table as direct, meaning that it stores data directly as SQLite rows instead of
+    /// using an intermediate view around a JSON store.
+    ///
+    /// Direct tables are still managed by the PowerSync SDK, which is responsible for creating, altering
+    /// and dropping them. You can query direct tables like JSON-based tables, and mutations are
+    /// consistently tracked as pending uploads.
+    /// For more information on direct tables, see
+    /// https://docs.powersync.com/client-sdks/advanced/performance-optimization#direct-tables.
+    ///
+    /// Direct tables can't use a view name override.
+    ///
+    /// Direct tables are currently experimental.
+    /// </summary>
+    public bool Direct { get; set; } = direct ?? false;
 }
 
 /// <summary>
@@ -109,6 +127,11 @@ public class Table
     {
         get { return Options.IgnoreEmptyUpdates; }
         set { Options.IgnoreEmptyUpdates = value; }
+    }
+    public bool Direct
+    {
+        get { return Options.Direct; }
+        set { Options.Direct = value; }
     }
 
     public Table()
@@ -185,6 +208,11 @@ public class Table
             throw new Exception("Can't include old values for local-only tables.");
         }
 
+        if (Options.Direct && Options.ViewName != null)
+        {
+            throw new Exception("Direct tables don't use views and can't use view name overrides.");
+        }
+
         var columnNames = new HashSet<string> { "id" };
 
         foreach (var kvp in Columns)
@@ -251,7 +279,7 @@ public class TableJsonConverter : JsonConverter<Table>
 
         var trackPrevious = value.TrackPreviousValues;
 
-        serializer.Serialize(writer, new
+        var json = JObject.FromObject(new
         {
             name = value.Name,
             view_name = value.ViewName ?? value.Name,
@@ -286,7 +314,14 @@ public class TableJsonConverter : JsonConverter<Table>
                 { Columns: var columns } => columns
             }),
             include_old_only_when_changed = trackPrevious?.OnlyWhenChanged ?? false
-        });
+        }, serializer);
+
+        if (value.Direct)
+        {
+            json["direct"] = true;
+        }
+
+        json.WriteTo(writer);
     }
 }
 

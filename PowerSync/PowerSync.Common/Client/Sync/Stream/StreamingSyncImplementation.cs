@@ -876,6 +876,9 @@ public class StreamingSyncImplementation : ICloseable
                         new SyncStatusOptions { },
                         new UpdateSyncStatusOptions { ClearDownloadError = true });
                     break;
+                case CheckpointDelayedDueToLocalData:
+                    // Can be ignored outside of download-only mode.
+                    break;
             }
         }
 

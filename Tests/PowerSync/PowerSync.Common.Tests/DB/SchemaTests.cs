@@ -440,4 +440,28 @@ public class SchemaTests
 
         Assert.Equal(JsonConvert.SerializeObject(expectedJson), JsonConvert.SerializeObject(schema));
     }
+
+    [Table("users", Direct = true)]
+    class DirectUser
+    {
+        public string id { get; set; } = "";
+        public string name { get; set; } = "";
+    }
+
+    [Fact]
+    public void Table_Direct()
+    {
+        var table = new Table("users", new Dictionary<string, ColumnType> { ["name"] = ColumnType.Text }, new TableOptions(direct: true));
+        table.Validate();
+
+        var json = JsonConvert.SerializeObject(table);
+        Assert.Contains("\"direct\":true", json);
+        Assert.DoesNotContain("direct", JsonConvert.SerializeObject(new Table("users", table.Columns)));
+
+        Assert.True(new Table(typeof(DirectUser)).Direct);
+
+        var withOverride = new Table("users", table.Columns, new TableOptions(direct: true, viewName: "forbidden"));
+        var ex = Assert.Throws<Exception>(withOverride.Validate);
+        Assert.Contains("view name", ex.Message);
+    }
 }

@@ -18,6 +18,7 @@ public sealed class TableAttribute : Attribute
     public string? ViewName { get; set; }
     public bool TrackMetadata { get; set; }
     public bool IgnoreEmptyUpdates { get; set; }
+    public bool Direct { get; set; }
     public TrackPrevious TrackPreviousValues { get; set; }
 
     public TableAttribute(string name)

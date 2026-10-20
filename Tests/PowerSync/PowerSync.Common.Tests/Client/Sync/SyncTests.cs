@@ -1,6 +1,7 @@
 namespace PowerSync.Common.Tests.Client.Sync;
 
 using PowerSync.Common.Client;
+using PowerSync.Common.DB.Schema;
 using PowerSync.Common.Tests.Utils;
 using PowerSync.Common.Tests.Utils.Sync;
 
@@ -125,4 +126,51 @@ public class SyncTests : IAsyncLifetime
         Assert.Null(db.CurrentStatus.DataFlowStatus.DownloadError);
     }
 
+    [Fact]
+    public async Task DirectTablesTest()
+    {
+        // This is mostly a smoke test, the core extension manages direct tables and covers things like migrations.
+        var schema = new Schema(new Table("users", new Dictionary<string, ColumnType> { ["name"] = ColumnType.Text }, new TableOptions(direct: true)));
+        var directDb = syncService.CreateDatabase(schema: schema);
+
+        try
+        {
+            var type = await directDb.Get<string>("SELECT type FROM pragma_table_list('users')");
+            Assert.Equal("table", type);
+
+            await directDb.Connect(new TestConnector());
+
+            string[] lines = [
+                """{"checkpoint":{"last_op_id":"1","buckets":[{"bucket":"bucket","checksum":0,"count":1,"priority":1}]}}""",
+                """{"data":{"bucket":"bucket","has_more":false,"data":[{"op_id":"1","op":"PUT","object_type":"users","object_id":"user","checksum":0,"data":"{\"name\":\"synced user\"}"}]}}""",
+                """{"checkpoint_complete":{"last_op_id":"1"}}"""
+            ];
+            foreach (var line in lines)
+            {
+                syncService.PushLine(line);
+            }
+
+            await directDb.WaitForFirstSync();
+
+            var user = await directDb.Get<dynamic>("SELECT * FROM users");
+            Assert.Equal("user", (string)user.id);
+            Assert.Equal("synced user", (string)user.name);
+            await directDb.Disconnect();
+
+            await directDb.Execute("UPDATE users SET name = ?", ["local user"]);
+            user = await directDb.Get<dynamic>("SELECT * FROM users");
+            Assert.Equal("local user", (string)user.name);
+
+            var tx = await directDb.GetNextCrudTransaction();
+            Assert.NotNull(tx);
+            var entry = Assert.Single(tx.Crud);
+            Assert.Equal("users", entry.Table);
+            Assert.Equal("local user", entry.OpData!["name"]);
+        }
+        finally
+        {
+            await directDb.Close();
+            DatabaseUtils.CleanDb(directDb.Database.Name);
+        }
+    }
 }

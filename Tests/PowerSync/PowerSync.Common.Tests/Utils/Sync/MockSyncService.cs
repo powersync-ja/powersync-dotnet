@@ -89,7 +89,7 @@ public class MockSyncService : EventStream<string>
         Emit(line);
     }
 
-    public PowerSyncDatabase CreateDatabase(string? dbFilename = null, TimeProvider? timeProvider = null)
+    public PowerSyncDatabase CreateDatabase(string? dbFilename = null, TimeProvider? timeProvider = null, Schema? schema = null)
     {
         dbFilename ??= $"sync-stream-{Guid.NewGuid():N}.db";
         var connector = new TestConnector();
@@ -98,7 +98,7 @@ public class MockSyncService : EventStream<string>
         return new PowerSyncDatabase(new PowerSyncDatabaseOptions
         {
             Database = new SQLOpenOptions { DbFilename = dbFilename },
-            Schema = TestSchemaTodoList.AppSchema,
+            Schema = schema ?? TestSchemaTodoList.AppSchema,
             RemoteFactory = _ => mockRemote,
             TimeProvider = timeProvider,
             Logger = CreateLogger()

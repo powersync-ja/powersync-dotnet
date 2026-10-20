@@ -154,7 +154,8 @@ class AttributeParser
             viewName: _tableAttr.ViewName,
             trackMetadata: _tableAttr.TrackMetadata,
             trackPreviousValues: ParseTrackPreviousOptions(),
-            ignoreEmptyUpdates: _tableAttr.IgnoreEmptyUpdates
+            ignoreEmptyUpdates: _tableAttr.IgnoreEmptyUpdates,
+            direct: _tableAttr.Direct
         );
     }
 
