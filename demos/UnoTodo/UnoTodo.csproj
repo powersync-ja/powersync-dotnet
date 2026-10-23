@@ -1,0 +1,56 @@
+<Project Sdk="Uno.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net9.0-desktop;net9.0-android</TargetFrameworks>
+
+    <OutputType>Exe</OutputType>
+    <UnoSingleProject>true</UnoSingleProject>
+
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+
+    <!--
+      NETSDK1201: Warning that specifying RID won't create self containing app
+      PRI257: Ignore default language (en) not being one of the included resources (eg en-us, en-uk)
+    -->
+    <NoWarn>$(NoWarn);NETSDK1201</NoWarn>
+
+    <!-- Display name -->
+    <ApplicationTitle>UnoTodo</ApplicationTitle>
+    <!-- App Identifier -->
+    <ApplicationId>com.powersync.unotodo</ApplicationId>
+    <!-- Versions -->
+    <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+    <ApplicationVersion>1</ApplicationVersion>
+    <!-- Package Publisher -->
+    <ApplicationPublisher>PowerSync</ApplicationPublisher>
+    <!-- Package Description -->
+    <Description>Todo list application with realtime sync powered by Uno Platform and PowerSync.</Description>
+
+    <!--
+      UnoFeatures are used to quickly add and manage features enabled for your app.
+      https://aka.platform.uno/singleproject-features
+    -->
+    <UnoFeatures>
+      Material;
+      Dsp;
+      Hosting;
+      Toolkit;
+      Logging;
+      MVUX;
+      Configuration;
+      Navigation;
+      ThemeService;
+    </UnoFeatures>
+
+  </PropertyGroup>
+
+  <ItemGroup>
+    <UnoSupportedLanugage Include="en-US" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\PowerSync\PowerSync.Common\PowerSync.Common.csproj" />
+    <ProjectReference Include="..\..\PowerSync\PowerSync.Maui\PowerSync.Maui.csproj" />
+  </ItemGroup>
+
+</Project>

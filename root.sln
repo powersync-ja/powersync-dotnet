@@ -27,6 +27,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PowerSync.Common.Integratio
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PowerSync.Common.PerformanceTests", "Tests\PowerSync\PowerSync.Common.PerformanceTests\PowerSync.Common.PerformanceTests.csproj", "{B2BA37D6-0549-455D-9520-B3D21C7876D0}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UnoTodo", "demos\UnoTodo\UnoTodo.csproj", "{E100F20D-7F04-40C8-84E2-1C6B9CA1072F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -133,6 +135,18 @@ Global
 		{B2BA37D6-0549-455D-9520-B3D21C7876D0}.Release|x64.Build.0 = Release|Any CPU
 		{B2BA37D6-0549-455D-9520-B3D21C7876D0}.Release|x86.ActiveCfg = Release|Any CPU
 		{B2BA37D6-0549-455D-9520-B3D21C7876D0}.Release|x86.Build.0 = Release|Any CPU
+		{E100F20D-7F04-40C8-84E2-1C6B9CA1072F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E100F20D-7F04-40C8-84E2-1C6B9CA1072F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E100F20D-7F04-40C8-84E2-1C6B9CA1072F}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{E100F20D-7F04-40C8-84E2-1C6B9CA1072F}.Debug|x64.Build.0 = Debug|Any CPU
+		{E100F20D-7F04-40C8-84E2-1C6B9CA1072F}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{E100F20D-7F04-40C8-84E2-1C6B9CA1072F}.Debug|x86.Build.0 = Debug|Any CPU
+		{E100F20D-7F04-40C8-84E2-1C6B9CA1072F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E100F20D-7F04-40C8-84E2-1C6B9CA1072F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E100F20D-7F04-40C8-84E2-1C6B9CA1072F}.Release|x64.ActiveCfg = Release|Any CPU
+		{E100F20D-7F04-40C8-84E2-1C6B9CA1072F}.Release|x64.Build.0 = Release|Any CPU
+		{E100F20D-7F04-40C8-84E2-1C6B9CA1072F}.Release|x86.ActiveCfg = Release|Any CPU
+		{E100F20D-7F04-40C8-84E2-1C6B9CA1072F}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -147,5 +161,6 @@ Global
 		{A4A91B9F-0C86-41CB-BEF0-C002819C43BE} = {B1D87BA9-8812-4EFA-BBBE-1FF1EEEB5433}
 		{EB81D453-777D-40B5-A504-4144906ADBF4} = {C784FBE4-CC1E-4A0A-AE8E-6B818DD3724D}
 		{B2BA37D6-0549-455D-9520-B3D21C7876D0} = {C784FBE4-CC1E-4A0A-AE8E-6B818DD3724D}
+		{E100F20D-7F04-40C8-84E2-1C6B9CA1072F} = {9144195A-C68F-4B1E-A574-474EDD424D6C}
 	EndGlobalSection
 EndGlobal
