@@ -104,7 +104,8 @@ public class SqliteBucketStorage : IBucketStorageAdapter
         var seqBeforeResult = await db.ReadTransaction(async tx =>
         {
             var currentTarget = await TargetCheckpointRequestId(tx);
-            if (currentTarget != long.MaxValue)
+            var hasCrud = await tx.GetOptional<object>("SELECT 1 as ignore FROM ps_crud LIMIT 1") != null;
+            if (currentTarget != long.MaxValue || hasCrud)
             {
                 // Nothing to update
                 return (long?)null;

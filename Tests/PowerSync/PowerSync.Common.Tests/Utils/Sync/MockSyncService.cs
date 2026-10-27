@@ -93,14 +93,11 @@ public class MockSyncService : EventStream<string>
     public PowerSyncDatabase CreateDatabase(string? dbFilename = null, TimeProvider? timeProvider = null, Schema? schema = null)
     {
         dbFilename ??= $"sync-stream-{Guid.NewGuid():N}.db";
-        var connector = new TestConnector();
-        var mockRemote = new MockRemote(connector, this, _requests);
-
         return new PowerSyncDatabase(new PowerSyncDatabaseOptions
         {
             Database = new SQLOpenOptions { DbFilename = dbFilename },
             Schema = schema ?? TestSchemaTodoList.AppSchema,
-            RemoteFactory = _ => mockRemote,
+            RemoteFactory = (authenticator, endpoint) => new MockRemote(authenticator, endpoint, this, _requests),
             TimeProvider = timeProvider,
             Logger = CreateLogger()
         });
@@ -205,10 +202,11 @@ public class MockRemote : Remote
     private readonly List<StreamingSyncRequest> connectedListeners;
 
     public MockRemote(
-        IPowerSyncBackendConnector connector,
+        IAuthenticator authenticator,
+        string? endpoint,
         MockSyncService syncService,
         List<StreamingSyncRequest> connectedListeners)
-        : base(connector)
+        : base(authenticator, endpoint)
     {
         this.syncService = syncService;
         this.connectedListeners = connectedListeners;

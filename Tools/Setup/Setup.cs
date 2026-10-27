@@ -29,7 +29,7 @@ namespace Tools.Setup;
 /// </summary>
 public class PowerSyncSetup
 {
-    private const string VERSION = "0.5.3";
+    private const string VERSION = "0.5.4";
 
     private const string GITHUB_BASE_URL = $"https://github.com/powersync-ja/powersync-sqlite-core/releases/download/v{VERSION}";
 

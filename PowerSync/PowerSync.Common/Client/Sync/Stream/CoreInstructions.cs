@@ -39,6 +39,8 @@ public abstract class Instruction
             return json["CloseSyncStream"]!.ToObject<CloseSyncStream>()!;
         if (json.ContainsKey("DidCompleteSync"))
             return new DidCompleteSync();
+        if (json.ContainsKey("CheckpointDelayedDueToLocalData"))
+            return new CheckpointDelayedDueToLocalData();
 
         return new UnknownSyncInstruction(json);
     }
@@ -185,6 +187,8 @@ public class CloseSyncStream : Instruction
 }
 
 public class DidCompleteSync : NonInterruptingInstruction { }
+
+public class CheckpointDelayedDueToLocalData : NonInterruptingInstruction { }
 
 public class UnknownSyncInstruction(JObject source) : NonInterruptingInstruction
 {

@@ -50,7 +50,7 @@ public class PowerSyncDatabaseOptions() : BasePowerSyncDatabaseOptions()
     /// Used for testing to inject mock implementations.
     /// If not provided, a default Remote will be created.
     /// </summary>
-    public Func<IPowerSyncBackendConnector, Remote>? RemoteFactory { get; set; }
+    public Func<IAuthenticator, string?, Remote>? RemoteFactory { get; set; }
 
     /// <summary>
     /// Used to calculate delays for the sync client (retry delays, upload throttling).
@@ -100,6 +100,15 @@ public class PowerSyncDBEvents : EventManager
 public interface IPowerSyncDatabase : ICloseableAsync
 {
     public Task Connect(IPowerSyncBackendConnector connector, PowerSyncConnectionOptions? options = null);
+
+    public Task Connect(
+        string endpoint,
+        IAuthenticator authenticator,
+        IMutationUploader? uploader,
+        PowerSyncConnectionOptions? options = null);
+
+    public Task Connect(IMutationUploader uploader, PowerSyncConnectionOptions? options = null);
+
     public ISyncStream SyncStream(string name, Dictionary<string, object>? parameters = null);
 
     public Task<string> GetClientId();
@@ -168,11 +177,13 @@ public class PowerSyncDatabase : IPowerSyncDatabase
 
     private readonly AsyncLock runExclusive = new();
 
-    private readonly Func<IPowerSyncBackendConnector, Remote> remoteFactory;
+    private readonly Func<IAuthenticator, string?, Remote> remoteFactory;
 
     public StreamingSyncImplementation? SyncStreamImplementation => ConnectionManager.SyncStreamImplementation;
 
-    public IPowerSyncBackendConnector? Connector => ConnectionManager.Connector;
+    public string? PowerSyncEndpoint => ConnectionManager.Endpoint;
+    public IAuthenticator? Authenticator => ConnectionManager.Authenticator;
+    public IMutationUploader? MutationUploader => ConnectionManager.Uploader;
 
     public bool Connected => CurrentStatus.Connected;
     public bool Connecting => CurrentStatus.Connecting;
@@ -203,7 +214,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         }
         Logger = options.Logger ?? NullLogger.Instance;
         CurrentStatus = new SyncStatus(new SyncStatusOptions());
-        BucketStorageAdapter = generateBucketStorageAdapter();
+        BucketStorageAdapter = GenerateBucketStorageAdapter();
 
         Closed = false;
         Ready = false;
@@ -211,7 +222,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         schema = options.Schema;
         SdkVersion = "";
 
-        remoteFactory = options.RemoteFactory ?? (connector => new Remote(connector));
+        remoteFactory = options.RemoteFactory ?? ((authenticator, endpoint) => new Remote(authenticator, endpoint));
         var timeProvider = options.TimeProvider ?? TimeProvider.System;
 
         watchManager = new WatchManager(this, masterCts.Token);
@@ -225,7 +236,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
                     await tx.Execute("SELECT powersync_control(?, ?) AS r", ["subscriptions", JsonConvert.SerializeObject(payload)]);
                 }));
 
-        ConnectionManager = new ConnectionManager(createSyncImplementation: async (connector, options) =>
+        ConnectionManager = new ConnectionManager(createSyncImplementation: async (endpoint, authenticator, uploader, options) =>
         {
             await WaitForReady();
             using (await runExclusive.LockAsync())
@@ -235,17 +246,18 @@ public class PowerSyncDatabase : IPowerSyncDatabase
                 syncStreamImplementation = new StreamingSyncImplementation(new StreamingSyncImplementationOptions
                 {
                     Adapter = BucketStorageAdapter,
-                    Remote = remoteFactory(connector),
-                    UploadCrud = async () =>
+                    Remote = authenticator is not null ? remoteFactory(authenticator, endpoint) : null,
+                    UploadCrud = uploader is not null ? async () =>
                     {
                         await WaitForReady();
-                        await connector.UploadData(this);
-                    },
-                    PostCheckpointRequest = connector is ICustomCheckpointRequestConnector checkpointConnector
+                        await uploader.UploadMutations(this);
+                    }
+                    : null,
+                    PostCheckpointRequest = authenticator is ICustomCheckpointRequestConnector checkpointAuthenticator
                         ? async (clientId, requestId, token) =>
                         {
                             await WaitForReady();
-                            return await checkpointConnector.PostCheckpointRequest(clientId, requestId, token);
+                            return await checkpointAuthenticator.PostCheckpointRequest(clientId, requestId, token);
                         }
                     : null,
                     RetryDelayMs = options.RetryDelayMs,
@@ -280,7 +292,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         IsReadyTask = Initialize(options);
     }
 
-    protected IBucketStorageAdapter generateBucketStorageAdapter()
+    protected IBucketStorageAdapter GenerateBucketStorageAdapter()
     {
         return new SqliteBucketStorage(Database, Logger);
     }
@@ -497,18 +509,36 @@ public class PowerSyncDatabase : IPowerSyncDatabase
 
     public async Task Connect(IPowerSyncBackendConnector connector, PowerSyncConnectionOptions? options = null)
     {
-        await WaitForReady();
+        await ConnectInternal(null, connector, connector, options);
+    }
 
-        // close connection if one is open
+    public async Task Connect(
+        string endpoint,
+        IAuthenticator authenticator,
+        IMutationUploader? uploader,
+        PowerSyncConnectionOptions? options = null)
+    {
+        await ConnectInternal(endpoint, authenticator, uploader, options);
+    }
+
+    public async Task Connect(IMutationUploader uploader, PowerSyncConnectionOptions? options = null)
+    {
+        await ConnectInternal(null, null, uploader, options);
+    }
+
+    private async Task ConnectInternal(string? powerSyncEndpoint, IAuthenticator? authenticator, IMutationUploader? uploader, PowerSyncConnectionOptions? options = null)
+    {
+        // TODO Check at least one of authenticator, uploader is provided
+        await WaitForReady();
         await Disconnect();
+
         if (Closed)
         {
             throw new Exception("Cannot connect using a closed client");
         }
 
         var resolvedOptions = options ?? new PowerSyncConnectionOptions();
-
-        await ConnectionManager.Connect(connector, resolvedOptions);
+        await ConnectionManager.Connect(powerSyncEndpoint, authenticator, uploader, resolvedOptions);
     }
 
     public async Task Disconnect()

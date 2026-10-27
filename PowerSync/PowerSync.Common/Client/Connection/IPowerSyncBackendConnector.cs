@@ -1,6 +1,40 @@
 namespace PowerSync.Common.Client.Connection;
 
-public interface IPowerSyncBackendConnector
+/// <summary>
+/// Authenticates the PowerSync SDK against a PowerSync service, allowing it to download changes.
+/// </summary>
+public interface IAuthenticator
+{
+    /// <summary>
+    /// Resolves a JWT to use when connecting to a PowerSync service.
+    ///
+    /// The SDK does not cache this value and will call this method multiple times while a database
+    /// is connected. Implementations should consider caching credentials.
+    /// </summary>
+    public Task<string> ResolveCredentials();
+
+    /// <summary>
+    /// Invoked by the SDK when the PowerSync service has rejected credentials previously returned by
+    /// <see cref="ResolveCredentials" />.
+    ///
+    /// If the connector returns cached tokens, it can use this as a hint to refresh its local state.
+    /// </summary>
+    public void InvalidateCredentials() { }
+}
+
+/// <summary>
+/// Uploads local mutations (from `INSERT`, `UPDATE` and `DELETE` statements against the local
+/// database) to your source database.
+/// 
+/// While simple cases might use a protocol like PostgREST to write directly into the database,
+/// a custom backend is commonly used to validate uploaded mutations.
+/// </summary>
+public interface IMutationUploader
+{
+    public Task UploadMutations(IPowerSyncDatabase database);
+}
+
+public interface IPowerSyncBackendConnector : IAuthenticator, IMutationUploader
 {
     /// <summary> 
     /// Allows the PowerSync client to retrieve an authentication token from your backend
@@ -14,7 +48,7 @@ public interface IPowerSyncBackendConnector
     ///
     /// This token is kept for the duration of a sync connection.
     /// </summary>
-    Task<PowerSyncCredentials?> FetchCredentials();
+    public Task<PowerSyncCredentials?> FetchCredentials();
 
     /// <summary> 
     /// Upload local changes to the app backend.
@@ -23,13 +57,21 @@ public interface IPowerSyncBackendConnector
     ///
     /// Any thrown errors will result in a retry after the configured wait period (default: 5 seconds).
     /// </summary>
-    Task UploadData(IPowerSyncDatabase database);
+    public Task UploadData(IPowerSyncDatabase database);
+
+    async Task<string> IAuthenticator.ResolveCredentials()
+    {
+        var credentials = await FetchCredentials() ?? throw new InvalidOperationException("User is not logged in");
+        return credentials.Token;
+    }
+
+    Task IMutationUploader.UploadMutations(IPowerSyncDatabase database) => UploadData(database);
 }
 
 /// <summary>
-/// An <see cref="IPowerSyncBackendConnector" /> capable of requesting checkpoints.
+/// An <see cref="IAuthenticator" /> capable of requesting checkpoints.
 ///
-/// Extend this class instead of <see cref="IPowerSyncBackendConnector" /> when uploads are processed
+/// Implement this interface instead of <see cref="IAuthenticator" /> when uploads are processed
 /// asynchronously by the backend (for example through a message queue): The sync client as part of
 /// the PowerSync .NET SDK generates a checkpoint request id and hands it to your backend via this
 /// class, which is responsible for creating a matching checkpoint once the uploads preceding the
@@ -39,7 +81,7 @@ public interface IPowerSyncBackendConnector
 /// To use this connector, using <see cref="Sync.Stream.CheckpointMode.Requests" /> is required. Note that
 /// this requires PowerSync service version 1.24.0 or later.
 /// </summary>
-public interface ICustomCheckpointRequestConnector : IPowerSyncBackendConnector
+public interface ICustomCheckpointRequestConnector : IAuthenticator
 {
     /// <summary>
     /// Posts a client-generated checkpoint request to the backend and returns the effective checkpoint request state.
