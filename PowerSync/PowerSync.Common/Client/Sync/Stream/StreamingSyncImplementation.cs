@@ -941,7 +941,7 @@ public class StreamingSyncImplementation : ICloseable
                     }
                     break;
                 case CheckpointDelayedDueToLocalData:
-                    if (Options.UploadCrud == null)
+                    if (!await WillUpload())
                     {
                         const string message = "Applying checkpoint is blocked on local mutations, but no " +
                             "uploader is set. The sync client cannot proceed.";
@@ -1416,6 +1416,15 @@ public class StreamingSyncImplementation : ICloseable
         // Ends whichever task is still pending to prevent abandoned tasks from consuming
         // signals intended for future consumers of DelayRetry.
         nestedCts.Cancel();
+    }
+
+    private async Task<bool> WillUpload()
+    {
+        if (Options.UploadCrud != null) return true;
+
+        // If we're connected in download-only mode, we can still request
+        // checkpoints. But if there's a local write, that won't be uploaded.
+        return !await Options.Adapter.HasCrud();
     }
 
     public void UpdateSubscriptions(SubscribedStream[] subscriptions)
