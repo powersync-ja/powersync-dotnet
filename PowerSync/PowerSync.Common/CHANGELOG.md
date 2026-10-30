@@ -7,7 +7,7 @@
 - Use `long` for op IDs instead of `string`. This affects the types returned by some methods used in `PowerSyncBackendConnector.UploadData`, namely `PowerSyncDatabase.GetNextCrudTransaction()` and `PowerSyncDatabase.GetCrudBatch()`, as well as `ICustomCheckpointRequestConnector.PostCheckpointRequest`.
 - Bundle and load native libraries on Android, iOS, and MacCatalyst. This allows `PowerSync.Common` to fully replace `PowerSync.Maui`.
 - Support tables created outside of PowerSync via `RawTable`. For more information, see [Raw Tables](https://docs.powersync.com/usage/use-case-examples/raw-tables).
-- Introduce `IAuthenticator` and `IMutationUploader` as superinterfaces of `IPowerSyncBackendConnector`.
+- Introduce `IAuthenticator` and `IMutationUploader` as superinterfaces of `IPowerSyncBackendConnector`, and make `ICustomCheckpointRequestConnector` inherit from `IAuthenticator`. If your connector implemented only `ICustomCheckpointRequestConnector`, also implement `IPowerSyncBackendConnector`.
 - Allow connecting in download-only or upload-only mode (through overloads of `Connect()`).
 - Update the PowerSync SQLite core extension to 0.5.4.
 

@@ -507,28 +507,62 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         await WaitForReady();
     }
 
-    public async Task Connect(IPowerSyncBackendConnector connector, PowerSyncConnectionOptions? options = null)
+    /// <summary>
+    /// Connect to the PowerSync Service and your backend using the same <paramref name="connector" /> for uploading and downloading.
+    /// </summary>
+    public async Task Connect(
+        IPowerSyncBackendConnector connector,
+        PowerSyncConnectionOptions? options = null)
     {
         await ConnectInternal(null, connector, connector, options);
     }
 
+    /// <summary>
+    /// Connect to the PowerSync Service and your backend using a separate <paramref name="authenticator" /> and <paramref name="uploader" />.
+    /// <para />
+    /// Allows connecting in download-only mode by setting the <paramref name="uploader" /> to null.
+    /// </summary>
     public async Task Connect(
         string endpoint,
         IAuthenticator authenticator,
         IMutationUploader? uploader,
         PowerSyncConnectionOptions? options = null)
     {
+        if (authenticator is IMutationUploader && uploader == null)
+        {
+            Logger.LogWarning("Authenticator implementing both IAuthenticator and IMutationUploader, but connected in download-only mode. "
+                + "Consider implementing IPowerSyncBackendConnector, or pass your authenticator as both authenticator and uploader. "
+                + "If you intended to connect in download-only mode, you can safely ignore this warning.");
+        }
         await ConnectInternal(endpoint, authenticator, uploader, options);
     }
 
+    /// <summary>
+    /// Connect to your backend in upload-only mode.
+    /// </summary>
     public async Task Connect(IMutationUploader uploader, PowerSyncConnectionOptions? options = null)
     {
+        if (uploader is IAuthenticator)
+        {
+            Logger.LogWarning("Mutation uploader implementing both IAuthenticator and IMutationUploader, but connected in upload-only mode. "
+                + "Consider implementing IPowerSyncBackendConnector, or pass your uploader as both authenticator and uploader. "
+                + "If you intended to connect in upload-only mode, you can safely ignore this warning.");
+        }
         await ConnectInternal(null, null, uploader, options);
     }
 
     private async Task ConnectInternal(string? powerSyncEndpoint, IAuthenticator? authenticator, IMutationUploader? uploader, PowerSyncConnectionOptions? options = null)
     {
-        // TODO Check at least one of authenticator, uploader is provided
+        if (authenticator == null && uploader == null)
+        {
+            throw new ArgumentException("Cannot connect when both authenticator and uploader are null");
+        }
+
+        if (authenticator != null && authenticator is not IPowerSyncBackendConnector && powerSyncEndpoint == null)
+        {
+            throw new ArgumentException("powerSyncEndpoint is required when connecting with an IAuthenticator that is not an IPowerSyncBackendConnector");
+        }
+
         await WaitForReady();
         await Disconnect();
 

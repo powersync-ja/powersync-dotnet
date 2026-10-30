@@ -28,8 +28,6 @@ public class RequestDetails
 
 public class Remote
 {
-    private static readonly TimeSpan STREAMING_POST_TIMEOUT = TimeSpan.FromSeconds(30);
-
     private readonly HttpClient _httpClient;
     private readonly ICredentialsProvider _credentials;
 
@@ -48,10 +46,7 @@ public class Remote
             _credentials = new AuthenticatorCredentialsProvider(endpoint, authenticator);
         }
 
-        _httpClient = new HttpClient()
-        {
-            Timeout = STREAMING_POST_TIMEOUT
-        };
+        _httpClient = new HttpClient();
     }
 
     /// <summary>

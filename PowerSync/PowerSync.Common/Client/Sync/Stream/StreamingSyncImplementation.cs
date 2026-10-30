@@ -1287,12 +1287,22 @@ public class StreamingSyncImplementation : ICloseable
 
     private async Task UpdateLocalTargetUntilSuccess(CancellationToken signal, PowerSyncConnectionOptions options)
     {
+        Exception? lastException = null;
         while (!signal.IsCancellationRequested)
         {
             try
             {
                 await UpdateLocalTarget(signal, options);
                 crudUploadCompleted.Writer.TryWrite(true);
+
+                if (lastException != null)
+                {
+                    UpdateSyncStatus(
+                        new SyncStatusOptions(),
+                        new UpdateSyncStatusOptions(ClearUploadError: true),
+                        current => current.DataFlowStatus.UploadError == lastException);
+                }
+
                 return;
             }
             catch (OperationCanceledException) when (signal.IsCancellationRequested)
@@ -1301,6 +1311,7 @@ public class StreamingSyncImplementation : ICloseable
             }
             catch (Exception ex)
             {
+                lastException = ex;
                 logger.LogError("Error requesting checkpoint after crud upload: {message}", ex.Message);
                 UpdateSyncStatus(new SyncStatusOptions { DataFlow = new SyncDataFlowStatus { UploadError = ex } });
 
@@ -1325,12 +1336,17 @@ public class StreamingSyncImplementation : ICloseable
     protected record UpdateSyncStatusOptions(
         bool? ClearDownloadError = null, bool? ClearUploadError = null
     );
-    protected void UpdateSyncStatus(SyncStatusOptions options, UpdateSyncStatusOptions? updateOptions = null)
+    protected void UpdateSyncStatus(SyncStatusOptions options, UpdateSyncStatusOptions? updateOptions = null, Func<SyncStatus, bool>? condition = null)
     {
         try
         {
             lock (_syncStatusLock)
             {
+                if (condition != null && !condition(_syncStatus))
+                {
+                    return;
+                }
+
                 var updatedStatus = new SyncStatus(new SyncStatusOptions
                 {
                     Connected = options.Connected ?? _syncStatus.Connected,
