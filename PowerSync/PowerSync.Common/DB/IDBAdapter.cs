@@ -3,8 +3,6 @@ namespace PowerSync.Common.DB;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-using PowerSync.Common.Utils;
-
 public class NonQueryResult
 {
     // Represents the auto-generated row id if applicable.
@@ -16,30 +14,50 @@ public class NonQueryResult
 
 public class QueryResult
 {
-    public class QueryRows
-    {
-        // Raw array with all dataset.
-        public List<Dictionary<string, object>> Array { get; set; } = [];
-
-        // The length of the dataset.
-        public int Length => Array.Count;
-    }
-    public QueryRows Rows { get; set; } = new QueryRows();
+    public List<IQueryRow> Rows { get; } = rows;
+    public int Count => Rows.Count;
 }
+
+public interface IQueryRow
+{
+    public string GetString(string columnName);
+    public int GetInt(string columnName);
+    public long GetLong(string columnName);
+    public bool GetBool(string columnName);
+    public double GetDouble(string columnName);
+    public DateTime GetDateTime(string columnName);
+
+    public string? GetStringOrNull(string columnName);
+    public int? GetIntOrNull(string columnName);
+    public long? GetLongOrNull(string columnName);
+    public bool? GetBoolOrNull(string columnName);
+    public double? GetDoubleOrNull(string columnName);
+    public DateTime? GetDateTimeOrNull(string columnName);
+}
+
+public interface IFromRow
+{
+    public T FromSql(QueryRow row);
+}
+
+public delegate T SqlMapper<T>(QueryRow row);
 
 public interface IDBGetUtils
 {
     // Execute a read-only query and return results.
-    Task<T[]> GetAll<T>(string sql, object?[]? parameters = null);
-    Task<dynamic[]> GetAll(string sql, object?[]? parameters = null);
+    Task<QueryResult> GetAll(string sql, object?[]? parameters = null);
+    Task<List<T>> GetAll<T>(string sql, object?[]? parameters = null, SqlMapper<T> mapper);
+    Task<List<T>> GetAll<T>(string sql, object?[]? parameters = null) where T : IFromRow;
 
     // Execute a read-only query and return the first result, or null if the ResultSet is empty.
-    Task<T?> GetOptional<T>(string sql, object?[]? parameters = null);
-    Task<dynamic?> GetOptional(string sql, object?[]? parameters = null);
+    Task<IQueryRow?> GetOptional(string sql, object?[]? parameters = null);
+    Task<T?> GetOptional<T>(string sql, object?[]? parameters = null, SqlMapper<T> mapper);
+    Task<T?> GetOptional<T>(string sql, object?[]? parameters = null) where T : IFromRow;
 
     // Execute a read-only query and return the first result, error if the ResultSet is empty.
-    Task<T> Get<T>(string sql, object?[]? parameters = null);
-    Task<dynamic> Get(string sql, object?[]? parameters = null);
+    Task<IQueryRow> Get(string sql, object?[]? parameters = null);
+    Task<T> Get<T>(string sql, object?[]? parameters = null, SqlMapper<T> mapper);
+    Task<T> Get<T>(string sql, object?[]? parameters = null) where T : IFromRow;
 }
 
 public interface ILockContext : IDBGetUtils
