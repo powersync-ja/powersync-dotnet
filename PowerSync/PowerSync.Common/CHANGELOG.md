@@ -9,6 +9,8 @@
   - `IFromRow<T>`: for types implementing `static T FromRow(IQueryRow row)`, e.g. `db.GetAll<Todo>(sql)`.
 - **Breaking:** `GetAll<T>` and `Watch<T>` now return `List<T>` instead of `T[]`.
 - **Breaking:** Schema types with `[Column]` attributes are no longer hydrated automatically when queried; implement `IFromRow<T>` or pass a mapper.
+- Add the `PowerSync.Common.SourceGenerators` package. Marking a `partial` class, struct or record with `[GenerateSqlMapper]` generates its `IFromRow<T>` implementation, reading each property from its `[Column]` name or its property name.
+- Column names are now matched case-insensitively when reading `IQueryRow` values, like SQLite identifiers.
 - `PowerSyncDatabase.OnChange` now returns the underlying raw table name instead of the view name to mirror PowerSync JS.
 - Use `long` for op IDs instead of `string`. This affects the types returned by some methods used in `PowerSyncBackendConnector.UploadData`, namely `PowerSyncDatabase.GetNextCrudTransaction()` and `PowerSyncDatabase.GetCrudBatch()`, as well as `ICustomCheckpointRequestConnector.PostCheckpointRequest`.
 - Bundle and load native libraries on Android, iOS, and MacCatalyst. This allows `PowerSync.Common` to fully replace `PowerSync.Maui`.
