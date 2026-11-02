@@ -68,17 +68,16 @@ public class PowerSyncData
         PowerSyncDatabase db,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
-        var stream = db.Watch<PhotoIdResult>(
+        var stream = db.Watch(
             "SELECT photo_id FROM todos WHERE photo_id IS NOT NULL",
             [],
+            row => row.GetString("photo_id"),
             new SQLWatchOptions { TriggerImmediately = true, Signal = ct });
-        await foreach (var rows in stream.WithCancellation(ct))
+        await foreach (var photoIds in stream.WithCancellation(ct))
         {
-            yield return [.. rows.Select(r => new WatchedAttachmentItem(r.photo_id, fileExtension: "jpg"))];
+            yield return [.. photoIds.Select(id => new WatchedAttachmentItem(id, fileExtension: "jpg"))];
         }
     }
-
-    private record PhotoIdResult(string photo_id);
 
     /// <summary>
     /// Asks the service for a checkpoint and waits until the local database has applied everything

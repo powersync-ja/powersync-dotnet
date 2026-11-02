@@ -3,6 +3,8 @@ namespace PowerSync.Common.DB;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
+using PowerSync.Common.Utils;
+
 public class NonQueryResult
 {
     // Represents the auto-generated row id if applicable.
@@ -12,7 +14,7 @@ public class NonQueryResult
     public int RowsAffected { get; set; }
 }
 
-public class QueryResult
+public class QueryResult(List<IQueryRow> rows)
 {
     public List<IQueryRow> Rows { get; } = rows;
     public int Count => Rows.Count;
@@ -20,6 +22,9 @@ public class QueryResult
 
 public interface IQueryRow
 {
+    public IReadOnlyList<string> Columns { get; }
+    public object? GetValue(string columnName);
+
     public string GetString(string columnName);
     public int GetInt(string columnName);
     public long GetLong(string columnName);
@@ -35,29 +40,29 @@ public interface IQueryRow
     public DateTime? GetDateTimeOrNull(string columnName);
 }
 
-public interface IFromRow
+public interface IFromRow<TSelf> where TSelf : IFromRow<TSelf>
 {
-    public T FromSql(QueryRow row);
+    public static abstract TSelf FromRow(IQueryRow row);
 }
 
-public delegate T SqlMapper<T>(QueryRow row);
+public delegate T SqlMapper<T>(IQueryRow row);
 
 public interface IDBGetUtils
 {
     // Execute a read-only query and return results.
     Task<QueryResult> GetAll(string sql, object?[]? parameters = null);
-    Task<List<T>> GetAll<T>(string sql, object?[]? parameters = null, SqlMapper<T> mapper);
-    Task<List<T>> GetAll<T>(string sql, object?[]? parameters = null) where T : IFromRow;
+    Task<List<T>> GetAll<T>(string sql, object?[]? parameters, SqlMapper<T> mapper);
+    Task<List<T>> GetAll<T>(string sql, object?[]? parameters = null) where T : IFromRow<T>;
 
     // Execute a read-only query and return the first result, or null if the ResultSet is empty.
     Task<IQueryRow?> GetOptional(string sql, object?[]? parameters = null);
-    Task<T?> GetOptional<T>(string sql, object?[]? parameters = null, SqlMapper<T> mapper);
-    Task<T?> GetOptional<T>(string sql, object?[]? parameters = null) where T : IFromRow;
+    Task<T?> GetOptional<T>(string sql, object?[]? parameters, SqlMapper<T> mapper);
+    Task<T?> GetOptional<T>(string sql, object?[]? parameters = null) where T : IFromRow<T>;
 
     // Execute a read-only query and return the first result, error if the ResultSet is empty.
     Task<IQueryRow> Get(string sql, object?[]? parameters = null);
-    Task<T> Get<T>(string sql, object?[]? parameters = null, SqlMapper<T> mapper);
-    Task<T> Get<T>(string sql, object?[]? parameters = null) where T : IFromRow;
+    Task<T> Get<T>(string sql, object?[]? parameters, SqlMapper<T> mapper);
+    Task<T> Get<T>(string sql, object?[]? parameters = null) where T : IFromRow<T>;
 }
 
 public interface ILockContext : IDBGetUtils
