@@ -153,7 +153,7 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvents.TablesUpdatedEvent
 
         using var reader = command.ExecuteReader();
         var columns = new string[reader.FieldCount];
-        var columnIndices = new Dictionary<string, int>(reader.FieldCount);
+        var columnIndices = new Dictionary<string, int>(reader.FieldCount, StringComparer.OrdinalIgnoreCase);
         for (int i = 0; i < reader.FieldCount; i++)
         {
             columns[i] = reader.GetName(i);
