@@ -1,12 +1,13 @@
 ﻿namespace MAUITodo.Models;
 
+using PowerSync.Common.DB;
 using PowerSync.Common.DB.Schema.Attributes;
 
 [
     Table("todos", IgnoreEmptyUpdates = true),
     Index("list", ["list_id"])
 ]
-public class TodoItem
+public class TodoItem : IFromRow<TodoItem>
 {
     [Column("id")]
     public string ID { get; set; } = "";
@@ -24,10 +25,10 @@ public class TodoItem
     public string Description { get; set; } = null!;
 
     [Column("created_by")]
-    public string CreatedBy { get; set; } = null!;
+    public string? CreatedBy { get; set; }
 
     [Column("completed_by")]
-    public string CompletedBy { get; set; } = null!;
+    public string? CompletedBy { get; set; }
 
     [Column("completed")]
     public bool Completed { get; set; }
@@ -36,10 +37,9 @@ public class TodoItem
     public string? PhotoId { get; set; }
 
     // Display-only properties. [Ignored] keeps them out of the PowerSync schema (they are not
-    // real columns on the `todos` table), while [Column] still lets Dapper hydrate PhotoLocalUri
-    // from the `photo_local_uri` alias produced by the attachments LEFT JOIN in the watch query.
+    // real columns on the `todos` table). PhotoLocalUri is read from the `photo_local_uri` alias
+    // produced by the attachments LEFT JOIN in the watch query.
     [Ignored]
-    [Column("photo_local_uri")]
     public string? PhotoLocalUri { get; set; }
 
     [Ignored]
@@ -50,4 +50,18 @@ public class TodoItem
 
     [Ignored]
     public bool IsPhotoReady => PhotoLocalUri != null;
+
+    public static TodoItem FromRow(IQueryRow row) => new()
+    {
+        ID = row.GetString("id"),
+        ListId = row.GetString("list_id"),
+        CreatedAt = row.GetString("created_at"),
+        CompletedAt = row.GetStringOrNull("completed_at"),
+        Description = row.GetString("description"),
+        CreatedBy = row.GetStringOrNull("created_by"),
+        CompletedBy = row.GetStringOrNull("completed_by"),
+        Completed = row.GetBool("completed"),
+        PhotoId = row.GetStringOrNull("photo_id"),
+        PhotoLocalUri = row.GetStringOrNull("photo_local_uri"),
+    };
 }

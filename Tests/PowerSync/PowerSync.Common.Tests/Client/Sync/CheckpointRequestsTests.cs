@@ -5,6 +5,7 @@ using PowerSync.Common.Client.Connection;
 using PowerSync.Common.Client.Sync;
 using PowerSync.Common.Client.Sync.Bucket;
 using PowerSync.Common.Client.Sync.Stream;
+using PowerSync.Common.DB;
 using PowerSync.Common.Tests.Utils;
 using PowerSync.Common.Tests.Utils.Sync;
 
@@ -591,11 +592,9 @@ public class CheckpointRequestsTests : IAsyncLifetime
         Assert.True(checkpoint.HasSynced);
     }
 
-    // A class with a settable property rather than a positional record: Dapper can't pick a
-    // constructor when the result set is empty and SQLite reports no column type.
-    private class NameResult
+    private record NameResult(string name) : IFromRow<NameResult>
     {
-        public string name { get; set; } = "";
+        public static NameResult FromRow(IQueryRow row) => new(row.GetString("name"));
     }
 }
 

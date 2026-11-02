@@ -3,9 +3,6 @@ using System.Reflection;
 
 using MAUITodo.Data;
 
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-
 namespace MAUITodo.Views;
 
 public partial class SqlConsolePage : ContentPage
@@ -28,27 +25,18 @@ public partial class SqlConsolePage : ContentPage
             if (string.IsNullOrWhiteSpace(query))
                 return;
 
-            var results = await database.Db.GetAll<object>(query);
-            if (results.Length == 0)
+            var results = await database.Db.GetAll(query);
+            if (results.Count == 0)
             {
                 Headers.Text = "No results found.";
                 Results.Text = "";
                 return;
             }
 
-            var keys = JObject.Parse(JsonConvert.SerializeObject(results[0])).Properties().Select(p => p.Name).ToList();
-            var allValues = results
-                .Select(result => JObject.Parse(JsonConvert.SerializeObject(result))
-                    .Properties()
-                    .Select(p => p.Value.ToObject<object>())
-                    .ToList())
-                .ToList();
+            var columns = results.Rows[0].Columns;
 
-            Console.WriteLine($"Results count: {JsonConvert.SerializeObject(keys)}");
-            Console.WriteLine($"Results count \n: {JsonConvert.SerializeObject(allValues)}");
-
-            Headers.Text = string.Join(" | ", keys);
-            Results.Text = string.Join("\n\n", allValues.Select(v => string.Join(" | ", v)));
+            Headers.Text = string.Join(" | ", columns);
+            Results.Text = string.Join("\n\n", results.Rows.Select(row => string.Join(" | ", columns.Select(row.GetValue))));
         }
         catch (Exception ex)
         {

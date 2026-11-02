@@ -48,7 +48,7 @@ public static class TestUtils
     }
 
     public static async Task<T> WaitForMatchAsync<T>(
-        Func<CancellationToken, IAsyncEnumerable<T[]>> source,
+        Func<CancellationToken, IAsyncEnumerable<List<T>>> source,
         Func<T, bool> predicate,
         TimeSpan? timeout = null)
     {

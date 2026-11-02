@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 
 using PowerSync.Common.Attachments;
 using PowerSync.Common.Client;
+using PowerSync.Common.DB;
 using PowerSync.Common.DB.Schema;
 using PowerSync.Common.Tests.Utils;
 
@@ -56,18 +57,32 @@ public class AttachmentTests : IAsyncLifetime
         }
     }
 
-    private sealed class UserPhotoRow
+    private sealed class UserPhotoRow : IFromRow<UserPhotoRow>
     {
         public string photo_id { get; set; } = string.Empty;
+
+        public static UserPhotoRow FromRow(IQueryRow row) => new()
+        {
+            photo_id = row.GetString("photo_id"),
+        };
     }
 
-    private sealed class AttachmentResult
+    private sealed class AttachmentResult : IFromRow<AttachmentResult>
     {
         public string id { get; set; } = string.Empty;
         public long state { get; set; }
         public string? local_uri { get; set; }
         public string filename { get; set; } = string.Empty;
         public bool has_synced { get; set; }
+
+        public static AttachmentResult FromRow(IQueryRow row) => new()
+        {
+            id = row.GetString("id"),
+            state = row.GetLong("state"),
+            local_uri = row.GetStringOrNull("local_uri"),
+            filename = row.GetString("filename"),
+            has_synced = row.GetBoolOrNull("has_synced") ?? false,
+        };
     }
 
     [Fact(Timeout = 10000)]

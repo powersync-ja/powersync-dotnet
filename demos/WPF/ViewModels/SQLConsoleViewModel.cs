@@ -1,12 +1,11 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
+using System.Data;
 using System.Threading.Tasks;
 using System.Windows.Input;
 
-using Newtonsoft.Json;
-
 using PowerSync.Common.Client;
+using PowerSync.Common.DB;
 
 using PowersyncDotnetTodoList.Services;
 
@@ -34,8 +33,8 @@ namespace PowersyncDotnetTodoList.ViewModels
             }
         }
 
-        private ObservableCollection<object> _queryResults = new();
-        public ObservableCollection<object> QueryResults
+        private DataView _queryResults = new DataTable().DefaultView;
+        public DataView QueryResults
         {
             get => _queryResults;
             set
@@ -88,16 +87,36 @@ namespace PowersyncDotnetTodoList.ViewModels
                 ErrorMessage = string.Empty;
 
                 // Fetch results from database
-                var results = await _db.GetAll<object>(SqlQuery, []);
+                var results = await _db.GetAll(SqlQuery, []);
 
-                // Update the collection with the results
-                QueryResults = new ObservableCollection<object>(results);
+                // Update the grid with the results
+                QueryResults = ToDataTable(results).DefaultView;
             }
             catch (Exception ex)
             {
                 ErrorMessage = ex.Message;
-                QueryResults = [];
+                QueryResults = new DataTable().DefaultView;
             }
+        }
+
+        private static DataTable ToDataTable(QueryResult results)
+        {
+            var table = new DataTable();
+            if (results.Count == 0)
+                return table;
+
+            var columns = results.Rows[0].Columns.Distinct().ToList();
+            foreach (var column in columns)
+            {
+                table.Columns.Add(column, typeof(object));
+            }
+
+            foreach (var row in results.Rows)
+            {
+                table.Rows.Add(columns.Select(column => row.GetValue(column) ?? DBNull.Value).ToArray());
+            }
+
+            return table;
         }
 
         private void GoBack()

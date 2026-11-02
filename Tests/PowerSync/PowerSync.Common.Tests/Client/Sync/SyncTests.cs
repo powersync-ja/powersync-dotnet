@@ -68,9 +68,9 @@ public class SyncTests : IAsyncLifetime
 
         await db.WaitForFirstSync();
 
-        var result = await db.GetAll<dynamic>("SELECT * FROM lists");
-        Assert.Single(result);
-        Assert.Equal("test_list", (string)result[0].name);
+        var result = await db.GetAll("SELECT * FROM lists");
+        Assert.Single(result.Rows);
+        Assert.Equal("test_list", result.Rows[0].GetString("name"));
     }
 
     [Fact]
@@ -93,12 +93,12 @@ public class SyncTests : IAsyncLifetime
         // Wait for sync to process
         await TestUtils.WaitForAsync(async () =>
         {
-            var rows = await db.GetAll<dynamic>("SELECT * FROM lists");
-            return rows.Length == 0;
+            var rows = await db.GetAll("SELECT * FROM lists");
+            return rows.Count == 0;
         });
 
-        var result = await db.GetAll<dynamic>("SELECT * FROM lists");
-        Assert.Empty(result);
+        var result = await db.GetAll("SELECT * FROM lists");
+        Assert.Empty(result.Rows);
     }
 
     [Fact]

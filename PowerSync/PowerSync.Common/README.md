@@ -16,7 +16,14 @@ dotnet add package PowerSync.Common
 
 ```csharp
 
-private record ListResult(string id, string name, string owner_id, string created_at);
+private record ListResult(string Id, string Name, string OwnerId, string CreatedAt) : IFromRow<ListResult>
+{
+    public static ListResult FromRow(IQueryRow row) => new(
+        row.GetString("id"),
+        row.GetString("name"),
+        row.GetString("owner_id"),
+        row.GetString("created_at"));
+}
 
 static async Task Main() {
 
@@ -27,7 +34,18 @@ static async Task Main() {
     });
     await db.Init();
 
+    // Map rows with a type implementing IFromRow<T>
     var lists = await db.GetAll<ListResult>("select * from lists");
+
+    // Or map rows with a lambda
+    var names = await db.GetAll("select name from lists", null, row => row.GetString("name"));
+
+    // Or read the rows directly
+    var result = await db.GetAll("select * from lists");
+    foreach (var row in result.Rows)
+    {
+        Console.WriteLine(row.GetString("name"));
+    }
 }
 
 ```
@@ -47,7 +65,7 @@ _ = Task.Run(async () =>
         table.Rows.Clear();
         foreach (var line in results)
         {
-            table.AddRow(line.id, line.name, line.owner_id, line.created_at);
+            table.AddRow(line.Id, line.Name, line.OwnerId, line.CreatedAt);
         }
     }
 }, cts.Token);
