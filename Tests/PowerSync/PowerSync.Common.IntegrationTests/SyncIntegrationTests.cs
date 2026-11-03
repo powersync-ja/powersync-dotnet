@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 
 using PowerSync.Common.Client;
 using PowerSync.Common.Client.Sync.Stream;
+using PowerSync.Common.DB;
 
 
 namespace PowerSync.Common.IntegrationTests;
@@ -9,7 +10,14 @@ namespace PowerSync.Common.IntegrationTests;
 [Trait("Category", "Integration")]
 public class SyncIntegrationTests : IAsyncLifetime
 {
-    private record ListResult(string id, string created_at, string name, string owner_id);
+    private record ListResult(string id, string? created_at, string name, string? owner_id) : IFromRow<ListResult>
+    {
+        public static ListResult FromRow(IQueryRow row) => new(
+            row.GetString("id"),
+            row.GetStringOrNull("created_at"),
+            row.GetString("name"),
+            row.GetStringOrNull("owner_id"));
+    }
 
     private record TodoResult(string id, string list_id, string created_at, string completed_at, string description, string created_by, string completed_by, int completed);
 
@@ -82,7 +90,7 @@ public class SyncIntegrationTests : IAsyncLifetime
         {
             await foreach (var x in db.Watch<ListResult>("select * from lists where id = ?", [id], new() { Signal = cts.Token }))
             {
-                if (x.Length == 1)
+                if (x.Count == 1)
                 {
                     watched.SetResult(true);
                     cts.Cancel();
@@ -109,12 +117,12 @@ public class SyncIntegrationTests : IAsyncLifetime
             bool sawCreate = false;
             await foreach (var x in db.Watch<ListResult>("select * from lists where id = ?", [id], new() { Signal = cts.Token }))
             {
-                if (!sawCreate && x.Length == 1)
+                if (!sawCreate && x.Count == 1)
                 {
                     sawCreate = true;
                     created.SetResult(true);
                 }
-                else if (sawCreate && x.Length == 0)
+                else if (sawCreate && x.Count == 0)
                 {
                     deleted.SetResult(true);
                     cts.Cancel();
@@ -142,7 +150,7 @@ public class SyncIntegrationTests : IAsyncLifetime
             await foreach (var x in db.Watch<ListResult>("select * from lists where name = ?", [listName], new() { Signal = cts.Token }))
             {
                 // Verify that the item was added locally
-                if (x.Length == 100)
+                if (x.Count == 100)
                 {
                     watched.SetResult(true);
                     cts.Cancel();
@@ -171,12 +179,12 @@ public class SyncIntegrationTests : IAsyncLifetime
             await foreach (var x in db.Watch<ListResult>("select * from lists where name = ?", [listName], new() { Signal = cts.Token }))
             {
                 // Verify that the items were added locally
-                if (x.Length == 100)
+                if (x.Count == 100)
                 {
                     localInsertWatch.SetResult(true);
                 }
                 // Verify that the new item added to backend was synced down
-                else if (x.Length == 101)
+                else if (x.Count == 101)
                 {
                     backendInsertWatch.SetResult(true);
                     cts.Cancel();

@@ -170,8 +170,7 @@ public class Table : BaseTable
     }
 
     /// <summary>
-    /// Generate a table implementation from a Type object and registers its shape with the
-    /// internal Dapper type mapper.
+    /// Generate a table implementation from a Type object.
     ///
     /// The given type is required to have the <see cref="TableAttribute" /> attribute.
     /// </summary>
@@ -181,7 +180,6 @@ public class Table : BaseTable
         Name = parser.TableName;
         Columns = parser.ParseColumns();
         Options = options ?? parser.ParseTableOptions();
-        parser.RegisterDapperTypeMap();
     }
 
     /// <summary>

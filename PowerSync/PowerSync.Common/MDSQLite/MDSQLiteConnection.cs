@@ -1,10 +1,7 @@
 namespace PowerSync.Common.MDSQLite;
 
-using System.Data;
 using System.Text;
 using System.Threading.Tasks;
-
-using Dapper;
 
 using Microsoft.Data.Sqlite;
 
@@ -123,62 +120,6 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvents.TablesUpdatedEvent
         return parameterList;
     }
 
-    private static Dictionary<string, object?>? PrepareQuery(ref string query, object?[]? parameters)
-    {
-        if (parameters == null || parameters.Length == 0)
-        {
-            return null;
-        }
-
-        int parameterCount = parameters.Length;
-        var parameterNames = PrepareQueryString(ref query, parameterCount);
-
-        var paramDict = new Dictionary<string, object?>(parameterCount);
-
-        for (int i = 0; i < parameterCount; i++)
-        {
-            paramDict[parameterNames[i]] = parameters[i];
-        }
-
-        return paramDict;
-    }
-
-    public Task<T[]> GetAll<T>(string query, object?[]? parameters = null)
-    {
-        var dynamicParams = PrepareQuery(ref query, parameters);
-        return Task.Run(async () => (await Db.QueryAsync<T>(query, dynamicParams, commandType: CommandType.Text)).ToArray());
-    }
-
-    public Task<dynamic[]> GetAll(string query, object?[]? parameters = null)
-    {
-        var dynamicParams = PrepareQuery(ref query, parameters);
-        return Task.Run(async () => (await Db.QueryAsync(query, dynamicParams, commandType: CommandType.Text)).ToArray());
-    }
-
-    public Task<T?> GetOptional<T>(string query, object?[]? parameters = null)
-    {
-        var dynamicParams = PrepareQuery(ref query, parameters);
-        return Task.Run(() => Db.QueryFirstOrDefaultAsync<T>(query, dynamicParams, commandType: CommandType.Text));
-    }
-
-    public Task<dynamic?> GetOptional(string query, object?[]? parameters = null)
-    {
-        var dynamicParams = PrepareQuery(ref query, parameters);
-        return Task.Run(() => Db.QueryFirstOrDefaultAsync(query, dynamicParams, commandType: CommandType.Text));
-    }
-
-    public Task<T> Get<T>(string query, object?[]? parameters = null)
-    {
-        var dynamicParams = PrepareQuery(ref query, parameters);
-        return Task.Run(() => Db.QueryFirstAsync<T>(query, dynamicParams, commandType: CommandType.Text));
-    }
-
-    public Task<dynamic> Get(string query, object?[]? parameters = null)
-    {
-        var dynamicParams = PrepareQuery(ref query, parameters);
-        return Task.Run(() => Db.QueryFirstAsync(query, dynamicParams, commandType: CommandType.Text));
-    }
-
     private static void PrepareCommandParameters(SqliteCommand command, ref string query, int parameterCount)
     {
         var parameterNames = PrepareQueryString(ref query, parameterCount);
@@ -203,6 +144,85 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvents.TablesUpdatedEvent
                 command.Parameters[i].Value = parameters[i] ?? DBNull.Value;
             }
         }
+    }
+
+    private QueryResult ReadRows(string query, object?[]? parameters, int? limit = null)
+    {
+        using var command = Db.CreateCommand();
+        PrepareCommand(command, ref query, parameters);
+
+        using var reader = command.ExecuteReader();
+        var columns = new string[reader.FieldCount];
+        var columnIndices = new Dictionary<string, int>(reader.FieldCount, StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < reader.FieldCount; i++)
+        {
+            columns[i] = reader.GetName(i);
+            columnIndices.TryAdd(columns[i], i);
+        }
+
+        var rows = new List<IQueryRow>();
+        while ((limit == null || rows.Count < limit) && reader.Read())
+        {
+            var values = new object?[reader.FieldCount];
+            for (int i = 0; i < reader.FieldCount; i++)
+            {
+                values[i] = reader.IsDBNull(i) ? null : reader.GetValue(i);
+            }
+            rows.Add(new QueryRow(columns, columnIndices, values));
+        }
+
+        return new QueryResult(rows);
+    }
+
+    private IQueryRow? ReadFirstRow(string query, object?[]? parameters)
+    {
+        var result = ReadRows(query, parameters, limit: 1);
+        return result.Count > 0 ? result.Rows[0] : null;
+    }
+
+    public Task<QueryResult> GetAll(string query, object?[]? parameters = null)
+    {
+        return Task.Run(() => ReadRows(query, parameters));
+    }
+
+    public Task<List<T>> GetAll<T>(string query, object?[]? parameters, SqlMapper<T> mapper)
+    {
+        return Task.Run(() => ReadRows(query, parameters).Rows.Select(row => mapper(row)).ToList());
+    }
+
+    public Task<List<T>> GetAll<T>(string query, object?[]? parameters = null) where T : IFromRow<T>
+    {
+        return GetAll(query, parameters, T.FromRow);
+    }
+
+    public Task<IQueryRow?> GetOptional(string query, object?[]? parameters = null)
+    {
+        return Task.Run(() => ReadFirstRow(query, parameters));
+    }
+
+    public Task<T?> GetOptional<T>(string query, object?[]? parameters, SqlMapper<T> mapper)
+    {
+        return Task.Run(() => ReadFirstRow(query, parameters) is { } row ? mapper(row) : default);
+    }
+
+    public Task<T?> GetOptional<T>(string query, object?[]? parameters = null) where T : IFromRow<T>
+    {
+        return GetOptional(query, parameters, T.FromRow);
+    }
+
+    public Task<IQueryRow> Get(string query, object?[]? parameters = null)
+    {
+        return Task.Run(() => ReadFirstRow(query, parameters) ?? throw new InvalidOperationException("Query returned no rows."));
+    }
+
+    public Task<T> Get<T>(string query, object?[]? parameters, SqlMapper<T> mapper)
+    {
+        return Task.Run(() => mapper(ReadFirstRow(query, parameters) ?? throw new InvalidOperationException("Query returned no rows.")));
+    }
+
+    public Task<T> Get<T>(string query, object?[]? parameters = null) where T : IFromRow<T>
+    {
+        return Get(query, parameters, T.FromRow);
     }
 
     public Task<NonQueryResult> Execute(string query, object?[]? parameters = null) => Task.Run(() =>
@@ -269,6 +289,6 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvents.TablesUpdatedEvent
 
     public async Task RefreshSchema()
     {
-        await Get<object>("PRAGMA table_info('sqlite_master')");
+        await Get("PRAGMA table_info('sqlite_master')");
     }
 }

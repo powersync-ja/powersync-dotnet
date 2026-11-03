@@ -5,6 +5,7 @@ using Microsoft.Data.Sqlite;
 using Newtonsoft.Json;
 
 using PowerSync.Common.Client;
+using PowerSync.Common.DB;
 using PowerSync.Common.DB.Crud;
 using PowerSync.Common.DB.Schema;
 using PowerSync.Common.Tests.Utils;
@@ -19,7 +20,10 @@ public class CRUDTests : IAsyncLifetime
     private readonly string testId = Guid.NewGuid().ToString();
     private readonly string dbName = $"crud-{Guid.NewGuid():N}.db";
 
-    private record CrudEntryData(string data);
+    private record CrudEntryData(string data) : IFromRow<CrudEntryData>
+    {
+        public static CrudEntryData FromRow(IQueryRow row) => new(row.GetString("data"));
+    }
 
     public async Task InitializeAsync()
     {
@@ -150,7 +154,7 @@ public class CRUDTests : IAsyncLifetime
     public async Task Insert_RecordCrudEntryTest()
     {
         var initialRows = await db.GetAll("SELECT * FROM ps_crud");
-        Assert.Empty(initialRows);
+        Assert.Empty(initialRows.Rows);
 
         await db.Execute("INSERT INTO assets(id, description) VALUES(?, ?)", [testId, "test"]);
         var crudEntry = await db.Get<CrudEntryData>("SELECT data FROM ps_crud ORDER BY id");
@@ -177,7 +181,10 @@ public class CRUDTests : IAsyncLifetime
         Assert.True(tx.Crud.First().Equals(expectedCrudEntry));
     }
 
-    private record CountResult(long count);
+    private record CountResult(long count) : IFromRow<CountResult>
+    {
+        public static CountResult FromRow(IQueryRow row) => new(row.GetLong("count"));
+    }
     private record CrudEntryDataResult(string data);
 
     [Fact]
@@ -299,7 +306,7 @@ public class CRUDTests : IAsyncLifetime
         try
         {
             var initialCrudRows = await insertOnlyDb.GetAll("SELECT * FROM ps_crud");
-            Assert.Empty(initialCrudRows);
+            Assert.Empty(initialCrudRows.Rows);
 
             await insertOnlyDb.Execute("INSERT INTO logs(id, level, content) VALUES(?, ?, ?)", [testId, "INFO", "test log"]);
 
@@ -317,7 +324,7 @@ public class CRUDTests : IAsyncLifetime
             );
 
             var logRows = await insertOnlyDb.GetAll("SELECT * FROM logs");
-            Assert.Empty(logRows);
+            Assert.Empty(logRows.Rows);
 
             var tx = await insertOnlyDb.GetNextCrudTransaction();
             Assert.Equal(1, tx!.TransactionId);
@@ -337,7 +344,10 @@ public class CRUDTests : IAsyncLifetime
         }
     }
 
-    private record QuantityResult(long quantity);
+    private record QuantityResult(long quantity) : IFromRow<QuantityResult>
+    {
+        public static QuantityResult FromRow(IQueryRow row) => new(row.GetLong("quantity"));
+    }
 
     [Fact]
     public async Task BigNumbersIntegerTest()
@@ -419,7 +429,7 @@ public class CRUDTests : IAsyncLifetime
     public async Task TransactionGroupingTest()
     {
         var initialCrudRows = await db.GetAll("SELECT * FROM ps_crud");
-        Assert.Empty(initialCrudRows);
+        Assert.Empty(initialCrudRows.Rows);
 
         await db.WriteTransaction(async (tx) =>
         {

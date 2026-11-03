@@ -3,6 +3,7 @@ namespace PowerSync.Common.Tests.MDSQLite;
 using Microsoft.Data.Sqlite;
 
 using PowerSync.Common.Client;
+using PowerSync.Common.DB;
 using PowerSync.Common.MDSQLite;
 using PowerSync.Common.Tests.Utils;
 using PowerSync.Common.Utils;
@@ -13,11 +14,18 @@ using PowerSync.Common.Utils;
 [Collection("MDSQLiteAdapterTests")]
 public class MDSQLiteAdapterTests
 {
-    private class AssetResult
+    private class AssetResult : IFromRow<AssetResult>
     {
         public string id { get; set; } = "";
         public string description { get; set; } = "";
         public string? make { get; set; }
+
+        public static AssetResult FromRow(IQueryRow row) => new()
+        {
+            id = row.GetString("id"),
+            description = row.GetString("description"),
+            make = row.GetStringOrNull("make"),
+        };
     }
 
     [Fact]
