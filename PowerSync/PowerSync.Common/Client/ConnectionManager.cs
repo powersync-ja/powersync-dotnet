@@ -72,10 +72,14 @@ public class ActiveSubscription(
 }
 
 public class StoredConnectionOptions(
-    IPowerSyncBackendConnector connector,
+    string? endpoint,
+    IAuthenticator? authenticator,
+    IMutationUploader? uploader,
     PowerSyncConnectionOptions options)
 {
-    public IPowerSyncBackendConnector Connector { get; set; } = connector;
+    public string? Endpoint { get; set; } = endpoint;
+    public IAuthenticator? Authenticator { get; set; } = authenticator;
+    public IMutationUploader? Uploader { get; set; } = uploader;
     public PowerSyncConnectionOptions Options { get; set; } = options;
 }
 
@@ -131,7 +135,11 @@ public class ConnectionManager : ICloseable
 
     public StreamingSyncImplementation? SyncStreamImplementation;
 
-    public IPowerSyncBackendConnector? Connector => PendingConnectionOptions?.Connector;
+    public string? Endpoint => PendingConnectionOptions?.Endpoint;
+
+    public IAuthenticator? Authenticator => PendingConnectionOptions?.Authenticator;
+
+    public IMutationUploader? Uploader => PendingConnectionOptions?.Uploader;
 
     public ConnectionManagerEvents Events { get; protected set; } = new();
 
@@ -143,11 +151,11 @@ public class ConnectionManager : ICloseable
     /// </summary>
     protected Action? SyncDisposer;
 
-    readonly Func<IPowerSyncBackendConnector, CreateSyncImplementationOptions, Task<ConnectionManagerSyncImplementationResult>> CreateSyncImplementation;
+    readonly Func<string?, IAuthenticator?, IMutationUploader?, CreateSyncImplementationOptions, Task<ConnectionManagerSyncImplementationResult>> CreateSyncImplementation;
 
     protected ILogger Logger;
 
-    public ConnectionManager(Func<IPowerSyncBackendConnector, CreateSyncImplementationOptions, Task<ConnectionManagerSyncImplementationResult>> createSyncImplementation,
+    public ConnectionManager(Func<string?, IAuthenticator?, IMutationUploader?, CreateSyncImplementationOptions, Task<ConnectionManagerSyncImplementationResult>> createSyncImplementation,
     ILogger logger)
     {
         CreateSyncImplementation = createSyncImplementation;
@@ -167,18 +175,18 @@ public class ConnectionManager : ICloseable
         SyncDisposer?.Invoke();
     }
 
-    public async Task Connect(IPowerSyncBackendConnector connector, PowerSyncConnectionOptions options)
+    public async Task Connect(string? endpoint, IAuthenticator? authenticator, IMutationUploader? uploader, PowerSyncConnectionOptions options)
     {
         // Keep track if there were pending operations before this call
         var hadPendingOptions = PendingConnectionOptions != null;
 
         // Update pending options to the latest values
-        PendingConnectionOptions = new StoredConnectionOptions(connector, options);
+        PendingConnectionOptions = new StoredConnectionOptions(endpoint, authenticator, uploader, options);
 
         // Warn if connector expects checkpoint requests but write checkpoints are enabled
-        if (connector is ICustomCheckpointRequestConnector && PendingConnectionOptions.Options.CheckpointMode == CheckpointMode.Legacy)
+        if (authenticator is ICustomCheckpointRequestConnector && PendingConnectionOptions.Options.CheckpointMode == CheckpointMode.Legacy)
         {
-            Logger.LogWarning("The backend connector implements ICustomCheckpointRequestConnector, but Connect() was called without checkpoint requests enabled.");
+            Logger.LogWarning("The authenticator or backend connector implements ICustomCheckpointRequestConnector, but Connect() was called without checkpoint requests enabled.");
         }
 
         // Disconnecting here provides aborting in progress connection attempts.
@@ -192,7 +200,10 @@ public class ConnectionManager : ICloseable
             await DisconnectInternal();
         }
 
-        ConnectingTask ??= CheckedConnectInternal();
+        if (ConnectingTask == null || ConnectingTask.IsCompleted)
+        {
+            ConnectingTask = CheckedConnectInternal();
+        }
         await ConnectingTask;
     }
 
@@ -281,10 +292,12 @@ public class ConnectionManager : ICloseable
             return;
         }
 
-        var connector = PendingConnectionOptions.Connector;
+        var endpoint = PendingConnectionOptions.Endpoint;
+        var authenticator = PendingConnectionOptions.Authenticator;
+        var uploader = PendingConnectionOptions.Uploader;
         var options = PendingConnectionOptions.Options;
 
-        var result = await CreateSyncImplementation(connector, new CreateSyncImplementationOptions
+        var result = await CreateSyncImplementation(endpoint, authenticator, uploader, new CreateSyncImplementationOptions
         {
             Subscriptions = ActiveStreams,
             CrudUploadThrottleMs = options.CrudUploadThrottleMs,

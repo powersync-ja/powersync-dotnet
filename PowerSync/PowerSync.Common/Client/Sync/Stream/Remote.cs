@@ -4,12 +4,10 @@ using System.IO;
 using System.Net.Http;
 using System.Reflection;
 using System.Text;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 
 using PowerSync.Common.Client.Connection;
 
@@ -30,31 +28,34 @@ public class RequestDetails
 
 public class Remote
 {
+    private readonly HttpClient _httpClient;
+    private readonly ICredentialsProvider _credentials;
 
-    private const int STREAMING_POST_TIMEOUT_MS = 30_000;
-
-    private readonly HttpClient httpClient;
-    protected IPowerSyncBackendConnector connector;
-
-    protected PowerSyncCredentials? credentials;
-
-    public Remote(IPowerSyncBackendConnector connector)
+    public Remote(IAuthenticator authenticator, string? endpoint = null)
     {
-        httpClient = new HttpClient();
-        this.connector = connector;
+        if (authenticator is IPowerSyncBackendConnector connector)
+        {
+            _credentials = new ConnectorCredentialsProvider(connector);
+        }
+        else
+        {
+            if (endpoint is null)
+            {
+                throw new ArgumentException("endpoint is required when not using IPowerSyncBackendConnector.");
+            }
+            _credentials = new AuthenticatorCredentialsProvider(endpoint, authenticator);
+        }
+
+        _httpClient = new HttpClient();
     }
 
     /// <summary>
     /// Get credentials currently cached, or fetch new credentials if none are available.
     /// These credentials may have expired already.
     /// </summary>
-    public async Task<PowerSyncCredentials?> GetCredentials()
+    public Task<PowerSyncCredentials?> GetCredentials()
     {
-        if (credentials != null)
-        {
-            return credentials;
-        }
-        return await PrefetchCredentials();
+        return _credentials.GetCredentials();
     }
 
     /// <summary>
@@ -62,19 +63,9 @@ public class Remote
     /// Until this call succeeds, GetCredentials will still return the old credentials.
     /// This may be called before the current credentials have expired.
     /// </summary>
-    public async Task<PowerSyncCredentials?> PrefetchCredentials()
+    public Task<PowerSyncCredentials?> PrefetchCredentials()
     {
-        credentials = await FetchCredentials();
-        return credentials;
-    }
-
-    /// <summary>
-    /// Get credentials for PowerSync.
-    /// This should always fetch a fresh set of credentials - don't use cached values.
-    /// </summary>
-    public async Task<PowerSyncCredentials?> FetchCredentials()
-    {
-        return await connector.FetchCredentials();
+        return _credentials.PrefetchCredentials();
     }
 
     /// <summary>
@@ -83,7 +74,7 @@ public class Remote
     /// </summary>
     public void InvalidateCredentials()
     {
-        credentials = null;
+        _credentials.InvalidateCredentials();
     }
 
     static string GetUserAgent()
@@ -102,12 +93,11 @@ public class Remote
         return $"powersync-dotnet/{version}";
     }
 
-    // TODO: Potentially use an abstract base class (similar to JS) instead of making arbitrary virtual
     public virtual async Task<T> FetchJson<T>(string path, HttpMethod? method = null, object? data = null, Dictionary<string, string>? headers = null, CancellationToken ct = default)
     {
         var request = await BuildRequest(method ?? HttpMethod.Get, path, data, headers);
 
-        var response = await httpClient.SendAsync(request, ct);
+        var response = await _httpClient.SendAsync(request, ct);
 
         if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
@@ -130,7 +120,7 @@ public class Remote
     public virtual async Task<Stream> PostStreamRaw(SyncStreamOptions options)
     {
         var request = await BuildRequest(HttpMethod.Post, options.Path, options.Data, options.Headers);
-        var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, options.CancellationToken);
+        var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, options.CancellationToken);
 
         if (response.Content == null)
         {
@@ -188,5 +178,101 @@ public class Remote
         }
 
         return request;
+    }
+}
+
+interface ICredentialsProvider
+{
+    Task<PowerSyncCredentials?> GetCredentials();
+    Task<PowerSyncCredentials?> PrefetchCredentials();
+    void InvalidateCredentials();
+}
+
+/// <summary>
+/// Wraps an <see cref="IAuthenticator" /> without caching credentials, since <see cref="IAuthenticator.ResolveCredentials" />
+/// is expected to handle caching itself.
+/// </summary>
+class AuthenticatorCredentialsProvider(string endpoint, IAuthenticator authenticator) : ICredentialsProvider
+{
+    private readonly string _endpoint = endpoint;
+    private readonly IAuthenticator _authenticator = authenticator;
+
+    public async Task<PowerSyncCredentials?> GetCredentials()
+    {
+        string token = await _authenticator.ResolveCredentials();
+        return new PowerSyncCredentials(_endpoint, token);
+    }
+
+    public Task<PowerSyncCredentials?> PrefetchCredentials()
+    {
+        _authenticator.InvalidateCredentials();
+        return GetCredentials();
+    }
+
+    public void InvalidateCredentials()
+    {
+        _authenticator.InvalidateCredentials();
+    }
+}
+
+/// <summary>
+/// Wraps an <see cref="IPowerSyncBackendConnector" /> to provide credentials caching behaviour.
+/// </summary>
+class ConnectorCredentialsProvider(IPowerSyncBackendConnector connector) : ICredentialsProvider
+{
+    private readonly IPowerSyncBackendConnector _connector = connector;
+    private readonly SemaphoreSlim _fetchingCredentials = new(1, 1);
+    private volatile PowerSyncCredentials? _cachedCredentials;
+
+    public async Task<PowerSyncCredentials?> GetCredentials()
+    {
+        if (_cachedCredentials is { } cached)
+        {
+            return cached;
+        }
+
+        await _fetchingCredentials.WaitAsync();
+        try
+        {
+            // With concurrent calls, it's possible that credentials have just been fetched.
+            return _cachedCredentials ?? await FetchAndCacheCredentials();
+        }
+        finally
+        {
+            _fetchingCredentials.Release();
+        }
+    }
+
+    /// <summary>
+    /// If no other task is currently fetching credentials, fetches and caches a new set. The previous
+    /// credentials stay cached until the fetch succeeds.
+    /// </summary>
+    public async Task<PowerSyncCredentials?> PrefetchCredentials()
+    {
+        if (!await _fetchingCredentials.WaitAsync(0))
+        {
+            return _cachedCredentials;
+        }
+
+        try
+        {
+            return await FetchAndCacheCredentials();
+        }
+        finally
+        {
+            _fetchingCredentials.Release();
+        }
+    }
+
+    private async Task<PowerSyncCredentials?> FetchAndCacheCredentials()
+    {
+        var credentials = await _connector.FetchCredentials();
+        _cachedCredentials = credentials;
+        return credentials;
+    }
+
+    public void InvalidateCredentials()
+    {
+        _cachedCredentials = null;
     }
 }
