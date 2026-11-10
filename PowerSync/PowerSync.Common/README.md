@@ -50,6 +50,8 @@ static async Task Main() {
 
 ```
 
+Mappers (`IFromRow<T>.FromRow` and `SqlMapper<T>` lambdas) run while the query result is being read, and the `IQueryRow` they receive is only valid during that call. Copy the values you need out of it instead of storing the row; use `GetAll`/`Get` without a mapper to keep rows around.
+
 ### Generated mappers
 
 Instead of implementing `IFromRow<T>` by hand, add the [PowerSync.Common.SourceGenerators](https://www.nuget.org/packages/PowerSync.Common.SourceGenerators) package and mark a `partial` type with `[GenerateSqlMapper]`. Properties are read from the column named by their `[Column]` attribute, or from the column matching the property name.

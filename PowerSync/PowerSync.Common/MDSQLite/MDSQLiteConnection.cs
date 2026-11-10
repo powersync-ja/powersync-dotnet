@@ -146,48 +146,94 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvents.TablesUpdatedEvent
         }
     }
 
-    private QueryResult ReadRows(string query, object?[]? parameters, int? limit = null)
+    private QueryResult ReadAll(string query, object?[]? parameters)
     {
         using var command = Db.CreateCommand();
         PrepareCommand(command, ref query, parameters);
 
         using var reader = command.ExecuteReader();
-        var columns = new string[reader.FieldCount];
-        var columnIndices = new Dictionary<string, int>(reader.FieldCount, StringComparer.OrdinalIgnoreCase);
-        for (int i = 0; i < reader.FieldCount; i++)
-        {
-            columns[i] = reader.GetName(i);
-            columnIndices.TryAdd(columns[i], i);
-        }
-
         var rows = new List<IQueryRow>();
-        while ((limit == null || rows.Count < limit) && reader.Read())
+        if (reader.Read())
         {
-            var values = new object?[reader.FieldCount];
-            for (int i = 0; i < reader.FieldCount; i++)
+            var columns = SqliteReaderRow.ReadColumns(reader);
+            do
             {
-                values[i] = reader.IsDBNull(i) ? null : reader.GetValue(i);
-            }
-            rows.Add(new QueryRow(columns, columnIndices, values));
+                rows.Add(SqliteReaderRow.Materialize(reader, columns));
+            } while (reader.Read());
         }
 
         return new QueryResult(rows);
     }
 
-    private IQueryRow? ReadFirstRow(string query, object?[]? parameters)
+    private List<T> ReadAll<T>(string query, object?[]? parameters, SqlMapper<T> mapper)
     {
-        var result = ReadRows(query, parameters, limit: 1);
-        return result.Count > 0 ? result.Rows[0] : null;
+        using var command = Db.CreateCommand();
+        PrepareCommand(command, ref query, parameters);
+
+        using var reader = command.ExecuteReader();
+        var results = new List<T>();
+        if (!reader.Read())
+        {
+            return results;
+        }
+
+        var row = SqliteReaderRow.Create(reader);
+        try
+        {
+            do
+            {
+                results.Add(row.Map(mapper));
+            } while (reader.Read());
+        }
+        finally
+        {
+            row.Release();
+        }
+
+        return results;
+    }
+
+    private IQueryRow? ReadFirst(string query, object?[]? parameters)
+    {
+        using var command = Db.CreateCommand();
+        PrepareCommand(command, ref query, parameters);
+
+        using var reader = command.ExecuteReader();
+        return reader.Read() ? SqliteReaderRow.Materialize(reader, SqliteReaderRow.ReadColumns(reader)) : null;
+    }
+
+    private bool TryReadFirst<T>(string query, object?[]? parameters, SqlMapper<T> mapper, out T result)
+    {
+        using var command = Db.CreateCommand();
+        PrepareCommand(command, ref query, parameters);
+
+        using var reader = command.ExecuteReader();
+        if (!reader.Read())
+        {
+            result = default!;
+            return false;
+        }
+
+        var row = SqliteReaderRow.Create(reader);
+        try
+        {
+            result = row.Map(mapper);
+            return true;
+        }
+        finally
+        {
+            row.Release();
+        }
     }
 
     public Task<QueryResult> GetAll(string query, object?[]? parameters = null)
     {
-        return Task.Run(() => ReadRows(query, parameters));
+        return Task.Run(() => ReadAll(query, parameters));
     }
 
     public Task<List<T>> GetAll<T>(string query, object?[]? parameters, SqlMapper<T> mapper)
     {
-        return Task.Run(() => ReadRows(query, parameters).Rows.Select(row => mapper(row)).ToList());
+        return Task.Run(() => ReadAll(query, parameters, mapper));
     }
 
     public Task<List<T>> GetAll<T>(string query, object?[]? parameters = null) where T : IFromRow<T>
@@ -197,12 +243,12 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvents.TablesUpdatedEvent
 
     public Task<IQueryRow?> GetOptional(string query, object?[]? parameters = null)
     {
-        return Task.Run(() => ReadFirstRow(query, parameters));
+        return Task.Run(() => ReadFirst(query, parameters));
     }
 
     public Task<T?> GetOptional<T>(string query, object?[]? parameters, SqlMapper<T> mapper)
     {
-        return Task.Run(() => ReadFirstRow(query, parameters) is { } row ? mapper(row) : default);
+        return Task.Run(() => TryReadFirst(query, parameters, mapper, out var result) ? result : default);
     }
 
     public Task<T?> GetOptional<T>(string query, object?[]? parameters = null) where T : IFromRow<T>
@@ -212,12 +258,12 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvents.TablesUpdatedEvent
 
     public Task<IQueryRow> Get(string query, object?[]? parameters = null)
     {
-        return Task.Run(() => ReadFirstRow(query, parameters) ?? throw new InvalidOperationException("Query returned no rows."));
+        return Task.Run(() => ReadFirst(query, parameters) ?? throw new InvalidOperationException("Query returned no rows."));
     }
 
     public Task<T> Get<T>(string query, object?[]? parameters, SqlMapper<T> mapper)
     {
-        return Task.Run(() => mapper(ReadFirstRow(query, parameters) ?? throw new InvalidOperationException("Query returned no rows.")));
+        return Task.Run(() => TryReadFirst(query, parameters, mapper, out var result) ? result : throw new InvalidOperationException("Query returned no rows."));
     }
 
     public Task<T> Get<T>(string query, object?[]? parameters = null) where T : IFromRow<T>
