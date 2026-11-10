@@ -112,15 +112,9 @@ public class ConnectModesTests : IAsyncLifetime
         await TestUtils.WaitForAsync(async () => (await ListNames()).SequenceEqual(["from server"]));
     }
 
-    private async Task<string[]> ListNames()
+    private Task<List<string>> ListNames()
     {
-        var rows = await _db.GetAll<NameResult>("SELECT name FROM lists ORDER BY name");
-        return [.. rows.Select(r => r.name)];
-    }
-
-    private class NameResult
-    {
-        public string name { get; set; } = "";
+        return _db.GetAll("SELECT name FROM lists ORDER BY name", null, mapper: row => row.GetString("name"));
     }
 
     private class TokenAuthenticator : IAuthenticator
