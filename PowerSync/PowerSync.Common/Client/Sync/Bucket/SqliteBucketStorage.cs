@@ -102,7 +102,7 @@ public class SqliteBucketStorage : IBucketStorageAdapter
         var seqBeforeResult = await db.ReadTransaction(async tx =>
         {
             var currentTarget = await TargetCheckpointRequestId(tx);
-            if (currentTarget != long.MaxValue)
+            if (currentTarget != long.MaxValue || await HasCrud(tx))
             {
                 // Nothing to update
                 return (long?)null;
@@ -127,8 +127,7 @@ public class SqliteBucketStorage : IBucketStorageAdapter
 
         return await db.WriteTransaction(async tx =>
         {
-            var anyData = await tx.Execute("SELECT 1 FROM ps_crud LIMIT 1");
-            if (anyData.RowsAffected > 0)
+            if (await HasCrud(tx))
             {
                 logger.LogDebug("[updateLocalTarget] ps crud is not empty");
                 return false;
@@ -164,8 +163,7 @@ public class SqliteBucketStorage : IBucketStorageAdapter
         {
             await tx.Execute($"DELETE FROM {PSInternalTable.CRUD} WHERE id <= ?", [lastClientId]);
 
-            var crudRemaining = await tx.GetOptional(
-                $"SELECT 1 as ignore FROM {PSInternalTable.CRUD} LIMIT 1") != null;
+            var crudRemaining = await HasCrud(tx);
 
             await TargetCheckpointRequestId(
                 tx,
@@ -211,7 +209,12 @@ public class SqliteBucketStorage : IBucketStorageAdapter
 
     public async Task<bool> HasCrud()
     {
-        return await db.GetOptional("SELECT 1 as ignore FROM ps_crud LIMIT 1") != null;
+        return await db.GetOptional($"SELECT 1 as ignore FROM {PSInternalTable.CRUD} LIMIT 1") != null;
+    }
+
+    private static async Task<bool> HasCrud(ITransaction tx)
+    {
+        return await tx.GetOptional($"SELECT 1 as ignore FROM {PSInternalTable.CRUD} LIMIT 1") != null;
     }
 
     public async Task<string> Control(string op, object? payload = null)

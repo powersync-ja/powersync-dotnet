@@ -29,7 +29,7 @@ public class StreamingSyncRetryTests
         {
             Database = new SQLOpenOptions { DbFilename = dbFilename },
             Schema = TestSchemaTodoList.AppSchema,
-            RemoteFactory = _ => throwing
+            RemoteFactory = (_, _) => throwing
         });
 
         try
