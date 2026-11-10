@@ -42,9 +42,15 @@ public interface IQueryRow
 
 public interface IFromRow<TSelf> where TSelf : IFromRow<TSelf>
 {
+    /// <summary>
+    /// Creates an instance from a result row. <paramref name="row"/> is only valid during this call.
+    /// </summary>
     public static abstract TSelf FromRow(IQueryRow row);
 }
 
+/// <summary>
+/// Maps a result row. <paramref name="row"/> is only valid during this call.
+/// </summary>
 public delegate T SqlMapper<T>(IQueryRow row);
 
 public interface IDBGetUtils
