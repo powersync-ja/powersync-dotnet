@@ -1,4 +1,4 @@
-# The version is pulled from the CHANGELOG.md file of the package.
+# The version of each package is pulled from its own CHANGELOG.md file.
 # Add a `-dev.xxx` suffix to the version. Example: `0.0.1-dev.1`
 name: Create Dev Release
 
@@ -12,6 +12,10 @@ jobs:
 
     permissions:
       contents: read
+
+    outputs:
+      common_version: ${{ steps.extract_version.outputs.common_version }}
+      source_generators_version: ${{ steps.extract_version.outputs.source_generators_version }}
 
     steps:
       - name: Checkout Repository
@@ -33,19 +37,28 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore
 
-      - name: Extract Common Package Version from CHANGELOG.md
+      - name: Extract Package Versions from CHANGELOG.md
+        id: extract_version
         shell: bash
         run: |
-          COMMON_VERSION=$(awk '/^## [0-9]+\.[0-9]+\.[0-9]+-dev(\.[0-9]+)?$/ {print $2; exit}' PowerSync/PowerSync.Common/CHANGELOG.md)
-          if [[ -z "$COMMON_VERSION" ]]; then
-            echo "Error: Invalid dev version found in PowerSync.Common/CHANGELOG.md. Expected format: x.x.x-dev.x"
-            exit 1
-          fi
-          echo "Detected Version: $COMMON_VERSION"
-          echo "VERSION=$COMMON_VERSION" >> $GITHUB_ENV
+          extract_version() {
+            local version
+            version=$(awk '/^## [0-9]+\.[0-9]+\.[0-9]+-dev(\.[0-9]+)?$/ {print $2; exit}' "PowerSync/$2/CHANGELOG.md")
+            if [[ -z "$version" ]]; then
+              echo "Error: Invalid dev version found in $2/CHANGELOG.md. Expected format: x.x.x-dev.x"
+              exit 1
+            fi
+            echo "Detected $2 Version: $version"
+            echo "$1=$version" >> $GITHUB_OUTPUT
+          }
+          extract_version common_version PowerSync.Common
+          extract_version source_generators_version PowerSync.Common.SourceGenerators
 
       - name: Run Pack For Common
-        run: dotnet pack PowerSync/PowerSync.Common -c Release -o ${{ github.workspace }}/output
+        run: dotnet pack PowerSync/PowerSync.Common -c Release -o ${{ github.workspace }}/output -p:Version=${{ steps.extract_version.outputs.common_version }}
+
+      - name: Run Pack For SourceGenerators
+        run: dotnet pack PowerSync/PowerSync.Common.SourceGenerators -c Release -o ${{ github.workspace }}/output -p:Version=${{ steps.extract_version.outputs.source_generators_version }}
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
@@ -144,6 +157,14 @@ jobs:
 
       - name: Run Push For Common
         run: >
-          dotnet nuget push "${{ github.workspace }}\SignedArtifacts\PowerSync.Common*.nupkg"
+          dotnet nuget push "${{ github.workspace }}\SignedArtifacts\PowerSync.Common.${{ needs.build.outputs.common_version }}.nupkg"
           --api-key "${{ steps.login.outputs.NUGET_API_KEY }}"
           --source https://api.nuget.org/v3/index.json
+          --skip-duplicate
+
+      - name: Run Push For SourceGenerators
+        run: >
+          dotnet nuget push "${{ github.workspace }}\SignedArtifacts\PowerSync.Common.SourceGenerators.${{ needs.build.outputs.source_generators_version }}.nupkg"
+          --api-key "${{ steps.login.outputs.NUGET_API_KEY }}"
+          --source https://api.nuget.org/v3/index.json
+          --skip-duplicate
