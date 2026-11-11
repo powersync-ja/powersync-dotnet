@@ -58,8 +58,10 @@ public class SqliteBucketStorage : IBucketStorageAdapter
     {
         if (clientId == null)
         {
-            var row = await db.Get("SELECT powersync_client_id() as client_id");
-            clientId = row.GetStringOrNull("client_id") ?? "";
+            clientId = await db.Get(
+                "SELECT powersync_client_id() as client_id",
+                null,
+                row => row.GetStringOrNull("client_id") ?? "");
         }
 
         return clientId;
@@ -109,10 +111,12 @@ public class SqliteBucketStorage : IBucketStorageAdapter
             }
 
             var rs = await tx.GetAll(
-                "SELECT seq FROM main.sqlite_sequence WHERE name = 'ps_crud'"
+                "SELECT seq FROM main.sqlite_sequence WHERE name = 'ps_crud'",
+                null,
+                row => row.GetLong("seq")
             );
 
-            return rs.Count == 0 ? null : (long?)rs.Rows[0].GetLong("seq");
+            return rs.Count == 0 ? null : (long?)rs[0];
         });
 
         if (seqBeforeResult is not { } seqBefore)
@@ -134,7 +138,9 @@ public class SqliteBucketStorage : IBucketStorageAdapter
             }
 
             var rsAfter = await tx.GetAll(
-                "SELECT seq FROM main.sqlite_sequence WHERE name = 'ps_crud'"
+                "SELECT seq FROM main.sqlite_sequence WHERE name = 'ps_crud'",
+                null,
+                row => row.GetLong("seq")
             );
 
             if (rsAfter.Count == 0)
@@ -142,7 +148,7 @@ public class SqliteBucketStorage : IBucketStorageAdapter
                 throw new Exception("SQLite Sequence should not be empty");
             }
 
-            long seqAfter = rsAfter.Rows[0].GetLong("seq");
+            long seqAfter = rsAfter[0];
             logger.LogDebug("[updateLocalTarget] seqAfter: {seq}", seqAfter);
 
             if (seqAfter != seqBefore)
@@ -207,22 +213,22 @@ public class SqliteBucketStorage : IBucketStorageAdapter
         return next != null ? CrudEntry.FromRow(next) : null;
     }
 
-    public async Task<bool> HasCrud()
+    private static readonly string HasCrudQuery = $"SELECT EXISTS(SELECT 1 FROM {PSInternalTable.CRUD}) AS r";
+
+    public Task<bool> HasCrud()
     {
-        return await db.GetOptional($"SELECT 1 as ignore FROM {PSInternalTable.CRUD} LIMIT 1") != null;
+        return db.Get(HasCrudQuery, null, row => row.GetBool("r"));
     }
 
-    private static async Task<bool> HasCrud(ITransaction tx)
+    private static Task<bool> HasCrud(ITransaction tx)
     {
-        return await tx.GetOptional($"SELECT 1 as ignore FROM {PSInternalTable.CRUD} LIMIT 1") != null;
+        return tx.Get(HasCrudQuery, null, row => row.GetBool("r"));
     }
 
     public async Task<string> Control(string op, object? payload = null)
     {
         return await db.WriteTransaction(async tx =>
-        {
-            var result = await tx.Get("SELECT powersync_control(?, ?) AS r", [op, payload]);
-            return result.GetStringOrNull("r")!;
-        });
+            await tx.Get("SELECT powersync_control(?, ?) AS r", [op, payload], row => row.GetStringOrNull("r")!)
+        );
     }
 }

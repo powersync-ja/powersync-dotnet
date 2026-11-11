@@ -105,10 +105,21 @@ namespace PowersyncDotnetTodoList.ViewModels
             if (results.Count == 0)
                 return table;
 
-            var columns = results.Rows[0].Columns.Distinct().ToList();
-            foreach (var column in columns)
+            var columns = results.Rows[0].Columns;
+            var duplicates = columns
+                .GroupBy(column => column, StringComparer.OrdinalIgnoreCase)
+                .Where(group => group.Count() > 1)
+                .Select(group => group.Key)
+                .ToList();
+            if (duplicates.Count > 0)
             {
-                table.Columns.Add(column, typeof(object));
+                throw new InvalidOperationException(
+                    $"Duplicate column names in result: {string.Join(", ", duplicates)}. Use aliases (e.g. SELECT a.id AS a_id) to give each column a unique name.");
+            }
+
+            for (var i = 0; i < columns.Count; i++)
+            {
+                table.Columns.Add(new DataColumn($"c{i}", typeof(object)) { Caption = columns[i] });
             }
 
             foreach (var row in results.Rows)

@@ -782,7 +782,6 @@ public class StreamingSyncImplementation : ICloseable
 
         // A failure opening or reading the stream, surfaced from the control loop so it retries.
         Exception? streamError = null;
-        Exception? iterationError = null;
 
         // Reconciling checkpoint request state runs alongside line processing rather than blocking it.
         Task? seedingCheckpointState = null;
@@ -1140,16 +1139,11 @@ public class StreamingSyncImplementation : ICloseable
         }
         catch (Exception ex)
         {
-            iterationError = ex;
+            UpdateSyncStatus(new SyncStatusOptions { DataFlow = new SyncDataFlowStatus { DownloadError = ex } });
             throw;
         }
         finally
         {
-            if (iterationError != null)
-            {
-                UpdateSyncStatus(new SyncStatusOptions { DataFlow = new SyncDataFlowStatus { DownloadError = iterationError } });
-            }
-
             handleActiveStreamsChange = null;
             notifyTokenRefreshed = null;
 

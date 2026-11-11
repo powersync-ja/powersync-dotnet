@@ -12,6 +12,13 @@ public enum Priority
 }
 
 [GenerateSqlMapper]
+public partial class EnumRow
+{
+    public Priority Priority { get; set; }
+    public Priority? NullPriority { get; set; }
+}
+
+[GenerateSqlMapper]
 public partial class MappedTypes
 {
     public string Text { get; set; } = "";
@@ -178,6 +185,21 @@ public class GenerateSqlMapperTests : IAsyncLifetime
         Assert.Equal(guid, result.NullGuid);
         Assert.Equal(Priority.High, result.NullPriority);
         Assert.Equal(new byte[] { 3 }, result.NullBlob);
+    }
+
+    [Fact]
+    public async Task MapsEnumsStoredAsText()
+    {
+        var result = await db.Get<EnumRow>("SELECT 'High' AS Priority, 'low' AS NullPriority");
+        Assert.Equal(Priority.High, result.Priority);
+        Assert.Equal(Priority.Low, result.NullPriority);
+
+        var withNull = await db.Get<EnumRow>("SELECT 2 AS Priority, NULL AS NullPriority");
+        Assert.Equal(Priority.High, withNull.Priority);
+        Assert.Null(withNull.NullPriority);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            db.Get<EnumRow>("SELECT NULL AS Priority, NULL AS NullPriority"));
     }
 
     [Fact]
