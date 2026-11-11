@@ -22,7 +22,7 @@ internal sealed class AttachmentService(PowerSyncDatabase db, string tableName, 
     public async IAsyncEnumerable<bool> WatchActiveAttachments(
         [EnumeratorCancellation] CancellationToken ct = default)
     {
-        var stream = db.Watch<string>(
+        var stream = db.Watch(
             $@"
                 SELECT id
                 FROM {tableName}

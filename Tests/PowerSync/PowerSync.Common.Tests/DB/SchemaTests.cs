@@ -304,24 +304,6 @@ public class SchemaTests
     }
 
     [Fact]
-    public void AttributeParser_TypeMap_CustomRegistered()
-    {
-        // Log has Column aliases
-        new AttributeParser(typeof(Log)).RegisterDapperTypeMap();
-        var typeMap = Dapper.SqlMapper.GetTypeMap(typeof(Log));
-        Assert.False(typeMap is Dapper.DefaultTypeMap);
-    }
-
-    [Fact]
-    public void AttributeParser_TypeMap_DefaultRegistered()
-    {
-        // Asset has no Column aliases
-        new AttributeParser(typeof(Asset)).RegisterDapperTypeMap();
-        var typeMap = Dapper.SqlMapper.GetTypeMap(typeof(Asset));
-        Assert.True(typeMap is Dapper.DefaultTypeMap);
-    }
-
-    [Fact]
     public void Schema_Validate_RejectsDuplicateTableNames()
     {
         var schema = new Schema(

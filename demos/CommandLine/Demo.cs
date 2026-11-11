@@ -6,17 +6,26 @@ using CommandLine.Utils;
 
 using PowerSync.Common.Client;
 using PowerSync.Common.Client.Connection;
+using PowerSync.Common.DB;
 
 using Spectre.Console;
 
 class Demo
 {
-    class ListResult
+    class ListResult : IFromRow<ListResult>
     {
         public string id { get; set; }
         public string name { get; set; }
         public string owner_id { get; set; }
         public string created_at { get; set; }
+
+        public static ListResult FromRow(IQueryRow row) => new()
+        {
+            id = row.GetString("id"),
+            name = row.GetString("name"),
+            owner_id = row.GetString("owner_id"),
+            created_at = row.GetString("created_at"),
+        };
     }
 
     static async Task Main()

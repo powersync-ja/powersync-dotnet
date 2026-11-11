@@ -1,3 +1,4 @@
+using System.Data;
 using System.Windows.Controls;
 
 namespace PowersyncDotnetTodoList.Views
@@ -7,6 +8,14 @@ namespace PowersyncDotnetTodoList.Views
         public SQLConsoleView()
         {
             InitializeComponent();
+        }
+
+        private void OnAutoGeneratingColumn(object? sender, DataGridAutoGeneratingColumnEventArgs e)
+        {
+            if (sender is DataGrid { ItemsSource: DataView view } && view.Table?.Columns[e.PropertyName] is { } column)
+            {
+                e.Column.Header = column.Caption;
+            }
         }
     }
 }
