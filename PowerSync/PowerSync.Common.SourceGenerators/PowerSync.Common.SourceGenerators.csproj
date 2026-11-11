@@ -20,7 +20,7 @@
     <RepositoryUrl>https://github.com/powersync-ja/powersync-dotnet</RepositoryUrl>
     <PackageProjectUrl>https://powersync.com</PackageProjectUrl>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
-    <PackageReleaseNotes>https://github.com/powersync-ja/powersync-dotnet/PowerSync/PowerSync.Common/CHANGELOG.md</PackageReleaseNotes>
+    <PackageReleaseNotes>https://github.com/powersync-ja/powersync-dotnet/PowerSync/PowerSync.Common.SourceGenerators/CHANGELOG.md</PackageReleaseNotes>
     <PackageTags>powersync local-first sqlite source-generator</PackageTags>
     <PackageIcon>icon.png</PackageIcon>
     <PackageReadmeFile>README.md</PackageReadmeFile>
@@ -33,11 +33,6 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" PrivateAssets="all" />
     <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.3.4" PrivateAssets="all" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <AdditionalFiles Include="AnalyzerReleases.Shipped.md" />
-    <AdditionalFiles Include="AnalyzerReleases.Unshipped.md" />
   </ItemGroup>
 
   <ItemGroup>
