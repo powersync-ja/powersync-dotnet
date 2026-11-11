@@ -2,6 +2,10 @@
 
 Source generators for [PowerSync.Common](https://www.nuget.org/packages/PowerSync.Common/).
 
+## ⚠️ Project Status
+
+This package is in alpha and is not yet considered ready for production use. See our feature status definitions [here](https://docs.powersync.com/resources/feature-status).
+
 ## `[GenerateSqlMapper]`
 
 Mark a `partial` class, struct or record with `[GenerateSqlMapper]` to generate its `IFromRow<T>` implementation, so it can be used with `GetAll<T>`, `Get<T>`, `GetOptional<T>` and `Watch<T>` without writing a mapper by hand.
