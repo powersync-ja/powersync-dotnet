@@ -14,8 +14,6 @@ Packages are published to [NuGet](https://www.nuget.org/profiles/PowerSync).
 
 - [PowerSync.Common](./PowerSync/PowerSync.Common/README.md)
   - Core package: .NET implementation of a PowerSync database connector and streaming sync bucket implementation. Packages meant for specific platforms will extend functionality of `Common`.
-- [PowerSync.Common.SourceGenerators](./PowerSync/PowerSync.Common.SourceGenerators/README.md)
-  - Optional source generators for `Common`, such as `[GenerateSqlMapper]` for mapping query rows to your own types.
 
 ## Demo Apps / Example Projects
 

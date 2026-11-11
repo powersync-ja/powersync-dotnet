@@ -31,7 +31,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\PowerSync\PowerSync.Common\PowerSync.Common.csproj" />
-    <ProjectReference Include="..\..\..\PowerSync\PowerSync.Common.SourceGenerators\PowerSync.Common.SourceGenerators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
 </Project>
