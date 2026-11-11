@@ -413,7 +413,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         string sdkVersion;
         try
         {
-            sdkVersion = (await Database.Get("SELECT powersync_rs_version() as version")).GetString("version");
+            sdkVersion = await Database.Get("SELECT powersync_rs_version() as version", null, row => row.GetString("version"));
         }
         catch (SqliteException ex)
         {

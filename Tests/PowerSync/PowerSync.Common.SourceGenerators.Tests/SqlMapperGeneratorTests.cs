@@ -245,4 +245,52 @@ public class SqlMapperGeneratorTests
         Assert.DoesNotContain("Secret", source);
         Assert.Contains("Name = row.GetString(\"Name\")", source);
     }
+
+    [Fact]
+    public void AttributeDoesNotConflictAcrossInternalsVisibleTo()
+    {
+        var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!)
+            .Split(Path.PathSeparator)
+            .Where(path => !Path.GetFileName(path).StartsWith("PowerSync.Common"))
+            .Select(path => (MetadataReference)MetadataReference.CreateFromFile(path))
+            .Append(MetadataReference.CreateFromFile(typeof(IFromRow<>).Assembly.Location))
+            .ToList();
+        var options = new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable);
+
+        Compilation Generate(string name, string source, IEnumerable<MetadataReference> refs)
+        {
+            var compilation = CSharpCompilation.Create(name, [CSharpSyntaxTree.ParseText(source, ParseOptions)], refs, options);
+            GeneratorDriver driver = CSharpGeneratorDriver.Create([new SqlMapperGenerator().AsSourceGenerator()], parseOptions: ParseOptions);
+            driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
+            Assert.Empty(diagnostics);
+            return output;
+        }
+
+        var app = Generate("App", """
+            using PowerSync.Common.DB;
+
+            [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("App.Tests")]
+
+            [GenerateSqlMapper]
+            public partial class Todo
+            {
+                public string Id { get; set; } = "";
+            }
+            """, references);
+        Assert.Empty(app.GetDiagnostics().Where(d => d.Severity >= DiagnosticSeverity.Warning));
+
+        using var stream = new MemoryStream();
+        Assert.True(app.Emit(stream).Success);
+
+        var tests = Generate("App.Tests", """
+            using PowerSync.Common.DB;
+
+            [GenerateSqlMapper]
+            public partial class Fixture
+            {
+                public string Id { get; set; } = "";
+            }
+            """, references.Append(MetadataReference.CreateFromImage(stream.ToArray())));
+        Assert.Empty(tests.GetDiagnostics().Where(d => d.Severity >= DiagnosticSeverity.Warning));
+    }
 }
