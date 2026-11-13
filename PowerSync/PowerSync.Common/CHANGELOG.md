@@ -3,58 +3,36 @@
 ## 1.0.1
 
 - Full release.
-- **Breaking:** Reworked the query API. `GetAll`, `GetOptional`, `Get` and `Watch` no longer use Dapper or return `dynamic`, and Dapper is no longer a dependency. Each method now has three overloads:
-  - Untyped: returns a `QueryResult` (`GetAll`, `Watch`) or `IQueryRow` (`Get`, `GetOptional`), with typed getters such as `GetString("name")` and `GetLongOrNull("count")`.
-  - Mapper: takes `parameters` and a `SqlMapper<T>` delegate, e.g. `db.GetAll(sql, null, row => row.GetString("id"))`.
-  - `IFromRow<T>`: for types implementing `static T FromRow(IQueryRow row)`, e.g. `db.GetAll<Todo>(sql)`.
-  - `GetAll<T>` and `Watch<T>` now return `List<T>` instead of `T[]`.
+- **Breaking:** Reworked the query API.
+  - `GetAll`, `GetOptional`, `Get` and `Watch` no longer use Dapper or return `dynamic`, and Dapper is no longer a dependency. Each method now has three overloads:
+    - Untyped: returns a `QueryResult` (`GetAll`, `Watch`) or `IQueryRow` (`Get`, `GetOptional`), with typed getters such as `GetString("name")` and `GetLongOrNull("count")`.
+    - Mapper: takes `parameters` and a `SqlMapper<T>` delegate, e.g. `db.GetAll(sql, null, row => row.GetString("id"))`.
+  - **Breaking:** `IFromRow<T>`: for types implementing `static T FromRow(IQueryRow row)`, e.g. `db.GetAll<Todo>(sql)`.
+  - **Breaking:** `GetAll<T>` and `Watch<T>` now return `List<T>` instead of `T[]`.
   - Schema types with `[Column]` attributes are no longer hydrated automatically when queried; implement `IFromRow<T>` or pass a mapper.
   - Column names are now matched case-insensitively when reading `IQueryRow` values, like SQLite identifiers.
 
 ```csharp
-// Old
+// Old, using Dapper:
 public class TodoItem
 {
     public string Id { get; set; }
-    string? Description { get; set; }
-    DateTime CreatedAt { get; set; }
-    bool Completed { get; set; }
+
+    public string? Description { get; set; }
+
+    [Column("created_at")]
+    public DateTime CreatedAt { get; set; }
+
+    public bool Completed { get; set; }
 }
 
 // Relies on Dapper queries + custom wrappers, therefore:
 // - Runs slower
 // - Uses more memory
-// - Relies on Sysem.Reflection.Emit
+// - Relies on System.Reflection.Emit
 TodoItem[] todoItems = await db.GetAll<TodoItem>("SELECT * FROM todos");
 
-// New (using `IFromRow<T>`)
-public class TodoItem : IFromRow<TodoItem>
-{
-    public string Id { get; set; }
-    string? Description { get; set; }
-    DateTime CreatedAt { get; set; }
-    bool Completed { get; set; }
-
-    public static TodoItem FromRow(IQueryRow row) => new TodoItem
-    {
-        Id = row.GetString("id"),
-        Description = row.GetStringOrNull("description"),
-        CreatedAt = row.GetDateTime("created_at"),
-        Completed = row.GetBool("completed"),
-    }
-}
-
-List<TodoItem> todoItems = await db.GetAll<TodoItem>("SELECT * FROM todos")
-
-// New (using `SqlMapper`)
-public class TodoItem
-{
-    public string Id { get; set; }
-    string? Description { get; set; }
-    DateTime CreatedAt { get; set; }
-    bool Completed { get; set; }
-}
-
+// New, using `SqlMapper`:
 List<TodoItem> todoItems = await db.GetAll<TodoItem>(
     "SELECT * FROM todos",
     null,
@@ -65,6 +43,25 @@ List<TodoItem> todoItems = await db.GetAll<TodoItem>(
         Completed = row.GetBool("completed"),
     }
 );
+
+// Or using `IFromRow<T>`:
+public class TodoItem : IFromRow<TodoItem>
+{
+    public string Id { get; set; }
+    public string? Description { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public bool Completed { get; set; }
+
+    public static TodoItem FromRow(IQueryRow row) => new TodoItem
+    {
+        Id = row.GetString("id"),
+        Description = row.GetStringOrNull("description"),
+        CreatedAt = row.GetDateTime("createdat"),
+        Completed = row.GetBool("completed"),
+    };
+}
+
+List<TodoItem> todoItems = await db.GetAll<TodoItem>("SELECT * FROM todos");
 ```
 
 - Fix `CheckpointRequest.WaitForSync()` failing with a "disconnected" error instead of the sync error when a sync iteration fails. The download error is now reported before the status changes to disconnected.
