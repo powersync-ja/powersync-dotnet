@@ -45,7 +45,6 @@ public class Schema
     private void RegisterType(Type type)
     {
         var parser = new AttributeParser(type);
-        parser.RegisterDapperTypeMap();
         _tables.Add(parser.ParseTable());
     }
 

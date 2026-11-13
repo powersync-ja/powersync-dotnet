@@ -99,6 +99,7 @@
                 <DataGrid Grid.Row="2"
                           ItemsSource="{Binding QueryResults}"
                           AutoGenerateColumns="True"
+                          AutoGeneratingColumn="OnAutoGeneratingColumn"
                           IsReadOnly="True"
                           Margin="0,10,0,0"
                           BorderBrush="#CCCCCC"

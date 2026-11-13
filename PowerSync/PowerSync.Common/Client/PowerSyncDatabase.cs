@@ -121,14 +121,17 @@ public interface IPowerSyncDatabase : ICloseableAsync
 
     Task<NonQueryResult> ExecuteBatch(string query, object?[][]? parameters = null);
 
-    Task<T[]> GetAll<T>(string sql, object?[]? parameters = null);
-    Task<dynamic[]> GetAll(string sql, object?[]? parameters = null);
+    Task<QueryResult> GetAll(string sql, object?[]? parameters = null);
+    Task<List<T>> GetAll<T>(string sql, object?[]? parameters, SqlMapper<T> mapper);
+    Task<List<T>> GetAll<T>(string sql, object?[]? parameters = null) where T : IFromRow<T>;
 
-    Task<T?> GetOptional<T>(string sql, object?[]? parameters = null);
-    Task<dynamic?> GetOptional(string sql, object?[]? parameters = null);
+    Task<IQueryRow?> GetOptional(string sql, object?[]? parameters = null);
+    Task<T?> GetOptional<T>(string sql, object?[]? parameters, SqlMapper<T> mapper);
+    Task<T?> GetOptional<T>(string sql, object?[]? parameters = null) where T : IFromRow<T>;
 
-    Task<T> Get<T>(string sql, object?[]? parameters = null);
-    Task<dynamic> Get(string sql, object?[]? parameters = null);
+    Task<IQueryRow> Get(string sql, object?[]? parameters = null);
+    Task<T> Get<T>(string sql, object?[]? parameters, SqlMapper<T> mapper);
+    Task<T> Get<T>(string sql, object?[]? parameters = null) where T : IFromRow<T>;
 
     Task<T> ReadLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null);
 
@@ -405,14 +408,12 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         Events.Emit(new PowerSyncDBEvents.InitializedEvent());
     }
 
-    private record VersionResult(string version);
-
     private async Task LoadVersion()
     {
         string sdkVersion;
         try
         {
-            sdkVersion = (await Database.Get<VersionResult>("SELECT powersync_rs_version() as version")).version;
+            sdkVersion = await Database.Get("SELECT powersync_rs_version() as version", null, row => row.GetString("version"));
         }
         catch (SqliteException ex)
         {
@@ -446,11 +447,10 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         }
     }
 
-    private record OfflineSyncStatusResult(string r);
     protected async Task ResolveOfflineSyncStatus()
     {
-        var result = await Database.Get<OfflineSyncStatusResult>("SELECT powersync_offline_sync_status() as r");
-        var parsed = JsonConvert.DeserializeObject<CoreSyncStatus>(result.r);
+        var result = await Database.Get("SELECT powersync_offline_sync_status() as r");
+        var parsed = JsonConvert.DeserializeObject<CoreSyncStatus>(result.GetString("r"));
 
         var parsedSyncStatus = CoreInstructionHelpers.CoreStatusToSyncStatus(parsed!);
 
@@ -693,8 +693,6 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         Events.Close();
     }
 
-    private record UploadQueueStatsSizeCountResult(long size, long count);
-    private record UploadQueueStatsCountResult(long count);
     /// <summary>
     /// Get upload queue size estimate and count.
     /// </summary>
@@ -704,18 +702,18 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         {
             if (includeSize)
             {
-                var result = await tx.Get<UploadQueueStatsSizeCountResult>(
+                var result = await tx.Get(
                     $"SELECT SUM(cast(data as blob) + 20) as size, count(*) as count FROM {PSInternalTable.CRUD}"
                 );
 
-                return new UploadQueueStats(result.count, result.size);
+                return new UploadQueueStats(result.GetLong("count"), result.GetLongOrNull("size") ?? 0);
             }
             else
             {
-                var result = await tx.Get<UploadQueueStatsCountResult>(
+                var result = await tx.Get(
                     $"SELECT count(*) as count FROM {PSInternalTable.CRUD}"
                 );
-                return new UploadQueueStats(result.count);
+                return new UploadQueueStats(result.GetLong("count"));
             }
         });
     }
@@ -739,7 +737,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
     /// </summary>
     public async Task<CrudBatch?> GetCrudBatch(int limit = 100)
     {
-        var crudResult = await GetAll<CrudEntryJSON>($"SELECT id, tx_id as transactionId, data FROM {PSInternalTable.CRUD} ORDER BY id ASC LIMIT ?", [limit + 1]);
+        var crudResult = await GetAll<CrudEntryJSON>($"SELECT id, tx_id, data FROM {PSInternalTable.CRUD} ORDER BY id ASC LIMIT ?", [limit + 1]);
 
         var all = crudResult.Select(CrudEntry.FromRow).ToList();
 
@@ -781,7 +779,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         return await ReadTransaction(async tx =>
         {
             var first = await tx.GetOptional<CrudEntryJSON>(
-            $"SELECT id, tx_id AS transactionId, data FROM {PSInternalTable.CRUD} ORDER BY id ASC LIMIT 1");
+            $"SELECT id, tx_id, data FROM {PSInternalTable.CRUD} ORDER BY id ASC LIMIT 1");
 
             if (first == null)
             {
@@ -799,7 +797,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
             else
             {
                 var result = await tx.GetAll<CrudEntryJSON>(
-                    $"SELECT id, tx_id as transactionId, data FROM {PSInternalTable.CRUD} WHERE tx_id = ? ORDER BY id ASC",
+                    $"SELECT id, tx_id, data FROM {PSInternalTable.CRUD} WHERE tx_id = ? ORDER BY id ASC",
                     [txId]);
 
                 all = result.Select(CrudEntry.FromRow).ToList();
@@ -841,40 +839,58 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         return await Database.ExecuteBatch(query, parameters);
     }
 
-    public async Task<T[]> GetAll<T>(string query, object?[]? parameters = null)
-    {
-        await WaitForReady();
-        return await Database.GetAll<T>(query, parameters);
-    }
-
-    public async Task<dynamic[]> GetAll(string query, object?[]? parameters = null)
+    public async Task<QueryResult> GetAll(string query, object?[]? parameters = null)
     {
         await WaitForReady();
         return await Database.GetAll(query, parameters);
     }
 
-    public async Task<T?> GetOptional<T>(string query, object?[]? parameters = null)
+    public async Task<List<T>> GetAll<T>(string query, object?[]? parameters, SqlMapper<T> mapper)
     {
         await WaitForReady();
-        return await Database.GetOptional<T>(query, parameters);
+        return await Database.GetAll(query, parameters, mapper);
     }
 
-    public async Task<dynamic?> GetOptional(string query, object?[]? parameters = null)
+    public async Task<List<T>> GetAll<T>(string query, object?[]? parameters = null) where T : IFromRow<T>
+    {
+        await WaitForReady();
+        return await Database.GetAll<T>(query, parameters);
+    }
+
+    public async Task<IQueryRow?> GetOptional(string query, object?[]? parameters = null)
     {
         await WaitForReady();
         return await Database.GetOptional(query, parameters);
     }
 
-    public async Task<T> Get<T>(string query, object?[]? parameters = null)
+    public async Task<T?> GetOptional<T>(string query, object?[]? parameters, SqlMapper<T> mapper)
     {
         await WaitForReady();
-        return await Database.Get<T>(query, parameters);
+        return await Database.GetOptional(query, parameters, mapper);
     }
 
-    public async Task<dynamic> Get(string query, object?[]? parameters = null)
+    public async Task<T?> GetOptional<T>(string query, object?[]? parameters = null) where T : IFromRow<T>
+    {
+        await WaitForReady();
+        return await Database.GetOptional<T>(query, parameters);
+    }
+
+    public async Task<IQueryRow> Get(string query, object?[]? parameters = null)
     {
         await WaitForReady();
         return await Database.Get(query, parameters);
+    }
+
+    public async Task<T> Get<T>(string query, object?[]? parameters, SqlMapper<T> mapper)
+    {
+        await WaitForReady();
+        return await Database.Get(query, parameters, mapper);
+    }
+
+    public async Task<T> Get<T>(string query, object?[]? parameters = null) where T : IFromRow<T>
+    {
+        await WaitForReady();
+        return await Database.Get<T>(query, parameters);
     }
 
     public async Task<T> ReadLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null)
@@ -920,9 +936,21 @@ public class PowerSyncDatabase : IPowerSyncDatabase
     /// <see cref="SQLWatchOptions.Tables"/> when provided), and are re-resolved whenever the
     /// schema changes, so watches keep working across <see cref="UpdateSchema"/> calls.
     /// </summary>
-    public IAsyncEnumerable<T[]> Watch<T>(string sql, object?[]? parameters = null, SQLWatchOptions? options = null)
+    public IAsyncEnumerable<QueryResult> Watch(string sql, object?[]? parameters = null, SQLWatchOptions? options = null)
     {
-        return watchManager.Watch<T>(sql, parameters, options);
+        return watchManager.Watch(sql, parameters, () => GetAll(sql, parameters), options);
+    }
+
+    /// <inheritdoc cref="Watch(string, object[], SQLWatchOptions)"/>
+    public IAsyncEnumerable<List<T>> Watch<T>(string sql, object?[]? parameters, SqlMapper<T> mapper, SQLWatchOptions? options = null)
+    {
+        return watchManager.Watch(sql, parameters, () => GetAll(sql, parameters, mapper), options);
+    }
+
+    /// <inheritdoc cref="Watch(string, object[], SQLWatchOptions)"/>
+    public IAsyncEnumerable<List<T>> Watch<T>(string sql, object?[]? parameters = null, SQLWatchOptions? options = null) where T : IFromRow<T>
+    {
+        return watchManager.Watch(sql, parameters, () => GetAll<T>(sql, parameters), options);
     }
 
     /// <summary>
@@ -933,34 +961,24 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         return watchManager.OnChange(options);
     }
 
-    private class ExplainedResult
-    {
-        public int addr = 0;
-        public string opcode = "";
-        public int p1 = 0;
-        public int p2 = 0;
-        public int p3 = 0;
-        public string p4 = "";
-        public int p5 = 0;
-    }
-    private record TableSelectResult(string tbl_name);
     internal async Task<HashSet<string>> GetSourceTables(string sql, object?[]? parameters = null)
     {
-        var explained = await GetAll<ExplainedResult>(
+        var explained = await GetAll(
             $"EXPLAIN {sql}", parameters
         );
 
-        var rootPages = explained
-            .Where(row => row.opcode == "OpenRead" && row.p3 == 0)
-            .Select(row => row.p2)
+        var rootPages = explained.Rows
+            .Where(row => row.GetString("opcode") == "OpenRead" && row.GetInt("p3") == 0)
+            .Select(row => row.GetInt("p2"))
             .ToList();
 
-        var tables = await GetAll<TableSelectResult>(
+        var tables = await GetAll(
             "SELECT DISTINCT tbl_name FROM sqlite_master WHERE rootpage IN (SELECT json_each.value FROM json_each(?))",
-            [JsonConvert.SerializeObject(rootPages)]
+            [JsonConvert.SerializeObject(rootPages)],
+            row => row.GetString("tbl_name")
         );
 
-        return [.. tables.Select(row => row.tbl_name)];
+        return [.. tables];
     }
 }
 

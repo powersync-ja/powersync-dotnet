@@ -204,34 +204,49 @@ public class MDSQLiteAdapter : IDBAdapter
         return await WriteTransaction((ctx) => ctx.ExecuteBatch(query, parameters));
     }
 
-    public async Task<T[]> GetAll<T>(string sql, object?[]? parameters = null)
-    {
-        return await ReadLock((ctx) => ctx.GetAll<T>(sql, parameters));
-    }
-
-    public async Task<dynamic[]> GetAll(string sql, object?[]? parameters = null)
+    public async Task<QueryResult> GetAll(string sql, object?[]? parameters = null)
     {
         return await ReadLock((ctx) => ctx.GetAll(sql, parameters));
     }
 
-    public async Task<T?> GetOptional<T>(string sql, object?[]? parameters = null)
+    public async Task<List<T>> GetAll<T>(string sql, object?[]? parameters, SqlMapper<T> mapper)
     {
-        return await ReadLock((ctx) => ctx.GetOptional<T>(sql, parameters));
+        return await ReadLock((ctx) => ctx.GetAll(sql, parameters, mapper));
     }
 
-    public async Task<dynamic?> GetOptional(string sql, object?[]? parameters = null)
+    public async Task<List<T>> GetAll<T>(string sql, object?[]? parameters = null) where T : IFromRow<T>
+    {
+        return await ReadLock((ctx) => ctx.GetAll<T>(sql, parameters));
+    }
+
+    public async Task<IQueryRow?> GetOptional(string sql, object?[]? parameters = null)
     {
         return await ReadLock((ctx) => ctx.GetOptional(sql, parameters));
     }
 
-    public async Task<T> Get<T>(string sql, object?[]? parameters = null)
+    public async Task<T?> GetOptional<T>(string sql, object?[]? parameters, SqlMapper<T> mapper)
     {
-        return await ReadLock((ctx) => ctx.Get<T>(sql, parameters));
+        return await ReadLock((ctx) => ctx.GetOptional(sql, parameters, mapper));
     }
 
-    public async Task<dynamic> Get(string sql, object?[]? parameters = null)
+    public async Task<T?> GetOptional<T>(string sql, object?[]? parameters = null) where T : IFromRow<T>
+    {
+        return await ReadLock((ctx) => ctx.GetOptional<T>(sql, parameters));
+    }
+
+    public async Task<IQueryRow> Get(string sql, object?[]? parameters = null)
     {
         return await ReadLock((ctx) => ctx.Get(sql, parameters));
+    }
+
+    public async Task<T> Get<T>(string sql, object?[]? parameters, SqlMapper<T> mapper)
+    {
+        return await ReadLock((ctx) => ctx.Get(sql, parameters, mapper));
+    }
+
+    public async Task<T> Get<T>(string sql, object?[]? parameters = null) where T : IFromRow<T>
+    {
+        return await ReadLock((ctx) => ctx.Get<T>(sql, parameters));
     }
 
     public async Task<T> ReadTransaction<T>(Func<ITransaction, Task<T>> fn, DBLockOptions? options = null)
@@ -445,33 +460,48 @@ public class MDSQLiteTransaction(MDSQLiteConnection connection) : ITransaction
         return connection.ExecuteBatch(query, parameters);
     }
 
-    public Task<T[]> GetAll<T>(string sql, object?[]? parameters = null)
-    {
-        return connection.GetAll<T>(sql, parameters);
-    }
-
-    public Task<dynamic[]> GetAll(string sql, object?[]? parameters = null)
+    public Task<QueryResult> GetAll(string sql, object?[]? parameters = null)
     {
         return connection.GetAll(sql, parameters);
     }
 
-    public Task<T?> GetOptional<T>(string sql, object?[]? parameters = null)
+    public Task<List<T>> GetAll<T>(string sql, object?[]? parameters, SqlMapper<T> mapper)
     {
-        return connection.GetOptional<T>(sql, parameters);
+        return connection.GetAll(sql, parameters, mapper);
     }
 
-    public Task<dynamic?> GetOptional(string sql, object?[]? parameters = null)
+    public Task<List<T>> GetAll<T>(string sql, object?[]? parameters = null) where T : IFromRow<T>
+    {
+        return connection.GetAll<T>(sql, parameters);
+    }
+
+    public Task<IQueryRow?> GetOptional(string sql, object?[]? parameters = null)
     {
         return connection.GetOptional(sql, parameters);
     }
 
-    public Task<T> Get<T>(string sql, object?[]? parameters = null)
+    public Task<T?> GetOptional<T>(string sql, object?[]? parameters, SqlMapper<T> mapper)
     {
-        return connection.Get<T>(sql, parameters);
+        return connection.GetOptional(sql, parameters, mapper);
     }
 
-    public Task<dynamic> Get(string sql, object?[]? parameters = null)
+    public Task<T?> GetOptional<T>(string sql, object?[]? parameters = null) where T : IFromRow<T>
+    {
+        return connection.GetOptional<T>(sql, parameters);
+    }
+
+    public Task<IQueryRow> Get(string sql, object?[]? parameters = null)
     {
         return connection.Get(sql, parameters);
+    }
+
+    public Task<T> Get<T>(string sql, object?[]? parameters, SqlMapper<T> mapper)
+    {
+        return connection.Get(sql, parameters, mapper);
+    }
+
+    public Task<T> Get<T>(string sql, object?[]? parameters = null) where T : IFromRow<T>
+    {
+        return connection.Get<T>(sql, parameters);
     }
 }

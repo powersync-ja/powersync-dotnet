@@ -3,6 +3,7 @@ using Newtonsoft.Json;
 using PowerSync.Common.Client;
 using PowerSync.Common.Client.Sync.Bucket;
 using PowerSync.Common.Client.Sync.Stream;
+using PowerSync.Common.DB;
 using PowerSync.Common.DB.Crud;
 using PowerSync.Common.DB.Schema;
 
@@ -49,15 +50,15 @@ public class RawTableTests : IAsyncLifetime
         NewDatabase(schema);
         await CreateAssetsTable(assets);
 
-        string tableType = (await _db.Get("SELECT type as r FROM sqlite_master WHERE name = 'assets'")).r;
+        string tableType = (await _db.Get("SELECT type as r FROM sqlite_master WHERE name = 'assets'")).GetString("r");
         Assert.Equal("table", tableType);
         Assert.NotEqual("view", tableType);
 
-        long powerSyncTableCount = await _db.Get<long>(@"
-            SELECT count(*)
+        long powerSyncTableCount = await _db.Get(@"
+            SELECT count(*) AS count
             FROM sqlite_master
             WHERE name = 'ps_data__assets'
-               OR name = 'ps_data_local__assets'");
+               OR name = 'ps_data_local__assets'", null, row => row.GetLong("count"));
         Assert.Equal(0L, powerSyncTableCount);
     }
 
@@ -69,12 +70,12 @@ public class RawTableTests : IAsyncLifetime
         NewDatabase(schema);
         await CreateAssetsTable(assets);
 
-        Assert.Equal(0L, await _db.Get<long>("SELECT count(*) FROM ps_crud"));
+        Assert.Equal(0L, await _db.Get("SELECT count(*) AS count FROM ps_crud", null, row => row.GetLong("count")));
         await _db.Execute(
             "INSERT INTO assets (id, make, model) VALUES (uuid(), ?, ?)",
             ["test make", "test model"]
         );
-        Assert.Equal(1L, await _db.Get<long>("SELECT count(*) FROM ps_crud"));
+        Assert.Equal(1L, await _db.Get("SELECT count(*) AS count FROM ps_crud", null, row => row.GetLong("count")));
     }
 
     [Fact]
@@ -279,11 +280,18 @@ public class RawTableTests : IAsyncLifetime
         Assert.Empty(query.Current);
     }
 
-    private class ListRow
+    private class ListRow : IFromRow<ListRow>
     {
         public string id { get; set; } = "";
         public string? name { get; set; }
         public string? _rest { get; set; }
+
+        public static ListRow FromRow(IQueryRow row) => new()
+        {
+            id = row.GetString("id"),
+            name = row.GetStringOrNull("name"),
+            _rest = row.Columns.Contains("_rest") ? row.GetStringOrNull("_rest") : null,
+        };
     }
 
     private void PushPut(long opId, string data)
