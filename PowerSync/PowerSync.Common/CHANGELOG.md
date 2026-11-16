@@ -72,6 +72,7 @@ List<TodoItem> todoItems = await db.GetAll<TodoItem>("SELECT * FROM todos");
 - Introduce `IAuthenticator` and `IMutationUploader` as superinterfaces of `IPowerSyncBackendConnector`, and make `ICustomCheckpointRequestConnector` inherit from `IAuthenticator`. If your connector implemented only `ICustomCheckpointRequestConnector`, also implement `IPowerSyncBackendConnector`.
 - Allow connecting in download-only or upload-only mode (through overloads of `Connect()`).
 - Update the PowerSync SQLite core extension to 0.5.4.
+- The SDK now registers update hooks using functions provided by the core extension, leading to the removal of `INotification`/`IBatchedUpdateNotification` in favor of plainly returning `HashSet<string>`.
 
 ## 1.0.0 (unlisted)
 

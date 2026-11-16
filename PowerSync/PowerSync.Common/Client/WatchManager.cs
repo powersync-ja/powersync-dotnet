@@ -150,7 +150,7 @@ internal class WatchManager
                 // Prevent a single bad notification from taking down the entire TablesUpdated loop
                 try
                 {
-                    var changed = new HashSet<string>(DBAdapterUtils.ExtractTableUpdates(update.TablesUpdated));
+                    HashSet<string> changed = update.TablesUpdated;
                     if (changed.Count == 0) continue;
 
                     foreach (var entry in watches)

@@ -84,6 +84,7 @@ public class MDSQLiteAdapter : IDBAdapter
             $"PRAGMA journal_mode = {resolvedOptions.JournalMode}",
             $"PRAGMA journal_size_limit = {resolvedOptions.JournalSizeLimit}",
             $"PRAGMA synchronous = {resolvedOptions.Synchronous}",
+            "SELECT powersync_update_hooks('install')",
         ];
 
         string[] readConnectionStatements =
@@ -189,7 +190,10 @@ public class MDSQLiteAdapter : IDBAdapter
     {
         tablesUpdatedCts?.Cancel();
         try { tablesUpdatedTask?.Wait(2000); } catch { /* expected */ }
-        writeConnection?.Close();
+        using (await writeMutex.LockAsync())
+        {
+            writeConnection?.Close();
+        }
         await readPool.Close();
         Events.Close();
     }
@@ -264,13 +268,14 @@ public class MDSQLiteAdapter : IDBAdapter
     {
         await initialized;
 
+        HashSet<string> updates;
         using (await writeMutex.LockAsync())
         {
             await fn(writeConnection);
+            updates = writeConnection.ConsumeUpdates();
         }
 
-        writeConnection.FlushUpdates();
-
+        writeConnection.EmitUpdates(updates);
     }
 
     public async Task<T> WriteLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null)
@@ -278,12 +283,14 @@ public class MDSQLiteAdapter : IDBAdapter
         await initialized;
 
         T result;
+        HashSet<string> updates;
         using (await writeMutex.LockAsync())
         {
             result = await fn(writeConnection);
+            updates = writeConnection.ConsumeUpdates();
         }
 
-        writeConnection.FlushUpdates();
+        writeConnection.EmitUpdates(updates);
 
         return result;
     }
@@ -343,7 +350,10 @@ public class MDSQLiteAdapter : IDBAdapter
     public async Task RefreshSchema()
     {
         await initialized;
-        await writeConnection.RefreshSchema();
+        using (await writeMutex.LockAsync())
+        {
+            await writeConnection.RefreshSchema();
+        }
         await readPool.LeaseAll(async (connections) =>
         {
             foreach (var conn in connections) await conn.RefreshSchema();

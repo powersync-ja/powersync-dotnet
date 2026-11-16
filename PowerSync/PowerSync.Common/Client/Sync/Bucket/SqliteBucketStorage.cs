@@ -38,7 +38,7 @@ public class SqliteBucketStorage : IBucketStorageAdapter
         {
             foreach (var update in updates)
             {
-                var tables = DBAdapterUtils.ExtractTableUpdates(update.TablesUpdated);
+                HashSet<string> tables = update.TablesUpdated;
                 if (tables.Contains(PSInternalTable.CRUD))
                 {
                     Events.Emit(new BucketStorageEvents.CrudUpdateEvent());
