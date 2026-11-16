@@ -1,0 +1,54 @@
+<Page x:Class="UnoTodo.Presentation.ListsPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:local="using:UnoTodo.Presentation"
+      xmlns:models="using:UnoTodo.Models"
+      xmlns:uen="using:Uno.Extensions.Navigation.UI"
+      xmlns:utu="using:Uno.Toolkit.UI"
+      xmlns:conv="using:UnoTodo.Presentation.Converters"
+      NavigationCacheMode="Required"
+      Background="{ThemeResource BackgroundBrush}">
+
+  <Page.Resources>
+    <conv:BoolToVisibilityConverter x:Key="BoolToVisibility" />
+  </Page.Resources>
+
+  <Grid utu:SafeArea.Insets="VisibleBounds">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition />
+    </Grid.RowDefinitions>
+
+    <utu:NavigationBar Content="Todo Lists" />
+
+    <Grid Grid.Row="1" Padding="16,8" ColumnDefinitions="*,Auto">
+      <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+        <TextBlock Text="● Online"
+                   Foreground="Green"
+                   Visibility="{Binding Connected, Converter={StaticResource BoolToVisibility}}" />
+        <TextBlock Text="● Offline"
+                   Foreground="Red"
+                   Visibility="{Binding Connected, Converter={StaticResource BoolToVisibility}, ConverterParameter=Invert}" />
+      </StackPanel>
+      <Button Grid.Column="1" Content="New List" Click="OnAddClicked" />
+    </Grid>
+
+    <ListView Grid.Row="2"
+              x:Name="ListsCollection"
+              ItemsSource="{Binding Lists}"
+              SelectionMode="Single"
+              uen:Navigation.Request="Todo">
+      <ListView.ItemTemplate>
+        <DataTemplate x:DataType="models:TodoList">
+          <Grid Padding="12,10" ColumnDefinitions="*,Auto">
+            <TextBlock Text="{x:Bind Name}"
+                       FontSize="16"
+                       VerticalAlignment="Center" />
+            <Button Grid.Column="1" Content="Delete" Click="OnDeleteClicked" />
+          </Grid>
+        </DataTemplate>
+      </ListView.ItemTemplate>
+    </ListView>
+  </Grid>
+</Page>
