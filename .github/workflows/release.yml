@@ -57,16 +57,9 @@ jobs:
       - name: Run Pack For Common
         run: dotnet pack PowerSync/PowerSync.Common -c Release -o ${{ github.workspace }}/output -p:Version=${{ steps.extract_version.outputs.common_version }}
 
-<<<<<<< HEAD
-||||||| parent of c7cacf7 (Update workflows to include SourceGenerators package)
-      - name: Run Pack For SourceGenerators
-        run: dotnet pack PowerSync/PowerSync.Common.SourceGenerators -c Release -o ${{ github.workspace }}/output
-
-=======
       - name: Run Pack For SourceGenerators
         run: dotnet pack PowerSync/PowerSync.Common.SourceGenerators -c Release -o ${{ github.workspace }}/output -p:Version=${{ steps.extract_version.outputs.source_generators_version }}
 
->>>>>>> c7cacf7 (Update workflows to include SourceGenerators package)
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
