@@ -40,7 +40,7 @@ internal class WatchManager
         _ = Task.Run(() => RunSchemaChangeLoop(schemaChanges));
     }
 
-    public IAsyncEnumerable<T[]> Watch<T>(string sql, object?[]? parameters, SQLWatchOptions? options)
+    public IAsyncEnumerable<T> Watch<T>(string sql, object?[]? parameters, Func<Task<T>> query, SQLWatchOptions? options)
     {
         options ??= new SQLWatchOptions();
 
@@ -58,7 +58,7 @@ internal class WatchManager
             refreshOnSchemaChange: true
         );
 
-        return Stream(subscription, _ => db.GetAll<T>(sql, parameters));
+        return Stream(subscription, _ => query());
     }
 
     public IAsyncEnumerable<WatchOnChangeEvent> OnChange(SQLWatchOptions? options)

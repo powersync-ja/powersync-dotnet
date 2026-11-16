@@ -106,18 +106,17 @@ static async IAsyncEnumerable<WatchedAttachmentItem[]> WatchProfilePhotos(
     PowerSyncDatabase db,
     [EnumeratorCancellation] CancellationToken ct)
 {
-    var stream = db.Watch<UserPhotoRow>(
+    var stream = db.Watch(
         "SELECT photo_id FROM users WHERE photo_id IS NOT NULL",
         null,
+        row => row.GetString("photo_id"),
         new SQLWatchOptions { TriggerImmediately = true, Signal = ct });
 
-    await foreach (var rows in stream.WithCancellation(ct))
+    await foreach (var photoIds in stream.WithCancellation(ct))
     {
-        yield return [.. rows.Select(r => new WatchedAttachmentItem(r.photo_id, fileExtension: "jpg"))];
+        yield return [.. photoIds.Select(id => new WatchedAttachmentItem(id, fileExtension: "jpg"))];
     }
 }
-
-internal sealed class UserPhotoRow { public string photo_id { get; set; } = ""; }
 ```
 
 ### 4. Save files with atomic updates
