@@ -25,7 +25,7 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvents.TablesUpdatedEvent
         Db = options.Database;
     }
 
-    public void FlushUpdates()
+    public HashSet<string> ConsumeUpdates()
     {
         // Using synchronous command execution deliberately
         using var command = Db.CreateCommand();
@@ -33,7 +33,11 @@ public class MDSQLiteConnection : EventStream<DBAdapterEvents.TablesUpdatedEvent
         using var reader = command.ExecuteReader();
         reader.Read();
 
-        HashSet<string> updates = JsonConvert.DeserializeObject<HashSet<string>>(reader.GetString(0))!;
+        return JsonConvert.DeserializeObject<HashSet<string>>(reader.GetString(0))!;
+    }
+
+    public void EmitUpdates(HashSet<string> updates)
+    {
         if (updates.Count != 0)
         {
             Emit(new DBAdapterEvents.TablesUpdatedEvent(updates));
