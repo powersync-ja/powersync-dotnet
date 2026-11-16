@@ -102,27 +102,13 @@ public class TableUpdateOperation(RowUpdateType OpType, long RowId)
     public long RowId { get; set; } = RowId;
 }
 
-public interface INotification;
-
-public class UpdateNotification(string table, RowUpdateType OpType, long RowId) : TableUpdateOperation(OpType, RowId), INotification
-{
-    public string Table { get; set; } = table;
-}
-
-public class BatchedUpdateNotification : INotification
-{
-    public UpdateNotification[] RawUpdates { get; set; } = [];
-    public string[] Tables { get; set; } = [];
-    public Dictionary<string, TableUpdateOperation[]> GroupedUpdates { get; set; } = [];
-}
-
 public class DBAdapterEvents : EventManager
 {
     public interface IDBAdapterEvent;
 
-    public class TablesUpdatedEvent(INotification tablesUpdatedNotification) : IDBAdapterEvent
+    public class TablesUpdatedEvent(HashSet<string> tablesUpdated) : IDBAdapterEvent
     {
-        public INotification TablesUpdated { get; set; } = tablesUpdatedNotification;
+        public HashSet<string> TablesUpdated { get; set; } = tablesUpdated;
     }
 
     public EventStream<TablesUpdatedEvent> OnTablesUpdated { get; } = new();
@@ -137,19 +123,6 @@ public class DBLockOptions
 {
     // Optional timeout in milliseconds.
     public int? TimeoutMs { get; set; }
-}
-
-public class DBAdapterUtils
-{
-    public static string[] ExtractTableUpdates(INotification update)
-    {
-        return update switch
-        {
-            BatchedUpdateNotification batchedUpdate => batchedUpdate.Tables,
-            UpdateNotification singleUpdate => [singleUpdate.Table],
-            _ => throw new ArgumentException("Invalid update type", nameof(update))
-        };
-    }
 }
 
 public interface IDBAdapter : ILockContext, ICloseableAsync

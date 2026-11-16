@@ -10,6 +10,8 @@ using PowerSync.Common.Utils;
 
 using SQLitePCL;
 
+using Newtonsoft.Json;
+
 public class MDSQLiteConnectionOptions(SqliteConnection database)
 {
     public SqliteConnection Database { get; set; } = database;
@@ -18,68 +20,24 @@ public class MDSQLiteConnectionOptions(SqliteConnection database)
 public class MDSQLiteConnection : EventStream<DBAdapterEvents.TablesUpdatedEvent>, ILockContext
 {
     public SqliteConnection Db;
-    private readonly List<UpdateNotification> _updateBuffer;
-    private readonly object _updateBufferLock = new();
     public MDSQLiteConnection(MDSQLiteConnectionOptions options)
     {
         Db = options.Database;
-        _updateBuffer = [];
-
-        raw.sqlite3_rollback_hook(Db.Handle, RollbackHook, IntPtr.Zero);
-        raw.sqlite3_update_hook(Db.Handle, UpdateHook, IntPtr.Zero);
-    }
-
-    private void RollbackHook(object user_data)
-    {
-        lock (_updateBufferLock)
-        {
-            _updateBuffer.Clear();
-        }
-    }
-
-    private void UpdateHook(object user_data, int type, utf8z database, utf8z table, long rowId)
-    {
-        var opType = type switch
-        {
-            18 => RowUpdateType.SQLITE_INSERT,
-            9 => RowUpdateType.SQLITE_DELETE,
-            23 => RowUpdateType.SQLITE_UPDATE,
-            _ => throw new InvalidOperationException($"Unknown update type: {type}"),
-        };
-        lock (_updateBufferLock)
-        {
-            _updateBuffer.Add(new UpdateNotification(table.utf8_to_string(), opType, rowId));
-        }
     }
 
     public void FlushUpdates()
     {
-        UpdateNotification[] updates;
-        lock (_updateBufferLock)
+        // Using synchronous command execution deliberately
+        using var command = Db.CreateCommand();
+        command.CommandText = "SELECT powersync_update_hooks('get')";
+        using var reader = command.ExecuteReader();
+        reader.Read();
+
+        HashSet<string> updates = JsonConvert.DeserializeObject<HashSet<string>>(reader.GetString(0))!;
+        if (updates.Count != 0)
         {
-            if (_updateBuffer.Count == 0)
-            {
-                return;
-            }
-            updates = _updateBuffer.ToArray();
-            _updateBuffer.Clear();
+            Emit(new DBAdapterEvents.TablesUpdatedEvent(updates));
         }
-
-        var groupedUpdates = updates
-            .GroupBy(update => update.Table)
-            .ToDictionary(
-                group => group.Key,
-                group => group.Select(update => new TableUpdateOperation(update.OpType, update.RowId)).ToArray()
-            );
-
-        var batchedUpdate = new BatchedUpdateNotification
-        {
-            GroupedUpdates = groupedUpdates,
-            RawUpdates = updates.ToArray(),
-            Tables = groupedUpdates.Keys.ToArray()
-        };
-
-        Emit(new DBAdapterEvents.TablesUpdatedEvent(batchedUpdate));
     }
 
     private static List<string> PrepareQueryString(ref string query, int parameterCount)

@@ -84,6 +84,7 @@ public class MDSQLiteAdapter : IDBAdapter
             $"PRAGMA journal_mode = {resolvedOptions.JournalMode}",
             $"PRAGMA journal_size_limit = {resolvedOptions.JournalSizeLimit}",
             $"PRAGMA synchronous = {resolvedOptions.Synchronous}",
+            "SELECT powersync_update_hooks('install')",
         ];
 
         string[] readConnectionStatements =
@@ -270,7 +271,6 @@ public class MDSQLiteAdapter : IDBAdapter
         }
 
         writeConnection.FlushUpdates();
-
     }
 
     public async Task<T> WriteLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null)
