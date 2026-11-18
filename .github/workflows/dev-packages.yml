@@ -43,9 +43,9 @@ jobs:
         run: |
           extract_version() {
             local version
-            version=$(awk '/^## [0-9]+\.[0-9]+\.[0-9]+-dev(\.[0-9]+)?$/ {print $2; exit}' "PowerSync/$2/CHANGELOG.md")
+            version=$(awk '/^## [0-9]+\.[0-9]+\.[0-9]+-(alpha|beta|dev|rc)(\.[0-9]+)?$/ {print $2; exit}' "PowerSync/$2/CHANGELOG.md")
             if [[ -z "$version" ]]; then
-              echo "Error: Invalid dev version found in $2/CHANGELOG.md. Expected format: x.x.x-dev.x"
+              echo "Error: Invalid dev version found in $2/CHANGELOG.md. Expected format: x.x.x-<dev-suffix>.x"
               exit 1
             fi
             echo "Detected $2 Version: $version"
