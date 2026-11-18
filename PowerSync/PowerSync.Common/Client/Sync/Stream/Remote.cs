@@ -274,5 +274,6 @@ class ConnectorCredentialsProvider(IPowerSyncBackendConnector connector) : ICred
     public void InvalidateCredentials()
     {
         _cachedCredentials = null;
+        _connector.InvalidateCredentials();
     }
 }
