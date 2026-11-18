@@ -3,21 +3,29 @@ namespace PowerSync.Common.Tests.MDSQLite;
 using Microsoft.Data.Sqlite;
 
 using PowerSync.Common.Client;
+using PowerSync.Common.DB;
 using PowerSync.Common.MDSQLite;
 using PowerSync.Common.Tests.Utils;
 using PowerSync.Common.Utils;
 
 /// <summary>
-/// dotnet test -v n --framework net8.0 --filter "MDSQLiteAdapterTests"
+/// dotnet test -v n --framework net10.0 --filter "MDSQLiteAdapterTests"
 /// </summary>
 [Collection("MDSQLiteAdapterTests")]
 public class MDSQLiteAdapterTests
 {
-    private class AssetResult
+    private class AssetResult : IFromRow<AssetResult>
     {
         public string id { get; set; } = "";
         public string description { get; set; } = "";
         public string? make { get; set; }
+
+        public static AssetResult FromRow(IQueryRow row) => new()
+        {
+            id = row.GetString("id"),
+            description = row.GetString("description"),
+            make = row.GetStringOrNull("make"),
+        };
     }
 
     [Fact]
@@ -53,7 +61,7 @@ public class MDSQLiteAdapterTests
     public async Task LoadsCustomPowerSyncExtensionFromOverriddenPath()
     {
         var dbName = $"MDSQLiteAdapter-{Guid.NewGuid():N}.db";
-        var sourcePath = PowerSyncPathResolver.GetNativeLibraryPath(AppContext.BaseDirectory);
+        var sourcePath = PowerSyncDesktopPathResolver.GetNativeLibraryPath(AppContext.BaseDirectory);
         var customPath = Path.Combine(
             Path.GetTempPath(),
             $"powersync-ext-copy-{Guid.NewGuid():N}{Path.GetExtension(sourcePath)}"

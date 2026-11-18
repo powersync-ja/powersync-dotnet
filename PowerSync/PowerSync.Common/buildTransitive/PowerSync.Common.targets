@@ -1,0 +1,21 @@
+<Project>
+  <!--
+    A build without a runtime identifier does not know what platform it is running on, so it
+    copies every asset under `runtimes` into the output directory.
+
+    However, Android or Apple libraries require specific RIDs to be used, so bundling them in
+    all builds leads to bloat. This target strips the non-desktop assets from generic builds while
+    leaving builds for specific targets unchanged. Builds for mobile targets already filter their
+    native assets via other mechanisms, ex. `dotnet pack -r <rid>`.
+  -->
+  <Target Name="PowerSyncRemoveUnusableRuntimeTargets"
+          Condition="'$(TargetPlatformIdentifier)' == ''"
+          AfterTargets="ResolvePackageAssets"
+          BeforeTargets="ResolveLockFileCopyLocalFiles">
+    <ItemGroup>
+      <_PowerSyncUnusableRuntimeTarget Include="@(RuntimeTargetsCopyLocalItems)"
+                                       Condition="'%(NuGetPackageId)' == 'PowerSync.Common' And !$([System.Text.RegularExpressions.Regex]::IsMatch('%(RuntimeIdentifier)', '^(win|linux|osx)'))" />
+      <RuntimeTargetsCopyLocalItems Remove="@(_PowerSyncUnusableRuntimeTarget)" />
+    </ItemGroup>
+  </Target>
+</Project>

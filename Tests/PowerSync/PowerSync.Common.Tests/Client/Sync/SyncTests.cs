@@ -6,7 +6,7 @@ using PowerSync.Common.Tests.Utils.Sync;
 
 
 /// <summary>
-/// dotnet test -v n --framework net8.0 --filter "SyncTests"
+/// dotnet test -v n --framework net10.0 --filter "SyncTests"
 /// </summary>
 public class SyncTests : IAsyncLifetime
 {
@@ -41,6 +41,21 @@ public class SyncTests : IAsyncLifetime
             """{ "checkpoint_complete":{ "last_op_id":"2"} }"""
         ];
 
+    /// <summary>
+    /// The status published on the database must be current by the time Connect returns, so that a
+    /// caller reading CurrentStatus - or subscribing to OnStatusChanged - right after connecting
+    /// doesn't observe a status from before the connection settled.
+    /// </summary>
+    [Fact(Timeout = 15000)]
+    public async Task ConnectPublishesStatusBeforeReturning()
+    {
+        await db.Init();
+        await db.Connect(new TestConnector());
+
+        Assert.True(db.CurrentStatus.Connected);
+        Assert.False(db.CurrentStatus.Connecting);
+    }
+
     [Fact]
     public async Task SyncCreateOperationTest()
     {
@@ -53,9 +68,9 @@ public class SyncTests : IAsyncLifetime
 
         await db.WaitForFirstSync();
 
-        var result = await db.GetAll<dynamic>("SELECT * FROM lists");
-        Assert.Single(result);
-        Assert.Equal("test_list", (string)result[0].name);
+        var result = await db.GetAll("SELECT * FROM lists");
+        Assert.Single(result.Rows);
+        Assert.Equal("test_list", result.Rows[0].GetString("name"));
     }
 
     [Fact]
@@ -78,12 +93,12 @@ public class SyncTests : IAsyncLifetime
         // Wait for sync to process
         await TestUtils.WaitForAsync(async () =>
         {
-            var rows = await db.GetAll<dynamic>("SELECT * FROM lists");
-            return rows.Length == 0;
+            var rows = await db.GetAll("SELECT * FROM lists");
+            return rows.Count == 0;
         });
 
-        var result = await db.GetAll<dynamic>("SELECT * FROM lists");
-        Assert.Empty(result);
+        var result = await db.GetAll("SELECT * FROM lists");
+        Assert.Empty(result.Rows);
     }
 
     [Fact]

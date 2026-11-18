@@ -51,17 +51,19 @@ internal sealed class AttachmentContext(IPowerSyncDatabase db, string tableName,
         });
     }
 
-    public Task<string[]> GetAttachmentIdsAsync() => db.GetAll<string>(
-        $"SELECT id FROM {tableName} WHERE id IS NOT NULL");
+    public Task<List<string>> GetAttachmentIdsAsync() => db.GetAll(
+        $"SELECT id FROM {tableName} WHERE id IS NOT NULL",
+        null,
+        row => row.GetString("id"));
 
-    public Task<Attachment[]> GetAttachmentsAsync() => db.GetAll<Attachment>(
+    public Task<List<Attachment>> GetAttachmentsAsync() => db.GetAll<Attachment>(
         $@"
             SELECT *
             FROM {tableName}
             ORDER BY timestamp ASC
         ");
 
-    public Task<Attachment[]> GetActiveAttachmentsAsync() => db.GetAll<Attachment>(
+    public Task<List<Attachment>> GetActiveAttachmentsAsync() => db.GetAll<Attachment>(
         $@"
             SELECT *
             FROM {tableName}
@@ -75,7 +77,7 @@ internal sealed class AttachmentContext(IPowerSyncDatabase db, string tableName,
 
     public async Task<bool> DeleteArchivedAttachmentsAsync(Func<Attachment[], Task>? callback = null, int limit = 1000)
     {
-        var archived = await db.GetAll<Attachment>(
+        var archived = (await db.GetAll<Attachment>(
             $@"
                 SELECT *
                 FROM {tableName}
@@ -84,7 +86,7 @@ internal sealed class AttachmentContext(IPowerSyncDatabase db, string tableName,
                 LIMIT ?
                 OFFSET ?
             ",
-            [(int)AttachmentState.Archived, limit, maxArchivedCount]);
+            [(int)AttachmentState.Archived, limit, maxArchivedCount])).ToArray();
 
         if (archived.Length == 0)
         {

@@ -12,6 +12,10 @@ using Nito.AsyncEx;
 using PowerSync.Common.DB;
 using PowerSync.Common.Utils;
 
+#if IOS || MACCATALYST
+using Foundation;
+#endif
+
 public class MDSQLiteAdapterOptions()
 {
     public string Name { get; set; } = null!;
@@ -80,6 +84,7 @@ public class MDSQLiteAdapter : IDBAdapter
             $"PRAGMA journal_mode = {resolvedOptions.JournalMode}",
             $"PRAGMA journal_size_limit = {resolvedOptions.JournalSizeLimit}",
             $"PRAGMA synchronous = {resolvedOptions.Synchronous}",
+            "SELECT powersync_update_hooks('install')",
         ];
 
         string[] readConnectionStatements =
@@ -111,9 +116,10 @@ public class MDSQLiteAdapter : IDBAdapter
 
         // Register TablesUpdated listener
         tablesUpdatedCts = new CancellationTokenSource();
+        var notifications = writeConnection.ListenAsync(tablesUpdatedCts.Token);
         tablesUpdatedTask = Task.Run(async () =>
         {
-            await foreach (var notification in writeConnection.ListenAsync(tablesUpdatedCts.Token))
+            await foreach (var notification in notifications)
             {
                 if (notification.TablesUpdated != null)
                 {
@@ -154,20 +160,40 @@ public class MDSQLiteAdapter : IDBAdapter
 
     /// <summary>
     /// Loads the bundled PowerSync core SQLite extension. Override on
-    /// platform-specific adapters (e.g. MAUI iOS/Android) where the native library
-    /// lives outside the desktop runtime path.
+    /// platform-specific adapters where the native library lives
+    /// outside the standard runtimes path.
     /// </summary>
     protected virtual void LoadDefaultPowerSyncExtension(SqliteConnection db)
     {
-        var path = PowerSyncPathResolver.GetNativeLibraryPath(AppContext.BaseDirectory);
-        db.LoadExtension(path, "sqlite3_powersync_init");
+        string extensionPath;
+
+#if IOS || MACCATALYST
+        var bundlePath =
+            NSBundle.FromIdentifier("co.powersync.sqlitecore")?.BundlePath
+            ?? throw new Exception("Could not find PowerSync SQLite extension bundle path");
+        extensionPath = Path.Combine(bundlePath, "powersync-sqlite-core");
+#elif ANDROID
+        extensionPath = "libpowersync";
+#else
+        extensionPath = PowerSyncDesktopPathResolver.GetNativeLibraryPath(AppContext.BaseDirectory);
+#endif
+
+        // Use manual command instead of db.LoadExtension(), since that has issues on iOS
+        using var loadExtension = db.CreateCommand();
+        loadExtension.CommandText = "SELECT load_extension(@path, @entryPoint)";
+        loadExtension.Parameters.AddWithValue("@path", extensionPath);
+        loadExtension.Parameters.AddWithValue("@entryPoint", "sqlite3_powersync_init");
+        loadExtension.ExecuteNonQuery();
     }
 
     public async Task Close()
     {
         tablesUpdatedCts?.Cancel();
         try { tablesUpdatedTask?.Wait(2000); } catch { /* expected */ }
-        writeConnection?.Close();
+        using (await writeMutex.LockAsync())
+        {
+            writeConnection?.Close();
+        }
         await readPool.Close();
         Events.Close();
     }
@@ -182,34 +208,49 @@ public class MDSQLiteAdapter : IDBAdapter
         return await WriteTransaction((ctx) => ctx.ExecuteBatch(query, parameters));
     }
 
-    public async Task<T[]> GetAll<T>(string sql, object?[]? parameters = null)
-    {
-        return await ReadLock((ctx) => ctx.GetAll<T>(sql, parameters));
-    }
-
-    public async Task<dynamic[]> GetAll(string sql, object?[]? parameters = null)
+    public async Task<QueryResult> GetAll(string sql, object?[]? parameters = null)
     {
         return await ReadLock((ctx) => ctx.GetAll(sql, parameters));
     }
 
-    public async Task<T?> GetOptional<T>(string sql, object?[]? parameters = null)
+    public async Task<List<T>> GetAll<T>(string sql, object?[]? parameters, SqlMapper<T> mapper)
     {
-        return await ReadLock((ctx) => ctx.GetOptional<T>(sql, parameters));
+        return await ReadLock((ctx) => ctx.GetAll(sql, parameters, mapper));
     }
 
-    public async Task<dynamic?> GetOptional(string sql, object?[]? parameters = null)
+    public async Task<List<T>> GetAll<T>(string sql, object?[]? parameters = null) where T : IFromRow<T>
+    {
+        return await ReadLock((ctx) => ctx.GetAll<T>(sql, parameters));
+    }
+
+    public async Task<IQueryRow?> GetOptional(string sql, object?[]? parameters = null)
     {
         return await ReadLock((ctx) => ctx.GetOptional(sql, parameters));
     }
 
-    public async Task<T> Get<T>(string sql, object?[]? parameters = null)
+    public async Task<T?> GetOptional<T>(string sql, object?[]? parameters, SqlMapper<T> mapper)
     {
-        return await ReadLock((ctx) => ctx.Get<T>(sql, parameters));
+        return await ReadLock((ctx) => ctx.GetOptional(sql, parameters, mapper));
     }
 
-    public async Task<dynamic> Get(string sql, object?[]? parameters = null)
+    public async Task<T?> GetOptional<T>(string sql, object?[]? parameters = null) where T : IFromRow<T>
+    {
+        return await ReadLock((ctx) => ctx.GetOptional<T>(sql, parameters));
+    }
+
+    public async Task<IQueryRow> Get(string sql, object?[]? parameters = null)
     {
         return await ReadLock((ctx) => ctx.Get(sql, parameters));
+    }
+
+    public async Task<T> Get<T>(string sql, object?[]? parameters, SqlMapper<T> mapper)
+    {
+        return await ReadLock((ctx) => ctx.Get(sql, parameters, mapper));
+    }
+
+    public async Task<T> Get<T>(string sql, object?[]? parameters = null) where T : IFromRow<T>
+    {
+        return await ReadLock((ctx) => ctx.Get<T>(sql, parameters));
     }
 
     public async Task<T> ReadTransaction<T>(Func<ITransaction, Task<T>> fn, DBLockOptions? options = null)
@@ -227,28 +268,50 @@ public class MDSQLiteAdapter : IDBAdapter
     {
         await initialized;
 
-        using (await writeMutex.LockAsync())
+        HashSet<string> updates = [];
+        try
         {
-            await fn(writeConnection);
+            using (await writeMutex.LockAsync())
+            {
+                try
+                {
+                    await fn(writeConnection);
+                }
+                finally
+                {
+                    updates = writeConnection.ConsumeUpdates();
+                }
+            }
         }
-
-        writeConnection.FlushUpdates();
-
+        finally
+        {
+            writeConnection.EmitUpdates(updates);
+        }
     }
 
     public async Task<T> WriteLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null)
     {
         await initialized;
 
-        T result;
-        using (await writeMutex.LockAsync())
+        HashSet<string> updates = [];
+        try
         {
-            result = await fn(writeConnection);
+            using (await writeMutex.LockAsync())
+            {
+                try
+                {
+                    return await fn(writeConnection);
+                }
+                finally
+                {
+                    updates = writeConnection.ConsumeUpdates();
+                }
+            }
         }
-
-        writeConnection.FlushUpdates();
-
-        return result;
+        finally
+        {
+            writeConnection.EmitUpdates(updates);
+        }
     }
 
     public async Task WriteTransaction(Func<ITransaction, Task> fn, DBLockOptions? options = null)
@@ -306,7 +369,10 @@ public class MDSQLiteAdapter : IDBAdapter
     public async Task RefreshSchema()
     {
         await initialized;
-        await writeConnection.RefreshSchema();
+        using (await writeMutex.LockAsync())
+        {
+            await writeConnection.RefreshSchema();
+        }
         await readPool.LeaseAll(async (connections) =>
         {
             foreach (var conn in connections) await conn.RefreshSchema();
@@ -423,33 +489,48 @@ public class MDSQLiteTransaction(MDSQLiteConnection connection) : ITransaction
         return connection.ExecuteBatch(query, parameters);
     }
 
-    public Task<T[]> GetAll<T>(string sql, object?[]? parameters = null)
-    {
-        return connection.GetAll<T>(sql, parameters);
-    }
-
-    public Task<dynamic[]> GetAll(string sql, object?[]? parameters = null)
+    public Task<QueryResult> GetAll(string sql, object?[]? parameters = null)
     {
         return connection.GetAll(sql, parameters);
     }
 
-    public Task<T?> GetOptional<T>(string sql, object?[]? parameters = null)
+    public Task<List<T>> GetAll<T>(string sql, object?[]? parameters, SqlMapper<T> mapper)
     {
-        return connection.GetOptional<T>(sql, parameters);
+        return connection.GetAll(sql, parameters, mapper);
     }
 
-    public Task<dynamic?> GetOptional(string sql, object?[]? parameters = null)
+    public Task<List<T>> GetAll<T>(string sql, object?[]? parameters = null) where T : IFromRow<T>
+    {
+        return connection.GetAll<T>(sql, parameters);
+    }
+
+    public Task<IQueryRow?> GetOptional(string sql, object?[]? parameters = null)
     {
         return connection.GetOptional(sql, parameters);
     }
 
-    public Task<T> Get<T>(string sql, object?[]? parameters = null)
+    public Task<T?> GetOptional<T>(string sql, object?[]? parameters, SqlMapper<T> mapper)
     {
-        return connection.Get<T>(sql, parameters);
+        return connection.GetOptional(sql, parameters, mapper);
     }
 
-    public Task<dynamic> Get(string sql, object?[]? parameters = null)
+    public Task<T?> GetOptional<T>(string sql, object?[]? parameters = null) where T : IFromRow<T>
+    {
+        return connection.GetOptional<T>(sql, parameters);
+    }
+
+    public Task<IQueryRow> Get(string sql, object?[]? parameters = null)
     {
         return connection.Get(sql, parameters);
+    }
+
+    public Task<T> Get<T>(string sql, object?[]? parameters, SqlMapper<T> mapper)
+    {
+        return connection.Get(sql, parameters, mapper);
+    }
+
+    public Task<T> Get<T>(string sql, object?[]? parameters = null) where T : IFromRow<T>
+    {
+        return connection.Get<T>(sql, parameters);
     }
 }
