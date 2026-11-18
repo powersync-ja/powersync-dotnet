@@ -442,4 +442,54 @@ public class SchemaTests
 
         Assert.Equal(JsonConvert.SerializeObject(expectedJson), JsonConvert.SerializeObject(schema));
     }
+
+    [Fact]
+    public void Schema_SerializesIndexOnIdColumn()
+    {
+        object expectedJson = new
+        {
+            tables = new List<object>
+            {
+                new
+                {
+                    name = "todos",
+                    columns = new List<object> {
+                        new { name = "list_id", type = "Text" },
+                    },
+                    view_name = "todos",
+                    indexes = new List<object> {
+                        new {
+                            name = "by_list",
+                            columns = new List<object> {
+                                new { name = "list_id", ascending = true, type = "Text" },
+                                new { name = "id", ascending = false, type = "Text" },
+                            }
+                        }
+                    },
+                    local_only = false,
+                    insert_only = false,
+                    ignore_empty_update = false,
+                    include_metadata = false,
+                },
+            },
+            raw_tables = new List<object>()
+        };
+
+        var schema = new Schema(new Table
+        {
+            Name = "todos",
+            Columns =
+            {
+                ["list_id"] = ColumnType.Text,
+            },
+            Indexes =
+            {
+                ["by_list"] = ["list_id", "-id"],
+            }
+        });
+
+        schema.Validate();
+
+        Assert.Equal(JsonConvert.SerializeObject(expectedJson), JsonConvert.SerializeObject(schema));
+    }
 }

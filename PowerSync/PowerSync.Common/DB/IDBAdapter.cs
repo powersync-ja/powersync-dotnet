@@ -55,19 +55,56 @@ public delegate T SqlMapper<T>(IQueryRow row);
 
 public interface IDBGetUtils
 {
-    // Execute a read-only query and return results.
+    /// <summary>
+    /// Executes a read-only query and returns all rows.
+    /// </summary>
     Task<QueryResult> GetAll(string sql, object?[]? parameters = null);
+
+    /// <summary>
+    /// Executes a read-only query and returns all rows, mapped using <paramref name="mapper"/>.
+    /// </summary>
     Task<List<T>> GetAll<T>(string sql, object?[]? parameters, SqlMapper<T> mapper);
+
+    /// <summary>
+    /// Executes a read-only query and returns all rows, mapped using <c>T.FromRow</c>.
+    /// </summary>
     Task<List<T>> GetAll<T>(string sql, object?[]? parameters = null) where T : IFromRow<T>;
 
-    // Execute a read-only query and return the first result, or null if the ResultSet is empty.
+    /// <summary>
+    /// Executes a read-only query and returns the first row, or null if there are no rows.
+    /// </summary>
     Task<IQueryRow?> GetOptional(string sql, object?[]? parameters = null);
+
+    /// <summary>
+    /// Executes a read-only query and returns the first row mapped using <paramref name="mapper"/>,
+    /// or <c>default(T)</c> if there are no rows.
+    /// Note that <c>default(T)</c> is not null for all types.
+    /// Map to a nullable type (e.g. <c>row =&gt; (long?)row.GetLong("id")</c>) to ensure you get null.
+    /// </summary>
     Task<T?> GetOptional<T>(string sql, object?[]? parameters, SqlMapper<T> mapper);
+
+    /// <summary>
+    /// Executes a read-only query and returns the first row mapped using <c>T.FromRow</c>,
+    /// or <c>default(T)</c> if there are no rows.
+    /// Note that <c>default(T)</c> is not null if T is a value type.
+    /// </summary>
     Task<T?> GetOptional<T>(string sql, object?[]? parameters = null) where T : IFromRow<T>;
 
-    // Execute a read-only query and return the first result, error if the ResultSet is empty.
+    /// <summary>
+    /// Executes a read-only query and returns the first row. Throws if there are no rows.
+    /// </summary>
     Task<IQueryRow> Get(string sql, object?[]? parameters = null);
+
+    /// <summary>
+    /// Executes a read-only query and returns the first row mapped using <paramref name="mapper"/>.
+    /// Throws if there are no rows.
+    /// </summary>
     Task<T> Get<T>(string sql, object?[]? parameters, SqlMapper<T> mapper);
+
+    /// <summary>
+    /// Executes a read-only query and returns the first row mapped using <c>T.FromRow</c>.
+    /// Throws if there are no rows.
+    /// </summary>
     Task<T> Get<T>(string sql, object?[]? parameters = null) where T : IFromRow<T>;
 }
 

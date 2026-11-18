@@ -1233,8 +1233,11 @@ public class StreamingSyncImplementation : ICloseable
                                 DataFlow = new SyncDataFlowStatus
                                 {
                                     Uploading = false,
-                                    UploadError = null,
                                 },
+                            },
+                            new UpdateSyncStatusOptions
+                            {
+                                ClearUploadError = true,
                             });
                             break;
                         }

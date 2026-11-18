@@ -356,7 +356,10 @@ internal class TableJsonConverter : JsonConverter<Table>
                     columnName = asc
                         ? column
                         : column[1..];
-                    columnType = value.Columns[columnName].ToString();
+                    // Fallback to ColumnType.Text if can't find the column in Columns, e.g. for the implicit 'id' column
+                    columnType = value.Columns.TryGetValue(columnName, out var columnTypeRaw)
+                        ? columnTypeRaw.ToString()
+                        : ColumnType.Text.ToString();
                 }
                 catch (Exception e)
                 {

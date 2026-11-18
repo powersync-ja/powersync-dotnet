@@ -56,7 +56,7 @@ public class TodoItem : IFromRow<TodoItem>
     {
         Id = row.GetString("id"),
         Description = row.GetStringOrNull("description"),
-        CreatedAt = row.GetDateTime("createdat"),
+        CreatedAt = row.GetDateTime("created_at"),
         Completed = row.GetBool("completed"),
     };
 }
