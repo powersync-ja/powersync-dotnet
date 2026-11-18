@@ -121,16 +121,25 @@ public interface IPowerSyncDatabase : ICloseableAsync
 
     Task<NonQueryResult> ExecuteBatch(string query, object?[][]? parameters = null);
 
+    /// <inheritdoc cref="IDBGetUtils.GetAll(string, object[])"/>
     Task<QueryResult> GetAll(string sql, object?[]? parameters = null);
+    /// <inheritdoc cref="IDBGetUtils.GetAll{T}(string, object[], SqlMapper{T})"/>
     Task<List<T>> GetAll<T>(string sql, object?[]? parameters, SqlMapper<T> mapper);
+    /// <inheritdoc cref="IDBGetUtils.GetAll{T}(string, object[])"/>
     Task<List<T>> GetAll<T>(string sql, object?[]? parameters = null) where T : IFromRow<T>;
 
+    /// <inheritdoc cref="IDBGetUtils.GetOptional(string, object[])"/>
     Task<IQueryRow?> GetOptional(string sql, object?[]? parameters = null);
+    /// <inheritdoc cref="IDBGetUtils.GetOptional{T}(string, object[], SqlMapper{T})"/>
     Task<T?> GetOptional<T>(string sql, object?[]? parameters, SqlMapper<T> mapper);
+    /// <inheritdoc cref="IDBGetUtils.GetOptional{T}(string, object[])"/>
     Task<T?> GetOptional<T>(string sql, object?[]? parameters = null) where T : IFromRow<T>;
 
+    /// <inheritdoc cref="IDBGetUtils.Get(string, object[])"/>
     Task<IQueryRow> Get(string sql, object?[]? parameters = null);
+    /// <inheritdoc cref="IDBGetUtils.Get{T}(string, object[], SqlMapper{T})"/>
     Task<T> Get<T>(string sql, object?[]? parameters, SqlMapper<T> mapper);
+    /// <inheritdoc cref="IDBGetUtils.Get{T}(string, object[])"/>
     Task<T> Get<T>(string sql, object?[]? parameters = null) where T : IFromRow<T>;
 
     Task<T> ReadLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null);
@@ -839,54 +848,63 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         return await Database.ExecuteBatch(query, parameters);
     }
 
+    /// <inheritdoc/>
     public async Task<QueryResult> GetAll(string query, object?[]? parameters = null)
     {
         await WaitForReady();
         return await Database.GetAll(query, parameters);
     }
 
+    /// <inheritdoc/>
     public async Task<List<T>> GetAll<T>(string query, object?[]? parameters, SqlMapper<T> mapper)
     {
         await WaitForReady();
         return await Database.GetAll(query, parameters, mapper);
     }
 
+    /// <inheritdoc/>
     public async Task<List<T>> GetAll<T>(string query, object?[]? parameters = null) where T : IFromRow<T>
     {
         await WaitForReady();
         return await Database.GetAll<T>(query, parameters);
     }
 
+    /// <inheritdoc/>
     public async Task<IQueryRow?> GetOptional(string query, object?[]? parameters = null)
     {
         await WaitForReady();
         return await Database.GetOptional(query, parameters);
     }
 
+    /// <inheritdoc/>
     public async Task<T?> GetOptional<T>(string query, object?[]? parameters, SqlMapper<T> mapper)
     {
         await WaitForReady();
         return await Database.GetOptional(query, parameters, mapper);
     }
 
+    /// <inheritdoc/>
     public async Task<T?> GetOptional<T>(string query, object?[]? parameters = null) where T : IFromRow<T>
     {
         await WaitForReady();
         return await Database.GetOptional<T>(query, parameters);
     }
 
+    /// <inheritdoc/>
     public async Task<IQueryRow> Get(string query, object?[]? parameters = null)
     {
         await WaitForReady();
         return await Database.Get(query, parameters);
     }
 
+    /// <inheritdoc/>
     public async Task<T> Get<T>(string query, object?[]? parameters, SqlMapper<T> mapper)
     {
         await WaitForReady();
         return await Database.Get(query, parameters, mapper);
     }
 
+    /// <inheritdoc/>
     public async Task<T> Get<T>(string query, object?[]? parameters = null) where T : IFromRow<T>
     {
         await WaitForReady();

@@ -182,4 +182,13 @@ public class QueryRowTests : IAsyncLifetime
         Assert.Null(await db.GetOptional("SELECT 'a' AS id WHERE 0", null, row => row.GetString("id")));
         await Assert.ThrowsAsync<InvalidOperationException>(() => db.Get("SELECT 1 AS id WHERE 0", null, row => row.GetLong("id")));
     }
+
+    [Fact]
+    public async Task GetOptional_ValueTypeMapper_ReturnsDefaultWhenEmpty()
+    {
+        Assert.Equal(0L, await db.GetOptional("SELECT 1 AS id WHERE 0", null, row => row.GetLong("id")));
+        Assert.Equal(0L, await db.GetOptional("SELECT 0 AS id", null, row => row.GetLong("id")));
+        Assert.Null(await db.GetOptional("SELECT 1 AS id WHERE 0", null, row => (long?)row.GetLong("id")));
+        Assert.Equal(0L, await db.GetOptional("SELECT 0 AS id", null, row => (long?)row.GetLong("id")));
+    }
 }
