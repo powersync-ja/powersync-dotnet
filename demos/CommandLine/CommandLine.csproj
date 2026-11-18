@@ -14,7 +14,7 @@
    <ItemGroup>
     <PackageReference Include="Dotenv.Net" Version="4.0.2" />
     <PackageReference Include="Spectre.Console" Version="0.57.1" />
-    <PackageReference Include="supabase" Version="1.1.1" />
+    <PackageReference Include="Supabase" Version="8.5.1" />
   </ItemGroup>
 
   <ItemGroup>
