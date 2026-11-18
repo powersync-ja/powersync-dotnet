@@ -268,31 +268,50 @@ public class MDSQLiteAdapter : IDBAdapter
     {
         await initialized;
 
-        HashSet<string> updates;
-        using (await writeMutex.LockAsync())
+        HashSet<string> updates = [];
+        try
         {
-            await fn(writeConnection);
-            updates = writeConnection.ConsumeUpdates();
+            using (await writeMutex.LockAsync())
+            {
+                try
+                {
+                    await fn(writeConnection);
+                }
+                finally
+                {
+                    updates = writeConnection.ConsumeUpdates();
+                }
+            }
         }
-
-        writeConnection.EmitUpdates(updates);
+        finally
+        {
+            writeConnection.EmitUpdates(updates);
+        }
     }
 
     public async Task<T> WriteLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null)
     {
         await initialized;
 
-        T result;
-        HashSet<string> updates;
-        using (await writeMutex.LockAsync())
+        HashSet<string> updates = [];
+        try
         {
-            result = await fn(writeConnection);
-            updates = writeConnection.ConsumeUpdates();
+            using (await writeMutex.LockAsync())
+            {
+                try
+                {
+                    return await fn(writeConnection);
+                }
+                finally
+                {
+                    updates = writeConnection.ConsumeUpdates();
+                }
+            }
         }
-
-        writeConnection.EmitUpdates(updates);
-
-        return result;
+        finally
+        {
+            writeConnection.EmitUpdates(updates);
+        }
     }
 
     public async Task WriteTransaction(Func<ITransaction, Task> fn, DBLockOptions? options = null)
