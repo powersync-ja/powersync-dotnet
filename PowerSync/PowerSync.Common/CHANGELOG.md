@@ -1,6 +1,6 @@
 # PowerSync.Common Changelog
 
-## 1.0.1
+## 1.0.1-rc.2
 
 - Full release.
 - **Breaking:** Reworked the query API.
