@@ -2,8 +2,6 @@ namespace PowerSync.Common.DB.Schema.Attributes;
 
 using System.Reflection;
 
-using Dapper;
-
 class AttributeParser
 {
     private readonly Type _type;
@@ -186,31 +184,6 @@ class AttributeParser
             Columns = trackWholeTable ? null : ParseTrackedColumns(),
             OnlyWhenChanged = onlyWhenChanged,
         };
-    }
-
-    public CustomPropertyTypeMap ParseDapperTypeMap()
-    {
-        return new(
-            _type,
-            (type, columnName) => type.GetProperties()
-                .FirstOrDefault(prop => prop.GetCustomAttributes()
-                    .OfType<ColumnAttribute>()
-                    .Any(columnAttr => columnAttr.Name == columnName))!
-        );
-    }
-
-    public void RegisterDapperTypeMap()
-    {
-        // Only register type map if some Column("custom_name") is found
-        if (_type
-                .GetProperties()
-                .Any(prop => prop
-                    .GetCustomAttributes()
-                    .OfType<ColumnAttribute>()
-                    .Any(attr => attr.Name != null)))
-        {
-            Dapper.SqlMapper.SetTypeMap(_type, ParseDapperTypeMap());
-        }
     }
 
     public List<string> ParseTrackedColumns()

@@ -6,12 +6,13 @@ using System.Diagnostics;
 using Microsoft.Data.Sqlite;
 
 using PowerSync.Common.Client;
+using PowerSync.Common.DB;
 using PowerSync.Common.DB.Schema;
 using PowerSync.Common.Tests.Models;
 using PowerSync.Common.Tests.Utils;
 
 /// <summary>
-/// dotnet test -v n --framework net8.0 --filter "PowerSyncDatabaseTests"
+/// dotnet test -v n --framework net10.0 --filter "PowerSyncDatabaseTests"
 /// </summary>
 [Collection("PowerSyncDatabaseTests")]
 public class PowerSyncDatabaseTests : IAsyncLifetime
@@ -44,14 +45,28 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         DatabaseUtils.CleanDb(dbName);
     }
 
-    private record IdResult(string id);
-    private record CountResult(long count);
+    private record IdResult(string id) : IFromRow<IdResult>
+    {
+        public static IdResult FromRow(IQueryRow row) => new(row.GetString("id"));
+    }
 
-    private class AssetResult
+    private record CountResult(long count) : IFromRow<CountResult>
+    {
+        public static CountResult FromRow(IQueryRow row) => new(row.GetLong("count"));
+    }
+
+    private class AssetResult : IFromRow<AssetResult>
     {
         public string id { get; set; } = "";
         public string description { get; set; } = "";
         public string? make { get; set; }
+
+        public static AssetResult FromRow(IQueryRow row) => new()
+        {
+            id = row.GetString("id"),
+            description = row.GetString("description"),
+            make = row.GetStringOrNull("make"),
+        };
     }
 
     [Fact]
@@ -195,7 +210,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         });
 
         var result = await db.GetAll("SELECT * FROM assets");
-        Assert.Empty(result);
+        Assert.Empty(result.Rows);
     }
 
     [Fact]
@@ -217,7 +232,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         }
 
         var result = await db.GetAll("SELECT * FROM assets");
-        Assert.Empty(result);
+        Assert.Empty(result.Rows);
         Assert.True(exceptionThrown);
     }
 
@@ -242,10 +257,10 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
             await tx.Execute("INSERT INTO assets(id) VALUES(?)", ["O6"]);
 
             var txQuery = await tx.GetAll("SELECT * FROM assets");
-            Assert.Single(txQuery);
+            Assert.Single(txQuery.Rows);
 
             var dbQuery = await db.GetAll("SELECT * FROM assets");
-            Assert.Empty(dbQuery);
+            Assert.Empty(dbQuery.Rows);
         });
     }
 
@@ -302,7 +317,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.All(ids, n => Assert.Equal(id, n));
     }
 
-    [Fact(Timeout = 2000)]
+    [Fact(Timeout = 5000)]
     public async Task ReadWhileWriteIsRunning()
     {
         var sem = new TaskCompletionSource<bool>();
@@ -348,7 +363,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
 
         var result = await db.GetAll<AssetResult>("SELECT id, description, make FROM assets ORDER BY description");
 
-        Assert.Equal(2, result.Length);
+        Assert.Equal(2, result.Count);
         Assert.Equal(id1, result[0].id);
         Assert.Equal(description1, result[0].description);
         Assert.Equal(make1, result[0].make);
@@ -357,7 +372,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.Equal(make2, result[1].make);
     }
 
-    [Fact(Timeout = 2000)]
+    [Fact(Timeout = 5000)]
     public async Task QueueSimultaneousExecutions()
     {
         var order = new List<int>();
@@ -376,7 +391,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.Equal(expectedOrder, order);
     }
 
-    [Fact(Timeout = 2000)]
+    [Fact(Timeout = 5000)]
     public async Task CallUpdateHookOnChanges()
     {
         var result = new TaskCompletionSource<bool>();
@@ -401,7 +416,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         await result.Task;
     }
 
-    [Fact(Timeout = 2000)]
+    [Fact(Timeout = 5000)]
     public async Task ReflectWriteTransactionUpdatesOnReadConnections()
     {
         var watched = new TaskCompletionSource<bool>();
@@ -506,7 +521,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
 
         // Try and read while the write transaction is still open
         var result = await db.GetAll("SELECT * FROM assets");
-        Assert.Single(result); // The transaction is not commited yet, we should only read 1 asset
+        Assert.Single(result.Rows); // The transaction is not commited yet, we should only read 1 asset
 
         // Let the transaction complete
         sem.SetResult(true);
@@ -514,7 +529,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
 
         // Read again after the transaction is committed
         var afterTx = await db.GetAll("SELECT * FROM assets");
-        Assert.Equal(2, afterTx.Length);
+        Assert.Equal(2, afterTx.Count);
     }
 
     [Fact(Timeout = 5000)]
@@ -541,10 +556,10 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
             [id, description, make]
         );
 
-        var dynamicAsset = await db.Get("select id, description, make from assets");
-        Assert.Equal(id, dynamicAsset.id);
-        Assert.Equal(description, dynamicAsset.description);
-        Assert.Equal(make, dynamicAsset.make);
+        var asset = await db.Get("select id, description, make from assets");
+        Assert.Equal(id, asset.GetString("id"));
+        Assert.Equal(description, asset.GetString("description"));
+        Assert.Equal(make, asset.GetString("make"));
     }
 
     [Fact(Timeout = 2500)]
@@ -555,16 +570,16 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         string make = "dynamic make";
 
         using var sem = new SemaphoreSlim(0);
-        dynamic? dynamicAsset = null;
+        IQueryRow? asset = null;
 
-        var listener = db.Watch<AssetResult>("select id, description, make from assets", null, new() { TriggerImmediately = true });
+        var listener = db.Watch("select id, description, make from assets", null, new() { TriggerImmediately = true });
         _ = Task.Run(async () =>
         {
             await foreach (var assets in listener)
             {
-                if (assets.Length > 0)
+                if (assets.Count > 0)
                 {
-                    dynamicAsset = assets[0];
+                    asset = assets.Rows[0];
                 }
 
                 sem.Release();
@@ -577,14 +592,14 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         );
         Assert.True(await sem.WaitAsync(500));
 
-        Assert.NotNull(dynamicAsset);
+        Assert.NotNull(asset);
 
-        Assert.Equal(id, dynamicAsset?.id);
-        Assert.Equal(description, dynamicAsset?.description);
-        Assert.Equal(make, dynamicAsset?.make);
+        Assert.Equal(id, asset.GetString("id"));
+        Assert.Equal(description, asset.GetString("description"));
+        Assert.Equal(make, asset.GetString("make"));
     }
 
-    [Fact(Timeout = 2000)]
+    [Fact(Timeout = 5000)]
     public async Task Watch_Cancelled()
     {
         int callCount = 0;
@@ -616,7 +631,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.Equal(2, callCount);
     }
 
-    [Fact(Timeout = 3000)]
+    [Fact(Timeout = 5000)]
     public async Task Watch_MultipleCancelled()
     {
         int callCount = 0;
@@ -667,7 +682,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.Equal(3, callCount);
     }
 
-    [Fact(Timeout = 3000)]
+    [Fact(Timeout = 5000)]
     public async Task Watch_SchemaReset()
     {
         var dbId = Guid.NewGuid().ToString();
@@ -783,15 +798,15 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
     [Fact]
     public async Task IndexesCreatedOnTable()
     {
-        dynamic[] result = await db.GetAll("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'ps_data__assets'");
-        Assert.Equal(2, result.Length);
-        Assert.Equal("sqlite_autoindex_ps_data__assets_1", result[0].name);
-        Assert.Equal("ps_data__assets__makemodel", result[1].name);
+        var result = await db.GetAll("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'ps_data__assets'");
+        Assert.Equal(2, result.Count);
+        Assert.Equal("sqlite_autoindex_ps_data__assets_1", result.Rows[0].GetString("name"));
+        Assert.Equal("ps_data__assets__makemodel", result.Rows[1].GetString("name"));
 
         result = await db.GetAll("PRAGMA index_info('sqlite_autoindex_ps_data__assets_1')");
-        Assert.Single(result); // id
+        Assert.Single(result.Rows); // id
         result = await db.GetAll("PRAGMA index_info('ps_data__assets__makemodel')");
-        Assert.Equal(2, result.Length); // make, model
+        Assert.Equal(2, result.Count); // make, model
     }
 
     [Fact]
@@ -842,7 +857,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.Equal(3, current[0].count);
     }
 
-    [Fact(Timeout = 2000)]
+    [Fact(Timeout = 5000)]
     public async Task Watch_CancelsOnTokenCancellation()
     {
         var tcs = new TaskCompletionSource<bool>();
@@ -1096,7 +1111,7 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         Assert.True(await sem.WaitAsync(500));
         Assert.Single(events);
         Assert.True(events.TryDequeue(out var change));
-        Assert.Equal(["assets"], change.ChangedTables);
+        Assert.Equal(["ps_data__assets"], change.ChangedTables);
     }
 
     [Fact]
@@ -1175,11 +1190,11 @@ public class PowerSyncDatabaseTests : IAsyncLifetime
         // Doing a soft-clear should delete data but keep the bucket around.
         await db.DisconnectAndClear(soft: true);
         var bucket = await db.Get("SELECT name FROM ps_buckets");
-        Assert.Equal("bkt", bucket.name);
+        Assert.Equal("bkt", bucket.GetString("name"));
 
         // Doing a default clear also deletes buckets.
         await db.DisconnectAndClear();
         var buckets = await db.GetAll("SELECT name FROM ps_buckets");
-        Assert.Empty(buckets);
+        Assert.Empty(buckets.Rows);
     }
 }

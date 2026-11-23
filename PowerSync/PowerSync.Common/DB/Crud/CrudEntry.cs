@@ -16,7 +16,7 @@ public enum UpdateType
     DELETE
 }
 
-public class CrudEntryJSON
+public class CrudEntryJSON : IFromRow<CrudEntryJSON>
 {
     [JsonProperty("id")]
     public string Id { get; set; } = null!;
@@ -26,6 +26,13 @@ public class CrudEntryJSON
 
     [JsonProperty("tx_id")]
     public long? TransactionId { get; set; }
+
+    public static CrudEntryJSON FromRow(IQueryRow row) => new()
+    {
+        Id = row.GetString("id"),
+        Data = row.GetString("data"),
+        TransactionId = row.GetLongOrNull("tx_id"),
+    };
 }
 
 public class CrudEntryDataJSON

@@ -14,32 +14,98 @@ public class NonQueryResult
     public int RowsAffected { get; set; }
 }
 
-public class QueryResult
+public class QueryResult(List<IQueryRow> rows)
 {
-    public class QueryRows
-    {
-        // Raw array with all dataset.
-        public List<Dictionary<string, object>> Array { get; set; } = [];
-
-        // The length of the dataset.
-        public int Length => Array.Count;
-    }
-    public QueryRows Rows { get; set; } = new QueryRows();
+    public List<IQueryRow> Rows { get; } = rows;
+    public int Count => Rows.Count;
 }
+
+public interface IQueryRow
+{
+    public IReadOnlyList<string> Columns { get; }
+    public object? GetValue(string columnName);
+
+    public string GetString(string columnName);
+    public int GetInt(string columnName);
+    public long GetLong(string columnName);
+    public bool GetBool(string columnName);
+    public double GetDouble(string columnName);
+    public DateTime GetDateTime(string columnName);
+
+    public string? GetStringOrNull(string columnName);
+    public int? GetIntOrNull(string columnName);
+    public long? GetLongOrNull(string columnName);
+    public bool? GetBoolOrNull(string columnName);
+    public double? GetDoubleOrNull(string columnName);
+    public DateTime? GetDateTimeOrNull(string columnName);
+}
+
+public interface IFromRow<TSelf> where TSelf : IFromRow<TSelf>
+{
+    /// <summary>
+    /// Creates an instance from a result row. <paramref name="row"/> is only valid during this call.
+    /// </summary>
+    public static abstract TSelf FromRow(IQueryRow row);
+}
+
+/// <summary>
+/// Maps a result row. <paramref name="row"/> is only valid during this call.
+/// </summary>
+public delegate T SqlMapper<T>(IQueryRow row);
 
 public interface IDBGetUtils
 {
-    // Execute a read-only query and return results.
-    Task<T[]> GetAll<T>(string sql, object?[]? parameters = null);
-    Task<dynamic[]> GetAll(string sql, object?[]? parameters = null);
+    /// <summary>
+    /// Executes a read-only query and returns all rows.
+    /// </summary>
+    Task<QueryResult> GetAll(string sql, object?[]? parameters = null);
 
-    // Execute a read-only query and return the first result, or null if the ResultSet is empty.
-    Task<T?> GetOptional<T>(string sql, object?[]? parameters = null);
-    Task<dynamic?> GetOptional(string sql, object?[]? parameters = null);
+    /// <summary>
+    /// Executes a read-only query and returns all rows, mapped using <paramref name="mapper"/>.
+    /// </summary>
+    Task<List<T>> GetAll<T>(string sql, object?[]? parameters, SqlMapper<T> mapper);
 
-    // Execute a read-only query and return the first result, error if the ResultSet is empty.
-    Task<T> Get<T>(string sql, object?[]? parameters = null);
-    Task<dynamic> Get(string sql, object?[]? parameters = null);
+    /// <summary>
+    /// Executes a read-only query and returns all rows, mapped using <c>T.FromRow</c>.
+    /// </summary>
+    Task<List<T>> GetAll<T>(string sql, object?[]? parameters = null) where T : IFromRow<T>;
+
+    /// <summary>
+    /// Executes a read-only query and returns the first row, or null if there are no rows.
+    /// </summary>
+    Task<IQueryRow?> GetOptional(string sql, object?[]? parameters = null);
+
+    /// <summary>
+    /// Executes a read-only query and returns the first row mapped using <paramref name="mapper"/>,
+    /// or <c>default(T)</c> if there are no rows.
+    /// Note that <c>default(T)</c> is not null for all types.
+    /// Map to a nullable type (e.g. <c>row =&gt; (long?)row.GetLong("id")</c>) to ensure you get null.
+    /// </summary>
+    Task<T?> GetOptional<T>(string sql, object?[]? parameters, SqlMapper<T> mapper);
+
+    /// <summary>
+    /// Executes a read-only query and returns the first row mapped using <c>T.FromRow</c>,
+    /// or <c>default(T)</c> if there are no rows.
+    /// Note that <c>default(T)</c> is not null if T is a value type.
+    /// </summary>
+    Task<T?> GetOptional<T>(string sql, object?[]? parameters = null) where T : IFromRow<T>;
+
+    /// <summary>
+    /// Executes a read-only query and returns the first row. Throws if there are no rows.
+    /// </summary>
+    Task<IQueryRow> Get(string sql, object?[]? parameters = null);
+
+    /// <summary>
+    /// Executes a read-only query and returns the first row mapped using <paramref name="mapper"/>.
+    /// Throws if there are no rows.
+    /// </summary>
+    Task<T> Get<T>(string sql, object?[]? parameters, SqlMapper<T> mapper);
+
+    /// <summary>
+    /// Executes a read-only query and returns the first row mapped using <c>T.FromRow</c>.
+    /// Throws if there are no rows.
+    /// </summary>
+    Task<T> Get<T>(string sql, object?[]? parameters = null) where T : IFromRow<T>;
 }
 
 public interface ILockContext : IDBGetUtils
@@ -73,27 +139,13 @@ public class TableUpdateOperation(RowUpdateType OpType, long RowId)
     public long RowId { get; set; } = RowId;
 }
 
-public interface INotification;
-
-public class UpdateNotification(string table, RowUpdateType OpType, long RowId) : TableUpdateOperation(OpType, RowId), INotification
-{
-    public string Table { get; set; } = table;
-}
-
-public class BatchedUpdateNotification : INotification
-{
-    public UpdateNotification[] RawUpdates { get; set; } = [];
-    public string[] Tables { get; set; } = [];
-    public Dictionary<string, TableUpdateOperation[]> GroupedUpdates { get; set; } = [];
-}
-
 public class DBAdapterEvents : EventManager
 {
     public interface IDBAdapterEvent;
 
-    public class TablesUpdatedEvent(INotification tablesUpdatedNotification) : IDBAdapterEvent
+    public class TablesUpdatedEvent(HashSet<string> tablesUpdated) : IDBAdapterEvent
     {
-        public INotification TablesUpdated { get; set; } = tablesUpdatedNotification;
+        public HashSet<string> TablesUpdated { get; set; } = tablesUpdated;
     }
 
     public EventStream<TablesUpdatedEvent> OnTablesUpdated { get; } = new();
@@ -108,19 +160,6 @@ public class DBLockOptions
 {
     // Optional timeout in milliseconds.
     public int? TimeoutMs { get; set; }
-}
-
-public class DBAdapterUtils
-{
-    public static string[] ExtractTableUpdates(INotification update)
-    {
-        return update switch
-        {
-            BatchedUpdateNotification batchedUpdate => batchedUpdate.Tables,
-            UpdateNotification singleUpdate => [singleUpdate.Table],
-            _ => throw new ArgumentException("Invalid update type", nameof(update))
-        };
-    }
 }
 
 public interface IDBAdapter : ILockContext, ICloseableAsync

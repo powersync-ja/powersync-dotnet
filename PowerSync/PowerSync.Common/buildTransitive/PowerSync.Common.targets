@@ -1,0 +1,49 @@
+<Project>
+  <!--
+    A build without a runtime identifier does not know what platform it is running on, so it
+    copies every asset under `runtimes` into the output directory.
+
+    However, Android or Apple libraries require specific RIDs to be used, so bundling them in
+    all builds leads to bloat. This target strips the non-desktop assets from generic builds while
+    leaving builds for specific targets unchanged. Builds for mobile targets already filter their
+    native assets via other mechanisms, ex. `dotnet pack -r <rid>`.
+  -->
+  <Target Name="PowerSyncRemoveUnusableRuntimeTargets"
+          Condition="'$(TargetPlatformIdentifier)' == ''"
+          AfterTargets="ResolvePackageAssets"
+          BeforeTargets="ResolveLockFileCopyLocalFiles">
+    <ItemGroup>
+      <_PowerSyncUnusableRuntimeTarget Include="@(RuntimeTargetsCopyLocalItems)"
+                                       Condition="'%(NuGetPackageId)' == 'PowerSync.Common' And !$([System.Text.RegularExpressions.Regex]::IsMatch('%(RuntimeIdentifier)', '^(win|linux|osx)'))" />
+      <RuntimeTargetsCopyLocalItems Remove="@(_PowerSyncUnusableRuntimeTarget)" />
+    </ItemGroup>
+  </Target>
+
+  <!--
+    Android apps get `libpowersync.so` from `PowerSync.Common.aar` (lib/net*-android*/), which
+    the `AndroidNativeLibrary` items in PowerSync.Common.csproj embed under `jni/<abi>/`.
+
+    The same libraries also resolve out of `runtimes/<rid>/native`, so without this target every
+    ABI is added to the APK twice and the build warns with XA4301 ("APK already contains the item
+    lib/<abi>/libpowersync.so; ignoring"). If no `android-*` runtime matches, NuGet falls back
+    through the RID graph to `linux-*` and would pick the desktop glibc builds, which won't load on
+    Android. The `.aar` is the only source Android builds should use, so drop every PowerSync.Common
+    native asset that NuGet resolves from `runtimes/`.
+
+    The Android SDK resolves native assets in per-RID inner builds, where they arrive as
+    `NativeCopyLocalItems`. Builds without a RuntimeIdentifier use `RuntimeTargetsCopyLocalItems`.
+  -->
+  <Target Name="PowerSyncRemoveAndroidRuntimeNatives"
+          Condition="'$(TargetPlatformIdentifier)' == 'android'"
+          AfterTargets="ResolvePackageAssets"
+          BeforeTargets="ResolveLockFileCopyLocalFiles">
+    <ItemGroup>
+      <_PowerSyncAndroidRuntimeNative Include="@(NativeCopyLocalItems)"
+                                      Condition="'%(NuGetPackageId)' == 'PowerSync.Common'" />
+      <_PowerSyncAndroidRuntimeNative Include="@(RuntimeTargetsCopyLocalItems)"
+                                      Condition="'%(NuGetPackageId)' == 'PowerSync.Common'" />
+      <NativeCopyLocalItems Remove="@(_PowerSyncAndroidRuntimeNative)" />
+      <RuntimeTargetsCopyLocalItems Remove="@(_PowerSyncAndroidRuntimeNative)" />
+    </ItemGroup>
+  </Target>
+</Project>

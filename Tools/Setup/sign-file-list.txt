@@ -1,0 +1,3 @@
+**/*
+!runtimes/ios/native/*.xcframework.zip
+!runtimes/maccatalyst/native/*.xcframework.zip

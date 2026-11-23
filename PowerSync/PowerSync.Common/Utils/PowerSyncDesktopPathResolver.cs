@@ -2,7 +2,7 @@ namespace PowerSync.Common.Utils;
 
 using System.Runtime.InteropServices;
 
-public static class PowerSyncPathResolver
+public static class PowerSyncDesktopPathResolver
 {
     public static string GetNativeLibraryPath(string packagePath)
     {

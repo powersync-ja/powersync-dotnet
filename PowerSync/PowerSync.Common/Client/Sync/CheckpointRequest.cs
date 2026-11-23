@@ -18,10 +18,10 @@ namespace PowerSync.Common.Client.Sync;
 /// </summary>
 public class CheckpointRequest
 {
-    private readonly string _requestId;
+    private readonly long _requestId;
     private readonly PowerSyncDatabase _db;
 
-    internal CheckpointRequest(string requestId, PowerSyncDatabase db)
+    internal CheckpointRequest(long requestId, PowerSyncDatabase db)
     {
         _requestId = requestId;
         _db = db;

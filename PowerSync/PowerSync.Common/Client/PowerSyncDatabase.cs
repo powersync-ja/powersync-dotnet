@@ -50,7 +50,7 @@ public class PowerSyncDatabaseOptions() : BasePowerSyncDatabaseOptions()
     /// Used for testing to inject mock implementations.
     /// If not provided, a default Remote will be created.
     /// </summary>
-    public Func<IPowerSyncBackendConnector, Remote>? RemoteFactory { get; set; }
+    public Func<IAuthenticator, string?, Remote>? RemoteFactory { get; set; }
 
     /// <summary>
     /// Used to calculate delays for the sync client (retry delays, upload throttling).
@@ -100,6 +100,15 @@ public class PowerSyncDBEvents : EventManager
 public interface IPowerSyncDatabase : ICloseableAsync
 {
     public Task Connect(IPowerSyncBackendConnector connector, PowerSyncConnectionOptions? options = null);
+
+    public Task Connect(
+        string endpoint,
+        IAuthenticator authenticator,
+        IMutationUploader? uploader,
+        PowerSyncConnectionOptions? options = null);
+
+    public Task Connect(IMutationUploader uploader, PowerSyncConnectionOptions? options = null);
+
     public ISyncStream SyncStream(string name, Dictionary<string, object>? parameters = null);
 
     public Task<string> GetClientId();
@@ -112,14 +121,26 @@ public interface IPowerSyncDatabase : ICloseableAsync
 
     Task<NonQueryResult> ExecuteBatch(string query, object?[][]? parameters = null);
 
-    Task<T[]> GetAll<T>(string sql, object?[]? parameters = null);
-    Task<dynamic[]> GetAll(string sql, object?[]? parameters = null);
+    /// <inheritdoc cref="IDBGetUtils.GetAll(string, object[])"/>
+    Task<QueryResult> GetAll(string sql, object?[]? parameters = null);
+    /// <inheritdoc cref="IDBGetUtils.GetAll{T}(string, object[], SqlMapper{T})"/>
+    Task<List<T>> GetAll<T>(string sql, object?[]? parameters, SqlMapper<T> mapper);
+    /// <inheritdoc cref="IDBGetUtils.GetAll{T}(string, object[])"/>
+    Task<List<T>> GetAll<T>(string sql, object?[]? parameters = null) where T : IFromRow<T>;
 
-    Task<T?> GetOptional<T>(string sql, object?[]? parameters = null);
-    Task<dynamic?> GetOptional(string sql, object?[]? parameters = null);
+    /// <inheritdoc cref="IDBGetUtils.GetOptional(string, object[])"/>
+    Task<IQueryRow?> GetOptional(string sql, object?[]? parameters = null);
+    /// <inheritdoc cref="IDBGetUtils.GetOptional{T}(string, object[], SqlMapper{T})"/>
+    Task<T?> GetOptional<T>(string sql, object?[]? parameters, SqlMapper<T> mapper);
+    /// <inheritdoc cref="IDBGetUtils.GetOptional{T}(string, object[])"/>
+    Task<T?> GetOptional<T>(string sql, object?[]? parameters = null) where T : IFromRow<T>;
 
-    Task<T> Get<T>(string sql, object?[]? parameters = null);
-    Task<dynamic> Get(string sql, object?[]? parameters = null);
+    /// <inheritdoc cref="IDBGetUtils.Get(string, object[])"/>
+    Task<IQueryRow> Get(string sql, object?[]? parameters = null);
+    /// <inheritdoc cref="IDBGetUtils.Get{T}(string, object[], SqlMapper{T})"/>
+    Task<T> Get<T>(string sql, object?[]? parameters, SqlMapper<T> mapper);
+    /// <inheritdoc cref="IDBGetUtils.Get{T}(string, object[])"/>
+    Task<T> Get<T>(string sql, object?[]? parameters = null) where T : IFromRow<T>;
 
     Task<T> ReadLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null);
 
@@ -154,6 +175,10 @@ public class PowerSyncDatabase : IPowerSyncDatabase
 
     protected IBucketStorageAdapter BucketStorageAdapter;
 
+    private readonly object currentStatusLock = new();
+    /// <summary>
+    /// The latest published sync status.
+    /// </summary>
     public SyncStatus CurrentStatus { get; protected set; }
 
     protected CancellationTokenSource masterCts = new();
@@ -163,11 +188,14 @@ public class PowerSyncDatabase : IPowerSyncDatabase
     public ILogger Logger { get; protected set; }
 
     private readonly AsyncLock runExclusive = new();
-    private readonly Func<IPowerSyncBackendConnector, Remote> remoteFactory;
+
+    private readonly Func<IAuthenticator, string?, Remote> remoteFactory;
 
     public StreamingSyncImplementation? SyncStreamImplementation => ConnectionManager.SyncStreamImplementation;
 
-    public IPowerSyncBackendConnector? Connector => ConnectionManager.Connector;
+    public string? PowerSyncEndpoint => ConnectionManager.Endpoint;
+    public IAuthenticator? Authenticator => ConnectionManager.Authenticator;
+    public IMutationUploader? MutationUploader => ConnectionManager.Uploader;
 
     public bool Connected => CurrentStatus.Connected;
     public bool Connecting => CurrentStatus.Connecting;
@@ -198,7 +226,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         }
         Logger = options.Logger ?? NullLogger.Instance;
         CurrentStatus = new SyncStatus(new SyncStatusOptions());
-        BucketStorageAdapter = generateBucketStorageAdapter();
+        BucketStorageAdapter = GenerateBucketStorageAdapter();
 
         Closed = false;
         Ready = false;
@@ -206,7 +234,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         schema = options.Schema;
         SdkVersion = "";
 
-        remoteFactory = options.RemoteFactory ?? (connector => new Remote(connector));
+        remoteFactory = options.RemoteFactory ?? ((authenticator, endpoint) => new Remote(authenticator, endpoint));
         var timeProvider = options.TimeProvider ?? TimeProvider.System;
 
         watchManager = new WatchManager(this, masterCts.Token);
@@ -220,45 +248,51 @@ public class PowerSyncDatabase : IPowerSyncDatabase
                     await tx.Execute("SELECT powersync_control(?, ?) AS r", ["subscriptions", JsonConvert.SerializeObject(payload)]);
                 }));
 
-        ConnectionManager = new ConnectionManager(createSyncImplementation: async (connector, options) =>
+        ConnectionManager = new ConnectionManager(createSyncImplementation: async (endpoint, authenticator, uploader, options) =>
         {
             await WaitForReady();
             using (await runExclusive.LockAsync())
             {
+                var syncStreamStatusCts = CancellationTokenSource.CreateLinkedTokenSource(masterCts.Token);
+
                 syncStreamImplementation = new StreamingSyncImplementation(new StreamingSyncImplementationOptions
                 {
                     Adapter = BucketStorageAdapter,
-                    Remote = remoteFactory(connector),
-                    UploadCrud = async () =>
+                    Remote = authenticator is not null ? remoteFactory(authenticator, endpoint) : null,
+                    UploadCrud = uploader is not null ? async () =>
                     {
                         await WaitForReady();
-                        await connector.UploadData(this);
-                    },
-                    PostCheckpointRequest = connector is ICustomCheckpointRequestConnector checkpointConnector
+                        await uploader.UploadMutations(this);
+                    }
+                    : null,
+                    PostCheckpointRequest = authenticator is ICustomCheckpointRequestConnector checkpointAuthenticator
                         ? async (clientId, requestId, token) =>
                         {
                             await WaitForReady();
-                            return await checkpointConnector.PostCheckpointRequest(clientId, requestId, token);
+                            return await checkpointAuthenticator.PostCheckpointRequest(clientId, requestId, token);
                         }
                     : null,
                     RetryDelayMs = options.RetryDelayMs,
                     Subscriptions = options.Subscriptions,
+                    Schema = schema,
                     CrudUploadThrottleMs = options.CrudUploadThrottleMs,
                     TimeProvider = timeProvider,
-                    Logger = Logger
-                });
-
-                var syncStreamStatusCts = CancellationTokenSource.CreateLinkedTokenSource(masterCts.Token);
-                var syncStreamStatusListener = syncStreamImplementation.Events.OnStatusChanged.ListenAsync(syncStreamStatusCts.Token);
-                var _ = Task.Run(async () =>
-                {
-                    await foreach (var update in syncStreamStatusListener)
+                    Logger = Logger,
+                    OnStatusChanged = status =>
                     {
-                        CurrentStatus = new SyncStatus(new SyncStatusOptions(update.Status.Options)
+                        if (syncStreamStatusCts.IsCancellationRequested)
                         {
-                            HasSynced = CurrentStatus?.HasSynced == true || update.Status.LastSyncedAt != null,
-                        });
-                        Events.Emit(new PowerSyncDBEvents.StatusChangedEvent(CurrentStatus));
+                            return;
+                        }
+
+                        lock (currentStatusLock)
+                        {
+                            CurrentStatus = new SyncStatus(new SyncStatusOptions(status.Options)
+                            {
+                                HasSynced = CurrentStatus?.HasSynced == true || status.LastSyncedAt != null,
+                            });
+                            Events.Emit(new PowerSyncDBEvents.StatusChangedEvent(CurrentStatus));
+                        }
                     }
                 });
 
@@ -270,7 +304,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         IsReadyTask = Initialize(options);
     }
 
-    protected IBucketStorageAdapter generateBucketStorageAdapter()
+    protected IBucketStorageAdapter GenerateBucketStorageAdapter()
     {
         return new SqliteBucketStorage(Database, Logger);
     }
@@ -383,14 +417,12 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         Events.Emit(new PowerSyncDBEvents.InitializedEvent());
     }
 
-    private record VersionResult(string version);
-
     private async Task LoadVersion()
     {
         string sdkVersion;
         try
         {
-            sdkVersion = (await Database.Get<VersionResult>("SELECT powersync_rs_version() as version")).version;
+            sdkVersion = await Database.Get("SELECT powersync_rs_version() as version", null, row => row.GetString("version"));
         }
         catch (SqliteException ex)
         {
@@ -424,19 +456,22 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         }
     }
 
-    private record OfflineSyncStatusResult(string r);
     protected async Task ResolveOfflineSyncStatus()
     {
-        var result = await Database.Get<OfflineSyncStatusResult>("SELECT powersync_offline_sync_status() as r");
-        var parsed = JsonConvert.DeserializeObject<CoreSyncStatus>(result.r);
+        var result = await Database.Get("SELECT powersync_offline_sync_status() as r");
+        var parsed = JsonConvert.DeserializeObject<CoreSyncStatus>(result.GetString("r"));
 
         var parsedSyncStatus = CoreInstructionHelpers.CoreStatusToSyncStatus(parsed!);
-        var updatedStatus = CurrentStatus.CreateUpdatedStatus(parsedSyncStatus);
 
-        if (!updatedStatus.IsEqual(CurrentStatus))
+        lock (currentStatusLock)
         {
-            CurrentStatus = updatedStatus;
-            Events.Emit(new PowerSyncDBEvents.StatusChangedEvent(CurrentStatus));
+            var updatedStatus = CurrentStatus.CreateUpdatedStatus(parsedSyncStatus);
+
+            if (!updatedStatus.IsEqual(CurrentStatus))
+            {
+                CurrentStatus = updatedStatus;
+                Events.Emit(new PowerSyncDBEvents.StatusChangedEvent(CurrentStatus));
+            }
         }
     }
 
@@ -481,20 +516,72 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         await WaitForReady();
     }
 
-    public async Task Connect(IPowerSyncBackendConnector connector, PowerSyncConnectionOptions? options = null)
+    /// <summary>
+    /// Connect to the PowerSync Service and your backend using the same <paramref name="connector" /> for uploading and downloading.
+    /// </summary>
+    public async Task Connect(
+        IPowerSyncBackendConnector connector,
+        PowerSyncConnectionOptions? options = null)
     {
-        await WaitForReady();
+        await ConnectInternal(null, connector, connector, options);
+    }
 
-        // close connection if one is open
+    /// <summary>
+    /// Connect to the PowerSync Service and your backend using a separate <paramref name="authenticator" /> and <paramref name="uploader" />.
+    /// <para />
+    /// Allows connecting in download-only mode by setting the <paramref name="uploader" /> to null.
+    /// </summary>
+    public async Task Connect(
+        string endpoint,
+        IAuthenticator authenticator,
+        IMutationUploader? uploader,
+        PowerSyncConnectionOptions? options = null)
+    {
+        if (authenticator is IMutationUploader && uploader == null)
+        {
+            Logger.LogWarning("Authenticator implementing both IAuthenticator and IMutationUploader, but connected in download-only mode. "
+                + "Consider implementing IPowerSyncBackendConnector, or pass your authenticator as both authenticator and uploader. "
+                + "If you intended to connect in download-only mode, you can safely ignore this warning.");
+        }
+        await ConnectInternal(endpoint, authenticator, uploader, options);
+    }
+
+    /// <summary>
+    /// Connect to your backend in upload-only mode.
+    /// </summary>
+    public async Task Connect(IMutationUploader uploader, PowerSyncConnectionOptions? options = null)
+    {
+        if (uploader is IAuthenticator)
+        {
+            Logger.LogWarning("Mutation uploader implementing both IAuthenticator and IMutationUploader, but connected in upload-only mode. "
+                + "Consider implementing IPowerSyncBackendConnector, or pass your uploader as both authenticator and uploader. "
+                + "If you intended to connect in upload-only mode, you can safely ignore this warning.");
+        }
+        await ConnectInternal(null, null, uploader, options);
+    }
+
+    private async Task ConnectInternal(string? powerSyncEndpoint, IAuthenticator? authenticator, IMutationUploader? uploader, PowerSyncConnectionOptions? options = null)
+    {
+        if (authenticator == null && uploader == null)
+        {
+            throw new ArgumentException("Cannot connect when both authenticator and uploader are null");
+        }
+
+        if (authenticator != null && authenticator is not IPowerSyncBackendConnector && powerSyncEndpoint == null)
+        {
+            throw new ArgumentException("powerSyncEndpoint is required when connecting with an IAuthenticator that is not an IPowerSyncBackendConnector");
+        }
+
+        await WaitForReady();
         await Disconnect();
+
         if (Closed)
         {
             throw new Exception("Cannot connect using a closed client");
         }
 
         var resolvedOptions = options ?? new PowerSyncConnectionOptions();
-
-        await ConnectionManager.Connect(connector, resolvedOptions);
+        await ConnectionManager.Connect(powerSyncEndpoint, authenticator, uploader, resolvedOptions);
     }
 
     public async Task Disconnect()
@@ -531,8 +618,11 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         });
 
         // The data has been deleted - reset the sync status
-        CurrentStatus = new SyncStatus(new SyncStatusOptions());
-        Events.Emit(new PowerSyncDBEvents.StatusChangedEvent(CurrentStatus));
+        lock (currentStatusLock)
+        {
+            CurrentStatus = new SyncStatus(new SyncStatusOptions());
+            Events.Emit(new PowerSyncDBEvents.StatusChangedEvent(CurrentStatus));
+        }
     }
 
     /// <summary>
@@ -612,8 +702,6 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         Events.Close();
     }
 
-    private record UploadQueueStatsSizeCountResult(long size, long count);
-    private record UploadQueueStatsCountResult(long count);
     /// <summary>
     /// Get upload queue size estimate and count.
     /// </summary>
@@ -623,18 +711,18 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         {
             if (includeSize)
             {
-                var result = await tx.Get<UploadQueueStatsSizeCountResult>(
+                var result = await tx.Get(
                     $"SELECT SUM(cast(data as blob) + 20) as size, count(*) as count FROM {PSInternalTable.CRUD}"
                 );
 
-                return new UploadQueueStats(result.count, result.size);
+                return new UploadQueueStats(result.GetLong("count"), result.GetLongOrNull("size") ?? 0);
             }
             else
             {
-                var result = await tx.Get<UploadQueueStatsCountResult>(
+                var result = await tx.Get(
                     $"SELECT count(*) as count FROM {PSInternalTable.CRUD}"
                 );
-                return new UploadQueueStats(result.count);
+                return new UploadQueueStats(result.GetLong("count"));
             }
         });
     }
@@ -658,7 +746,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
     /// </summary>
     public async Task<CrudBatch?> GetCrudBatch(int limit = 100)
     {
-        var crudResult = await GetAll<CrudEntryJSON>($"SELECT id, tx_id as transactionId, data FROM {PSInternalTable.CRUD} ORDER BY id ASC LIMIT ?", [limit + 1]);
+        var crudResult = await GetAll<CrudEntryJSON>($"SELECT id, tx_id, data FROM {PSInternalTable.CRUD} ORDER BY id ASC LIMIT ?", [limit + 1]);
 
         var all = crudResult.Select(CrudEntry.FromRow).ToList();
 
@@ -700,7 +788,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         return await ReadTransaction(async tx =>
         {
             var first = await tx.GetOptional<CrudEntryJSON>(
-            $"SELECT id, tx_id AS transactionId, data FROM {PSInternalTable.CRUD} ORDER BY id ASC LIMIT 1");
+            $"SELECT id, tx_id, data FROM {PSInternalTable.CRUD} ORDER BY id ASC LIMIT 1");
 
             if (first == null)
             {
@@ -718,7 +806,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
             else
             {
                 var result = await tx.GetAll<CrudEntryJSON>(
-                    $"SELECT id, tx_id as transactionId, data FROM {PSInternalTable.CRUD} WHERE tx_id = ? ORDER BY id ASC",
+                    $"SELECT id, tx_id, data FROM {PSInternalTable.CRUD} WHERE tx_id = ? ORDER BY id ASC",
                     [txId]);
 
                 all = result.Select(CrudEntry.FromRow).ToList();
@@ -733,7 +821,7 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         });
     }
 
-    public Task HandleCrudCheckpoint(long lastClientId, string? writeCheckpoint = null)
+    public Task HandleCrudCheckpoint(long lastClientId, long? writeCheckpoint = null)
     {
         return BucketStorageAdapter.HandleCrudCheckpoint(lastClientId, writeCheckpoint);
     }
@@ -760,40 +848,67 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         return await Database.ExecuteBatch(query, parameters);
     }
 
-    public async Task<T[]> GetAll<T>(string query, object?[]? parameters = null)
-    {
-        await WaitForReady();
-        return await Database.GetAll<T>(query, parameters);
-    }
-
-    public async Task<dynamic[]> GetAll(string query, object?[]? parameters = null)
+    /// <inheritdoc/>
+    public async Task<QueryResult> GetAll(string query, object?[]? parameters = null)
     {
         await WaitForReady();
         return await Database.GetAll(query, parameters);
     }
 
-    public async Task<T?> GetOptional<T>(string query, object?[]? parameters = null)
+    /// <inheritdoc/>
+    public async Task<List<T>> GetAll<T>(string query, object?[]? parameters, SqlMapper<T> mapper)
     {
         await WaitForReady();
-        return await Database.GetOptional<T>(query, parameters);
+        return await Database.GetAll(query, parameters, mapper);
     }
 
-    public async Task<dynamic?> GetOptional(string query, object?[]? parameters = null)
+    /// <inheritdoc/>
+    public async Task<List<T>> GetAll<T>(string query, object?[]? parameters = null) where T : IFromRow<T>
+    {
+        await WaitForReady();
+        return await Database.GetAll<T>(query, parameters);
+    }
+
+    /// <inheritdoc/>
+    public async Task<IQueryRow?> GetOptional(string query, object?[]? parameters = null)
     {
         await WaitForReady();
         return await Database.GetOptional(query, parameters);
     }
 
-    public async Task<T> Get<T>(string query, object?[]? parameters = null)
+    /// <inheritdoc/>
+    public async Task<T?> GetOptional<T>(string query, object?[]? parameters, SqlMapper<T> mapper)
     {
         await WaitForReady();
-        return await Database.Get<T>(query, parameters);
+        return await Database.GetOptional(query, parameters, mapper);
     }
 
-    public async Task<dynamic> Get(string query, object?[]? parameters = null)
+    /// <inheritdoc/>
+    public async Task<T?> GetOptional<T>(string query, object?[]? parameters = null) where T : IFromRow<T>
+    {
+        await WaitForReady();
+        return await Database.GetOptional<T>(query, parameters);
+    }
+
+    /// <inheritdoc/>
+    public async Task<IQueryRow> Get(string query, object?[]? parameters = null)
     {
         await WaitForReady();
         return await Database.Get(query, parameters);
+    }
+
+    /// <inheritdoc/>
+    public async Task<T> Get<T>(string query, object?[]? parameters, SqlMapper<T> mapper)
+    {
+        await WaitForReady();
+        return await Database.Get(query, parameters, mapper);
+    }
+
+    /// <inheritdoc/>
+    public async Task<T> Get<T>(string query, object?[]? parameters = null) where T : IFromRow<T>
+    {
+        await WaitForReady();
+        return await Database.Get<T>(query, parameters);
     }
 
     public async Task<T> ReadLock<T>(Func<ILockContext, Task<T>> fn, DBLockOptions? options = null)
@@ -839,9 +954,21 @@ public class PowerSyncDatabase : IPowerSyncDatabase
     /// <see cref="SQLWatchOptions.Tables"/> when provided), and are re-resolved whenever the
     /// schema changes, so watches keep working across <see cref="UpdateSchema"/> calls.
     /// </summary>
-    public IAsyncEnumerable<T[]> Watch<T>(string sql, object?[]? parameters = null, SQLWatchOptions? options = null)
+    public IAsyncEnumerable<QueryResult> Watch(string sql, object?[]? parameters = null, SQLWatchOptions? options = null)
     {
-        return watchManager.Watch<T>(sql, parameters, options);
+        return watchManager.Watch(sql, parameters, () => GetAll(sql, parameters), options);
+    }
+
+    /// <inheritdoc cref="Watch(string, object[], SQLWatchOptions)"/>
+    public IAsyncEnumerable<List<T>> Watch<T>(string sql, object?[]? parameters, SqlMapper<T> mapper, SQLWatchOptions? options = null)
+    {
+        return watchManager.Watch(sql, parameters, () => GetAll(sql, parameters, mapper), options);
+    }
+
+    /// <inheritdoc cref="Watch(string, object[], SQLWatchOptions)"/>
+    public IAsyncEnumerable<List<T>> Watch<T>(string sql, object?[]? parameters = null, SQLWatchOptions? options = null) where T : IFromRow<T>
+    {
+        return watchManager.Watch(sql, parameters, () => GetAll<T>(sql, parameters), options);
     }
 
     /// <summary>
@@ -852,34 +979,24 @@ public class PowerSyncDatabase : IPowerSyncDatabase
         return watchManager.OnChange(options);
     }
 
-    private class ExplainedResult
-    {
-        public int addr = 0;
-        public string opcode = "";
-        public int p1 = 0;
-        public int p2 = 0;
-        public int p3 = 0;
-        public string p4 = "";
-        public int p5 = 0;
-    }
-    private record TableSelectResult(string tbl_name);
     internal async Task<HashSet<string>> GetSourceTables(string sql, object?[]? parameters = null)
     {
-        var explained = await GetAll<ExplainedResult>(
+        var explained = await GetAll(
             $"EXPLAIN {sql}", parameters
         );
 
-        var rootPages = explained
-            .Where(row => row.opcode == "OpenRead" && row.p3 == 0)
-            .Select(row => row.p2)
+        var rootPages = explained.Rows
+            .Where(row => row.GetString("opcode") == "OpenRead" && row.GetInt("p3") == 0)
+            .Select(row => row.GetInt("p2"))
             .ToList();
 
-        var tables = await GetAll<TableSelectResult>(
+        var tables = await GetAll(
             "SELECT DISTINCT tbl_name FROM sqlite_master WHERE rootpage IN (SELECT json_each.value FROM json_each(?))",
-            [JsonConvert.SerializeObject(rootPages)]
+            [JsonConvert.SerializeObject(rootPages)],
+            row => row.GetString("tbl_name")
         );
 
-        return [.. tables.Select(row => row.tbl_name)];
+        return [.. tables];
     }
 }
 

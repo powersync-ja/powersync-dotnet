@@ -39,6 +39,8 @@ public abstract class Instruction
             return json["CloseSyncStream"]!.ToObject<CloseSyncStream>()!;
         if (json.ContainsKey("DidCompleteSync"))
             return new DidCompleteSync();
+        if (json.ContainsKey("CheckpointDelayedDueToLocalData"))
+            return new CheckpointDelayedDueToLocalData();
 
         return new UnknownSyncInstruction(json);
     }
@@ -135,7 +137,8 @@ public class CoreSyncStatus
     public List<CoreStreamSubscription> Streams { get; set; } = [];
 
     [JsonProperty("internal_last_applied_checkpoint_request_id")]
-    public string? LastAppliedCheckpointRequestId { get; set; }
+    [JsonConverter(typeof(StringLongConverter))]
+    public long? LastAppliedCheckpointRequestId { get; set; }
 }
 
 public class SyncPriorityStatus
@@ -184,6 +187,8 @@ public class CloseSyncStream : Instruction
 }
 
 public class DidCompleteSync : NonInterruptingInstruction { }
+
+public class CheckpointDelayedDueToLocalData : NonInterruptingInstruction { }
 
 public class UnknownSyncInstruction(JObject source) : NonInterruptingInstruction
 {
